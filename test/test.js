@@ -488,6 +488,18 @@ async function server() {
     assert.strictEqual(imp.body.reason, 'not-implemented');
   });
 
+  await t('the setup helper reads a tag back without believing the token', async () => {
+    const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+    const fake = `${b64({ alg: 'RS256', kid: 'k' })}.${b64({
+      iss: 'https://someteam.cloudflareaccess.com', aud: ['the-aud-tag'],
+      email: 'x@y.z', exp: Math.floor(Date.now() / 1000) + 60 })}.notasignature`;
+    const r = await fetch(`${BASE}/api/auth/access-info`, { headers: { 'cf-access-jwt-assertion': fake } });
+    assert.deepStrictEqual((await r.json()).seen.aud, ['the-aud-tag']);
+    // Decoding is not authenticating.
+    const gate = await fetch(`${BASE}/api/state`, { headers: { 'cf-access-jwt-assertion': fake } });
+    assert.strictEqual(gate.status, 401, 'reading a token is not believing it');
+  });
+
   await t('the shell is cache-busted and the stamped js path resolves', async () => {
     const html = await (await fetch(`${BASE}/`)).text();
     assert.ok(/style\.css\?v=[a-z0-9]+/.test(html));
