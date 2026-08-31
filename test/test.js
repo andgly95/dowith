@@ -21,6 +21,7 @@ const ITEMS = require('../lib/items');
 const MODULES = require('../lib/modules');
 const INVITES = require('../lib/invites');
 const SQUARE = require('../lib/square');
+const MAGIC = require('../lib/magic');
 
 let pass = 0;
 const fails = [];
@@ -317,6 +318,79 @@ async function squareBridge() {
   });
 }
 
+/* ── 5b. sign-in links ───────────────────────────────────────────────────── */
+
+async function magicLinks() {
+  console.log('\nsign-in links');
+  const SEC = 'link-test-secret-0123456789abcdef';
+  const opts = { sec: SEC };
+
+  await t('a minted link verifies, and carries the person it was minted for', () => {
+    const r = MAGIC.verify(MAGIC.mint('u1', opts), opts);
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.uid, 'u1');
+  });
+
+  await t('a link signed with another secret is not a link', () => {
+    const other = MAGIC.mint('u1', { sec: 'a-completely-different-secret-00' });
+    assert.strictEqual(MAGIC.verify(other, opts).ok, false);
+  });
+
+  await t('a tampered payload does not verify', () => {
+    const tok = MAGIC.mint('u1', opts);
+    const [payload, sig] = tok.split('.');
+    const evil = Buffer.from(JSON.stringify({ p: 'link', u: 'someone-else', e: Date.now() + 1e6, n: 'x' }))
+      .toString('base64url');
+    assert.strictEqual(MAGIC.verify(`${evil}.${sig}`, opts).ok, false);
+    assert.ok(payload.length > 10);
+  });
+
+  await t('a session cookie cannot be presented as a sign-in link', () => {
+    // Both are <payload>.<sig> over the same secret. The purpose label lives
+    // INSIDE the signed payload, so it cannot be edited to cross over.
+    const cookie = AUTH.sign('u1', SEC);
+    assert.strictEqual(MAGIC.verify(cookie, opts).ok, false, 'cookie must not open a link');
+    assert.strictEqual(AUTH.verify(MAGIC.mint('u1', opts), SEC), null, 'nor the reverse');
+  });
+
+  await t('a link expires', () => {
+    const tok = MAGIC.mint('u1', { ...opts, now: 0 });
+    assert.strictEqual(MAGIC.verify(tok, { ...opts, now: MAGIC.TTL_MS - 1 }).ok, true);
+    const late = MAGIC.verify(tok, { ...opts, now: MAGIC.TTL_MS + 1 });
+    assert.strictEqual(late.ok, false);
+    assert.ok(/expired/.test(late.why));
+  });
+
+  await t('a link works once — a forwarded one is a dead door', () => {
+    const st = { usedLinks: [] };
+    const tok = MAGIC.mint('u1', opts);
+    const first = MAGIC.verify(tok, { ...opts, used: MAGIC.usedSet(st) });
+    assert.strictEqual(first.ok, true);
+    MAGIC.spend(st, first.nonce);
+    const second = MAGIC.verify(tok, { ...opts, used: MAGIC.usedSet(st) });
+    assert.strictEqual(second.ok, false);
+    assert.ok(/already been used/.test(second.why));
+  });
+
+  await t('two links minted for the same person are different tokens', () => {
+    assert.notStrictEqual(MAGIC.mint('u1', opts), MAGIC.mint('u1', opts),
+      'each carries its own nonce, so spending one does not spend the other');
+  });
+
+  await t('the spent-nonce list is bounded', () => {
+    const st = { usedLinks: [] };
+    for (let i = 0; i < MAGIC.MAX_USED + 50; i++) MAGIC.spend(st, `n${i}`);
+    assert.strictEqual(st.usedLinks.length, MAGIC.MAX_USED, 'an unbounded list is a slow leak');
+    assert.ok(st.usedLinks.includes(`n${MAGIC.MAX_USED + 49}`), 'and it keeps the newest');
+  });
+
+  await t('junk is refused without throwing', () => {
+    for (const bad of ['', 'x', 'a.b.c', null, undefined, 'not.atoken', { }]) {
+      assert.strictEqual(MAGIC.verify(bad, opts).ok, false, String(bad));
+    }
+  });
+}
+
 /* ── 6. the API ──────────────────────────────────────────────────────────── */
 
 const PORT = 3907;
@@ -488,6 +562,41 @@ async function server() {
     assert.strictEqual(imp.body.reason, 'not-implemented');
   });
 
+  await t('a sign-in link lets exactly one person in, exactly once', async () => {
+    const MAGIC2 = require('../lib/magic');
+    const tok = MAGIC2.mint(L, { sec: SECRET });
+    const r = await fetch(`${BASE}/login/${tok}`, { redirect: 'manual' });
+    assert.strictEqual(r.status, 302, 'a good link signs you in and sends you to the app');
+    const setCookie = r.headers.get('set-cookie') || '';
+    assert.ok(new RegExp(`${AUTH.COOKIE}=`).test(setCookie));
+    assert.ok(/HttpOnly/.test(setCookie), 'and the session it mints is a normal one');
+
+    // The very same link again is spent.
+    const again = await fetch(`${BASE}/login/${tok}`, { redirect: 'manual' });
+    assert.strictEqual(again.status, 400, 'a forwarded link is a dead door');
+
+    // The cookie it handed out really is Linnea's, and only hers.
+    const uid = AUTH.verify(decodeURIComponent(setCookie.split('=')[1].split(';')[0]), SECRET);
+    assert.strictEqual(uid, L);
+  });
+
+  await t('there is NO route that mints a link — that is what keeps it safe', async () => {
+    // Possession of shell access is the credential. If any of these ever answer,
+    // anyone could ask for a link to anybody's account.
+    for (const [m, p] of [['POST', '/api/auth/link'], ['GET', '/api/auth/link'],
+      ['POST', `/api/auth/link/${A}`], ['GET', `/login`]]) {
+      const { status } = await api(m, p, m === 'GET' ? null : {}, A);
+      assert.ok(status === 404 || status === 400, `${m} ${p} answered ${status}`);
+    }
+  });
+
+  await t('a link for somebody who does not exist gets you nothing', async () => {
+    const tok = require('../lib/magic').mint('nobody-at-all', { sec: SECRET });
+    const r = await fetch(`${BASE}/login/${tok}`, { redirect: 'manual' });
+    assert.strictEqual(r.status, 400);
+    assert.ok(!(r.headers.get('set-cookie') || '').includes(AUTH.COOKIE), 'and no session');
+  });
+
   await t('the setup helper reads a tag back without believing the token', async () => {
     const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
     const fake = `${b64({ alg: 'RS256', kid: 'k' })}.${b64({
@@ -551,6 +660,7 @@ async function server() {
   await moduleSeam();
   await inviteRules();
   await squareBridge();
+  await magicLinks();
   await server();
 
   console.log(`\n${pass} passed, ${fails.length} failed`);
