@@ -1,0 +1,242 @@
+/* Warm dusk. The organising idea: this is a list about evenings out with people
+   you like, not a task manager — so it reads closer to a note left on a table
+   than to a productivity app. Deep plum ground, one warm accent, generous type,
+   and no checkbox grid. */
+
+:root{
+  --bg:#17131a;          /* deep warm plum-black */
+  --card:#211c26;
+  --card2:#2b2430;
+  --line:#332b3a;
+  --ink:#f4eee9;         /* warm off-white */
+  --ink2:#cbbfc6;
+  --dim:#948a9c;
+  --faint:#6b6274;
+  --accent:#f2845c;      /* warm coral — the only saturated thing on the page */
+  --accent2:#8fb9a8;     /* sage, for something already done */
+  --warn:#e0714f;
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --serif:'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
+  --page:620px;
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* The document never scrolls — every scroller is inside #app. Without this,
+   focusing a field lets iOS scroll the document to reveal it, dragging the fixed
+   layer off the top of the screen and leaving the header untappable. */
+html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior-y:none}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+input,textarea{font:inherit;color:var(--ink)}
+
+/* dvh, not inset:0 — a phone's layout viewport can be taller than what you can
+   actually see, which leaves the composer floating above the fold. */
+#app{position:fixed;top:0;left:0;right:0;height:100vh;height:100dvh;overflow:hidden}
+.screen{position:absolute;inset:0;display:none;flex-direction:column;background:var(--bg)}
+.screen.active{display:flex}
+
+/* ─── chrome ────────────────────────────────────────────────────────────── */
+.topbar{
+  display:flex;align-items:flex-start;gap:12px;
+  padding:calc(var(--safe-t) + 16px) 18px 12px;
+  max-width:var(--page);margin:0 auto;width:100%;
+}
+.topbar h1{font:600 21px/1.15 var(--serif);letter-spacing:-.01em;margin:0}
+/* The first block takes the slack so the trailing button sits on the edge. On
+   the space screen that block is `.ttl`, which is centred instead. */
+.topbar>div:first-of-type{flex:1;min-width:0}
+.topbar .ttl{flex:1;min-width:0;text-align:center}
+.topbar .with{
+  font:11px/1 var(--sans);letter-spacing:.16em;text-transform:uppercase;
+  color:var(--faint);margin-bottom:5px;
+}
+.sub{color:var(--dim);font:italic 400 14px/1.4 var(--serif);margin-top:3px}
+.icon-btn{
+  width:36px;height:36px;border-radius:50%;display:grid;place-items:center;
+  color:var(--dim);flex:none;
+}
+.icon-btn:active{color:var(--ink);background:var(--card)}
+.icon-btn svg{fill:currentColor}
+.avatar-btn{
+  width:34px;height:34px;border-radius:50%;flex:none;
+  background:var(--card2);border:1px solid var(--line);color:var(--ink2);
+  font:600 14px/1 var(--sans);display:grid;place-items:center;
+}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.scroll>*{max-width:var(--page);margin:0 auto;width:100%}
+.pad{height:30px}
+.pad-lg{height:120px}
+
+/* ─── sign in ───────────────────────────────────────────────────────────── */
+.screen.auth{display:none;place-items:center;padding:24px;z-index:80}
+.screen.auth.active{display:grid}
+.auth-in{width:min(340px,100%);text-align:center}
+.mark{font:600 40px/1.05 var(--serif);letter-spacing:-.02em;margin:0 0 18px}
+.lede{color:var(--dim);font:italic 400 16px/1.65 var(--serif);margin:0 0 30px}
+.lede b{color:var(--ink);font-style:normal;font-weight:600}
+.gbtn{display:flex;justify-content:center;min-height:44px}
+.note{color:var(--warn);font-size:13.5px;line-height:1.55;margin-top:22px}
+
+/* ─── the shelf ─────────────────────────────────────────────────────────── */
+.shelf{padding:6px 18px 0;display:flex;flex-direction:column;gap:10px}
+.sp-card{
+  display:flex;align-items:center;gap:14px;width:100%;text-align:left;
+  background:var(--card);border:1px solid var(--line);border-radius:16px;
+  padding:15px 16px;
+}
+.sp-card:active{background:var(--card2)}
+.sp-faces{display:flex;flex:none}
+.sp-faces i{
+  width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  background:var(--card2);border:1.5px solid var(--card);color:var(--ink2);
+  font:600 13px/1 var(--sans);font-style:normal;margin-left:-10px;
+}
+.sp-faces i:first-child{margin-left:0}
+.sp-bd{flex:1;min-width:0}
+.sp-bd b{display:block;font:600 17.5px/1.25 var(--serif);letter-spacing:-.01em}
+.sp-bd small{display:block;color:var(--dim);font-size:12.5px;margin-top:3px}
+.sp-count{
+  flex:none;font:600 15px/1 var(--sans);color:var(--accent);
+  min-width:26px;text-align:right;font-variant-numeric:tabular-nums;
+}
+.sp-count.none{color:var(--faint);font-weight:400}
+.add-space{
+  display:block;width:calc(100% - 36px);margin:12px 18px 0;padding:15px;
+  border:1px dashed var(--line);border-radius:16px;color:var(--dim);font-size:14.5px;
+}
+.add-space:active{color:var(--ink);border-color:var(--faint)}
+.empty{
+  text-align:center;color:var(--dim);padding:52px 26px;
+  font:italic 400 15.5px/1.7 var(--serif);
+}
+
+/* ─── the list ──────────────────────────────────────────────────────────── */
+.items{padding:4px 18px 0;display:flex;flex-direction:column}
+.it{
+  display:flex;align-items:flex-start;gap:13px;padding:14px 2px;
+  border-bottom:1px solid var(--line);
+}
+.it:last-child{border-bottom:0}
+/* The tick is a ring, not a checkbox — this is a list of things you want, and a
+   grid of empty squares reads as chores. */
+.tick{
+  width:23px;height:23px;border-radius:50%;flex:none;margin-top:2px;
+  border:1.5px solid var(--faint);display:grid;place-items:center;
+  color:transparent;font-size:12px;transition:all .15s ease;
+}
+.tick:active{transform:scale(.9)}
+.it.done .tick{border-color:var(--accent2);background:var(--accent2);color:var(--bg)}
+.it-bd{flex:1;min-width:0}
+.it-bd b{
+  display:block;font:400 17px/1.4 var(--serif);letter-spacing:-.005em;
+  word-break:break-word;
+}
+.it.done .it-bd b{color:var(--faint);text-decoration:line-through;text-decoration-thickness:1px}
+.it-bd p{color:var(--ink2);font-size:13.5px;line-height:1.5;margin:4px 0 0}
+.it-meta{
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px;
+  font:11.5px/1 var(--sans);color:var(--faint);
+}
+.it-meta .who{color:var(--dim)}
+.it-meta a{color:var(--accent);text-decoration:none}
+.chip{
+  padding:3px 7px;border-radius:6px;background:var(--card2);color:var(--dim);
+  font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+}
+.chip.private{color:var(--accent);background:rgba(242,132,92,.13)}
+.chip.public{color:var(--accent2);background:rgba(143,185,168,.13)}
+.chip.elsewhere{font-style:italic;text-transform:none;letter-spacing:0;font-size:11px}
+.chip.place::before{content:'⌖ ';opacity:.8}
+
+/* ─── composer ──────────────────────────────────────────────────────────── */
+.composer{
+  border-top:1px solid var(--line);background:var(--bg);
+  padding:10px 18px calc(var(--safe-b) + 10px);
+}
+.composer>*{max-width:var(--page);margin:0 auto;width:100%}
+.vis-row{display:flex;gap:6px;margin-bottom:9px}
+.vis-row button{
+  flex:1;padding:7px 4px;border-radius:9px;background:var(--card);
+  border:1px solid var(--line);color:var(--dim);
+  font:11px/1.35 var(--sans);letter-spacing:.04em;
+}
+.vis-row button b{display:block;font-size:12.5px;font-weight:600;letter-spacing:0}
+.vis-row button.on{background:var(--accent);border-color:var(--accent);color:#2a1206}
+.vis-row button.on b{color:#2a1206}
+.comp-in{display:flex;gap:10px;align-items:center}
+.comp-in input{
+  flex:1;min-width:0;background:var(--card);border:1px solid var(--line);
+  border-radius:13px;padding:13px 14px;outline:none;font-size:16px;
+}
+.comp-in input:focus{border-color:var(--accent)}
+.comp-in button{
+  width:46px;height:46px;flex:none;border-radius:13px;
+  background:var(--accent);color:#2a1206;font-size:24px;font-weight:600;
+  display:grid;place-items:center;
+}
+.comp-in button:active{opacity:.8}
+
+/* ─── sheets ────────────────────────────────────────────────────────────── */
+.modal{
+  position:fixed;inset:0;background:rgba(10,7,12,.86);backdrop-filter:blur(7px);
+  display:grid;place-items:center;z-index:70;padding:20px;
+}
+/* an author `display` beats the UA rule for [hidden] — restore it explicitly */
+.modal[hidden]{display:none}
+.modal-in{
+  width:min(400px,100%);max-height:88dvh;overflow-y:auto;
+  background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;
+}
+.modal-hd{margin-bottom:18px}
+.modal-hd b{display:block;font:600 21px/1.25 var(--serif)}
+.modal-hd span{display:block;color:var(--dim);font-size:12.5px;margin-top:4px}
+.fld{display:block;margin-bottom:14px}
+.fld>span{
+  display:block;font:11px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint);margin-bottom:6px;
+}
+.fld>span em{font-style:normal;text-transform:none;letter-spacing:0;opacity:.7}
+.fld input,.fld textarea{
+  width:100%;background:var(--card2);border:1px solid var(--line);border-radius:11px;
+  padding:11px 12px;outline:none;font-size:16px;resize:vertical;
+}
+.fld input:focus,.fld textarea:focus{border-color:var(--accent)}
+.primary{
+  width:100%;padding:14px;border-radius:13px;background:var(--accent);color:#2a1206;
+  font-size:15.5px;font-weight:600;margin-top:4px;
+}
+.primary:active{opacity:.85}
+.ghost{width:100%;color:var(--dim);padding:12px;font-size:14px;margin-top:8px}
+.ghost:active{color:var(--ink)}
+.danger{
+  width:100%;margin-top:10px;padding:12px;color:var(--warn);font-size:13.5px;
+  border:1px solid var(--line);border-radius:12px;
+}
+.danger[hidden]{display:none}
+.rows{display:flex;flex-direction:column;gap:1px;margin-bottom:14px}
+.row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:var(--card2);padding:12px 14px;font-size:14px;color:var(--dim);
+}
+.row:first-child{border-radius:11px 11px 0 0}
+.row:last-child{border-radius:0 0 11px 11px}
+.row b{color:var(--ink);font-weight:600}
+
+.invite-box{background:var(--card2);border-radius:13px;padding:14px;margin:16px 0}
+.ib-hd{font:600 14px/1 var(--sans);margin-bottom:7px}
+.ib-note{color:var(--dim);font-size:12.5px;line-height:1.55;margin:0 0 12px}
+.ib-link{
+  margin-top:12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;
+  padding:11px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:var(--accent);word-break:break-all;
+}
+
+.toast{
+  position:fixed;left:50%;bottom:calc(var(--safe-b) + 96px);transform:translateX(-50%);
+  background:var(--card2);border:1px solid var(--line);color:var(--ink);
+  padding:11px 17px;border-radius:99px;font-size:13.5px;z-index:90;
+  max-width:88vw;text-align:center;box-shadow:0 8px 26px rgba(0,0,0,.5);
+}
+.toast[hidden]{display:none}

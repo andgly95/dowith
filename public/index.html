@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#17131a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Do With">
+<title>Do With</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ───────────── SIGN IN ───────────── -->
+  <section id="scr-auth" class="screen auth">
+    <div class="auth-in">
+      <h1 class="mark">Do&nbsp;With</h1>
+      <p class="lede" id="authLede">
+        The things you keep meaning to do with the people you keep meaning to do them with.
+      </p>
+      <div id="gbtn" class="gbtn"></div>
+      <p class="note" id="authNote" hidden></p>
+    </div>
+  </section>
+
+  <!-- ───────────── SHELF ───────────── -->
+  <section id="scr-shelf" class="screen">
+    <header class="topbar">
+      <div>
+        <h1>Do With</h1>
+        <div class="sub" id="shelfSub">—</div>
+      </div>
+      <button class="avatar-btn" id="btnMe" aria-label="Account"><span id="meInitial">·</span></button>
+    </header>
+    <div class="scroll">
+      <div id="shelfList" class="shelf"></div>
+      <button class="add-space" id="btnNewSpace">+ &nbsp;Start a new list</button>
+      <div class="pad"></div>
+    </div>
+  </section>
+
+  <!-- ───────────── ONE SPACE ───────────── -->
+  <section id="scr-space" class="screen">
+    <header class="topbar">
+      <button class="icon-btn" id="spaceBack" aria-label="Back">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="ttl">
+        <div class="with">to do with</div>
+        <h1 id="spaceTitle">—</h1>
+      </div>
+      <button class="icon-btn" id="spaceMenu" aria-label="List settings">
+        <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
+      </button>
+    </header>
+    <div class="scroll" id="spaceScroll">
+      <div id="itemList" class="items"></div>
+      <div class="pad-lg"></div>
+    </div>
+    <div class="composer">
+      <div class="vis-row" id="visRow"></div>
+      <div class="comp-in">
+        <input id="newItem" type="text" placeholder="Something to do together…" autocapitalize="sentences">
+        <button id="btnAdd" aria-label="Add">+</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- one item, opened -->
+<div id="itemSheet" class="modal" hidden>
+  <div class="modal-in">
+    <div class="modal-hd"><b id="isTitle">—</b><span id="isMeta"></span></div>
+    <label class="fld"><span>What</span><input id="isName" type="text" maxlength="200"></label>
+    <label class="fld"><span>Notes <em>optional</em></span><textarea id="isNotes" rows="3" maxlength="2000"></textarea></label>
+    <label class="fld"><span>Where <em>optional</em></span><input id="isPlace" type="text" maxlength="120" placeholder="that ramen bar in Adams Morgan"></label>
+    <label class="fld"><span>Link <em>optional</em></span><input id="isLink" type="url" maxlength="500" placeholder="https://"></label>
+    <div class="vis-row" id="isVis"></div>
+    <button class="primary" id="isSave">Save</button>
+    <button class="danger" id="isDelete">Delete</button>
+    <button class="ghost" id="isCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- list settings / invite -->
+<div id="spaceSheet" class="modal" hidden>
+  <div class="modal-in">
+    <div class="modal-hd"><b id="ssTitle">List</b><span id="ssWho"></span></div>
+    <label class="fld" id="ssNameFld"><span>Name this list <em>groups only</em></span>
+      <input id="ssName" type="text" maxlength="60" placeholder="Ski trip crew"></label>
+    <div class="invite-box">
+      <div class="ib-hd">Invite someone</div>
+      <p class="ib-note">They'll get an account when they open the link. It works once, and expires in a fortnight.</p>
+      <button class="primary" id="ssInvite">Make an invite link</button>
+      <div id="ssLink" class="ib-link" hidden></div>
+    </div>
+    <button class="danger" id="ssLeave">Leave this list</button>
+    <button class="ghost" id="ssCancel">Close</button>
+  </div>
+</div>
+
+<!-- account -->
+<div id="meSheet" class="modal" hidden>
+  <div class="modal-in">
+    <div class="modal-hd"><b id="meName">—</b><span id="meEmail"></span></div>
+    <div class="rows">
+      <div class="row"><span>People you can share with</span><b id="meCircle">0</b></div>
+      <div class="row" id="squareRow"><span>The Square</span><b id="squareState">—</b></div>
+    </div>
+    <button class="ghost" id="meSignOut">Sign out</button>
+    <button class="ghost" id="meCancel">Close</button>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+[Unit]
+Description=Do With (things to do with people)
+After=network.target
+
+[Service]
+Type=simple
+User=andrew
+WorkingDirectory=/home/andrew/dowith
+ExecStart=/home/andrew/.nvm/versions/node/v22.21.0/bin/node server.js
+Restart=on-failure
+RestartSec=3
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

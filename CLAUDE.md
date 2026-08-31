@@ -1,0 +1,205 @@
+# Do With — CLAUDE.md
+
+A to-do list where the **with** is the point. Not a task app with sharing bolted
+on: the unit is a *list you keep with someone*, and it is titled from whichever
+side you are standing on. Andrew sees "to do with Linnea"; Linnea sees "to do
+with Andrew". Same list.
+
+Things like *go record shopping*, *watch "Obsession"*, *go swing dancing* — not
+chores. That shapes everything from the tick being a ring rather than a checkbox
+to the default visibility being `shared`.
+
+Port **3006**. Repo not yet published; not yet deployed (see Deployment).
+
+## Stack
+
+Same shape as `~/workout` and `~/trips`:
+
+- **Runtime:** Node.js v22, no build step — `node server.js` is production
+- **Server:** Express, thin `server.js` + CommonJS modules in `lib/`
+- **Store:** single JSON file (`data/store.json`)
+- **Frontend:** vanilla JS ES modules in `public/js/` + plain HTML/CSS
+- **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
+  `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
+  there and this is not the place to have a second opinion about sessions.
+- **Tests:** `npm test` — 43 assertions + a headless-chromium check
+
+## The model
+
+```js
+space = { id, name, memberIds: [...], createdBy, createdAt }
+item  = { id, spaceId, authorId, title, notes, visibility, tags,
+          mod: { place?, link? }, done, doneAt, doneBy, createdAt, updatedAt }
+```
+
+- **A space holds people.** Two, usually. A pair needs no name — from your side it
+  IS the other person. Three or more gets a name of its own, because "to do with
+  Sam, Alex, Jo and 3 others" is not a title. `titleFor(space, uid, nameOf)` is the
+  whole conceit and it costs one function.
+- **Items are flat with a `spaceId`**, not nested under spaces, because a `public`
+  item has to be findable from OUTSIDE its own space and nesting would make that a
+  scan of everything.
+
+## Visibility — read this before touching anything
+
+`lib/spaces.js` is PURE and is the most important file here. Every other rule is a
+convenience; this one is the promise.
+
+| | who sees it |
+|---|---|
+| `private` | the author. Nobody else, ever — not even the person the list is with |
+| `shared` | everyone in that space |
+| `public` | everyone who shares **any** space with the author |
+
+- **`public` is not a feed.** It means "a standing wish, for anyone of mine who
+  wants to pick it up" — so it surfaces in *every* space its author belongs to, and
+  the client marks it as arriving from elsewhere. The audience is the union of your
+  own spaces and nothing wider: your friend's friend is not in it, and there is no
+  discovery, no directory, no strangers.
+- **`canSee()` checks authorship first**, because being a member of an item's space
+  is not sufficient — a private item written there is still nobody's business.
+- **An unknown visibility is refused.** A typo, a future value, a hand-written
+  request: none of it may widen an audience. Failing open here is the one class of
+  bug this app cannot have, and there is a truth-table row for every way in.
+- **Editing and completing are different rights.** The sentence stays the author's;
+  ticking it off is anyone who can see it, because doing the thing is the point and
+  "Linnea ticked off record shopping" is the nice bit.
+- **A shared item stops being visible once its author leaves the space.** `shared`
+  means "the two of us" and there is no longer a two of us.
+- Routes answer **404, not 403**, for something you cannot see. "This exists but is
+  not yours" is itself a disclosure.
+
+## The item gate
+
+`lib/items.js`. Everything entering the store passes through it, and a field it
+doesn't know is dropped — so **add it there first** or a PATCH will appear to
+succeed and change nothing.
+
+- **`authorId` and `spaceId` come from the CALLER**, resolved from the session and
+  a membership check, never from the request body. There is no request shape that
+  signs an item with someone else's name or writes it into someone else's list.
+- A PATCH cannot move an item between spaces, reassign its author, or set `done` —
+  ticking off is its own operation because *who* did it is part of the record.
+- The default is `shared`. A default of `private` would quietly make the app a
+  diary.
+
+## Modules — the seam
+
+`lib/modules.js`. **This is not a plugin framework and resisting that is the
+point.** A framework written before there are two real implementations is a guess
+about what the second one needs, and it is always wrong in a way you find out at
+the third. What exists instead is one narrow contract:
+
+- A module owns `item.mod[<id>]` and supplies a `clean(raw)` returning its slice or
+  null. That is the whole contract.
+- Unknown module ids are dropped, so a client from the future cannot write fields
+  this server has no rules for.
+- **A module cannot touch visibility.** That lives in `lib/spaces.js` and nowhere
+  else. A map module that could quietly widen an audience is exactly how a private
+  thing ends up on somebody's screen.
+
+Two ship today, and two is the smallest number that shows the contract
+generalises: `place` (name, optional range-checked coordinates — refused on the way
+IN, because a bad pin is far easier to reject than to find later) and `link`
+(http/https only; a `javascript:` URL rendered into an href is script injection,
+and this app shows other people's items to you).
+
+**A map view is a renderer over items carrying `place`** — the seam is already
+there. Same for anything else: add a module, add a renderer.
+
+## Invites
+
+`lib/invites.js`. **Signing in alone gets a stranger nothing** — a brand-new Google
+account with no invite is refused and no user record is written. Deliberately
+chosen over an approval queue: this is an app for people you actually do things
+with, "send Linnea a link" is how that starts in real life, and a queue would mean
+strangers accumulating in the store waiting to be told no.
+
+Codes are unguessable (not merely unique), one-shot, and expire in a fortnight.
+`GET /api/invite/:code` is the one data route that works **signed out** — the link
+has to say who sent it, or a message from your girlfriend looks like phishing. It
+discloses the inviter's name and nothing about what is in the list.
+
+## The Square bridge — plumbing only
+
+`lib/square.js`. Nothing is imported and `importable()` refuses on purpose. It
+exists so the shape is decided while the reasons are fresh.
+
+- **The Square has no email on a person** — just a slug (`andrew`), a name, a
+  colour, an avatar. So there is nothing to join on, and anything that tried to
+  match automatically would be guessing whose data it was moving. The link must be
+  an explicit **claim**, and a claim needs proof.
+- Sketch for when it is built: a one-time code shown in the Square to a signed-in
+  person, pasted here, verified back against it. No shared secret, no
+  email-matching, no trusting a typed slug.
+- **Hard constraint:** the Square's store holds `messages`, `dms` and
+  `groupMessages` — everybody's private conversations. A bridge reads `people` and
+  `customGroups` and NOTHING else, read-only, projected down to id/name/avatar.
+  This is the same data the trips agent sandbox `--tmpfs`es away; a convenience
+  feature must not be the thing that walks it out of the building. There is a test
+  that dumps the projection and asserts no message content survives.
+- `squareStorePath` in config, not hardcoded — a bridge that assumes a sibling
+  directory breaks the moment either app moves.
+
+## HTTP routes
+
+| Route | Purpose |
+|---|---|
+| `POST /api/auth/google` | ID token + optional invite → session. **Public.** |
+| `GET /api/auth/me` · `POST /api/auth/signout` | status; sign out |
+| `GET /api/invite/:code` | who invited you — **works signed out** |
+| `GET /api/state` | you, your spaces with per-viewer titles, module manifest |
+| `POST /api/space` · `PATCH /api/space/:id` · `POST /api/space/:id/leave` | lists |
+| `GET /api/space/:id/items` · `POST /api/space/:spaceId/item` | the list itself |
+| `POST /api/space/:id/invite` | mint an invite into this list |
+| `PATCH`·`DELETE /api/item/:id` · `POST /api/item/:id/done` | one thing |
+| `GET /api/square/status` · `POST /api/square/import` | the bridge (501) |
+
+`mySpace()` and `myItem()` resolve from the session plus a membership/visibility
+check in one step, so no handler below them ever sees something the caller is not
+entitled to. There is no route that takes a user id.
+
+## Conventions
+
+- **`lib/spaces.js` is pure and is the source of truth for who sees what.** Don't
+  mirror `canSee` into the client; the client renders what the server sent.
+- **`esc()` for anything interpolated into innerHTML** — this app shows other
+  people's words to you.
+- **Assert visibility by layout in tests** (`offsetWidth`/`getClientRects`), never
+  `.hidden` — an author `display` rule beats the UA `[hidden]` rule.
+- **No build step.** `style.css` gets `?v=STAMP`; the JS tree is served under
+  `/js-<STAMP>/`, anchored on `src="` and global (a bare `.replace('/js/', …)`
+  takes the first match anywhere in the file, and a comment mentioning a path was
+  once enough to eat the stamp). **Restart to bust caches.**
+- **The suite points `CONFIG_FILE` at scratch space before requiring lib/config**,
+  which resolves its path once at load. A test suite must not write into the thing
+  it is testing.
+
+## Deployment
+
+Not deployed yet. To bring it up:
+
+1. `sudo cp dowith.service /etc/systemd/system/` (see below), `systemctl enable --now dowith`
+2. Add to `~/.cloudflared/config.yml`: `- hostname: dowith.guess-ai.app` →
+   `service: http://localhost:3006`, then `cloudflared tunnel route dns hot-seat
+   dowith.guess-ai.app` and restart `cloudflared`
+3. Put **either** `googleClientId` **or** `cfAccessTeam` + `cfAccessAud` in
+   `config.local.json` (gitignored, 0600). With neither, nobody can sign in.
+4. The first person still needs an invite, and there is nobody to send one — so
+   bootstrap once from the Pi:
+   `node -e "const s=require('./store');s.state.invites.push({code:'bootstrap',spaceId:null,createdBy:null,createdAt:Date.now(),expiresAt:Date.now()+9e8,usedBy:null});s.flushSync()"`
+   then open `/?invite=bootstrap`.
+
+## Open threads
+
+- **The map view.** `place` items carry coordinates; the renderer is the next
+  module. `~/trips/public/js/map.js` and `lib/geo.js` are the reference — Web
+  Mercator at an integer zoom, tiles as plain `<img>`, no mapping library.
+- **AI, quietly.** The obvious first use is paste-to-item — drop
+  "Khruangbin at the Anthem, March 4" in and have it come back as a title, a place
+  and a date. It should never be labelled as such; it is just the box being clever.
+- **Offline.** Notes-style outbox as in trips: queue writes in `localStorage`,
+  replay on reconnect. Items get server ids the moment they exist, so an optimistic
+  one needs a reconciliation story — same reason trips scoped its outbox to notes.
+- **Nudges.** `~/workout/lib/push.js` is portable as-is if "Linnea added something"
+  turns out to be wanted.
