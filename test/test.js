@@ -389,6 +389,47 @@ async function magicLinks() {
       assert.strictEqual(MAGIC.verify(bad, opts).ok, false, String(bad));
     }
   });
+
+  await t('a short code avoids the characters people mistype', () => {
+    // It gets read off one screen and typed into another. 0/O and 1/I/L are the
+    // ones that go wrong.
+    assert.ok(!/[01OIL]/.test(MAGIC.ALPHABET), MAGIC.ALPHABET);
+    const st = { loginCodes: [] };
+    const c = MAGIC.mintCode(st, 'u1').code;
+    assert.strictEqual(c.length, MAGIC.CODE_LEN);
+    assert.ok([...c].every(ch => MAGIC.ALPHABET.includes(ch)));
+  });
+
+  await t('a short code is single-use, case-insensitive, and short-lived', () => {
+    const st = { loginCodes: [] };
+    const c = MAGIC.mintCode(st, 'u1').code;
+    // Typed in lowercase from a phone keyboard — still the same code.
+    const first = MAGIC.redeemCode(st, `  ${c.toLowerCase()} `);
+    assert.deepStrictEqual([first.ok, first.uid], [true, 'u1']);
+    assert.strictEqual(MAGIC.redeemCode(st, c).ok, false, 'once only');
+
+    const st2 = { loginCodes: [] };
+    const c2 = MAGIC.mintCode(st2, 'u1', { now: 0 }).code;
+    assert.strictEqual(MAGIC.redeemCode(st2, c2, { now: MAGIC.CODE_TTL_MS + 1 }).ok, false, 'expires');
+  });
+
+  await t('codes are unguessable enough, and the list does not grow forever', () => {
+    const st = { loginCodes: [] };
+    const seen = new Set();
+    for (let i = 0; i < 300; i++) seen.add(MAGIC.mintCode(st, 'u1').code);
+    assert.strictEqual(seen.size, 300, 'no collisions across 300 draws');
+    // Minting prunes spent and expired ones rather than accumulating.
+    for (const c of st.loginCodes) c.usedAt = 1;
+    MAGIC.mintCode(st, 'u1');
+    assert.strictEqual(st.loginCodes.length, 1, 'spent codes are swept on the next mint');
+  });
+
+  await t('an unknown, blank or nonsense code gets you nothing', () => {
+    const st = { loginCodes: [] };
+    for (const bad of ['', null, undefined, 'AAAAAAAA', '../../x', 12345]) {
+      assert.strictEqual(MAGIC.redeemCode(st, bad).ok, false, String(bad));
+    }
+  });
 }
 
 /* ── 6. the API ──────────────────────────────────────────────────────────── */
@@ -580,11 +621,49 @@ async function server() {
     assert.strictEqual(uid, L);
   });
 
+  await t('a short code signs you in over HTTP, once', async () => {
+    // Minted server-side, as links are. There is no route that issues one.
+    //
+    // The server has to be STOPPED first. A live one holds the whole store in
+    // memory and flushes it on SIGTERM, so minting into the file underneath it
+    // and then restarting loses the write — which is exactly the footgun
+    // tools/link.js now refuses to let you walk into.
+    child.kill('SIGTERM');
+    await new Promise(r => child.on('exit', r));
+
+    const { spawnSync } = require('child_process');
+    const probe = spawnSync(process.execPath, ['-e', `
+      const store = require('${path.join(__dirname, '..', 'store')}');
+      const magic = require('${path.join(__dirname, '..', 'lib', 'magic')}');
+      store.state.users['probe'] = { id: 'probe', name: 'Probe', createdAt: 1 };
+      process.stdout.write(magic.mintCode(store.state, 'probe').code);
+      store.flushSync();
+    `], { env: { ...process.env, DATA_FILE: dataFile, CONFIG_FILE: cfgFile } });
+    const code = probe.stdout.toString().trim();
+    assert.ok(/^[A-Z2-9]{8}$/.test(code), `bad code: ${code}`);
+
+    child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
+      env: { ...process.env, PORT: String(PORT), DATA_FILE: dataFile, CONFIG_FILE: cfgFile },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    for (let i = 0; i < 60; i++) {
+      try { if ((await fetch(`${BASE}/api/auth/me`)).ok) break; } catch (_) {}
+      await new Promise(r => setTimeout(r, 150));
+    }
+
+    const r = await fetch(`${BASE}/l/${code.toLowerCase()}`, { redirect: 'manual' });
+    assert.strictEqual(r.status, 302, 'typed in lowercase, still works');
+    assert.ok((r.headers.get('set-cookie') || '').includes(AUTH.COOKIE));
+    const again = await fetch(`${BASE}/l/${code}`, { redirect: 'manual' });
+    assert.strictEqual(again.status, 400, 'and only once');
+  });
+
   await t('there is NO route that mints a link — that is what keeps it safe', async () => {
     // Possession of shell access is the credential. If any of these ever answer,
     // anyone could ask for a link to anybody's account.
     for (const [m, p] of [['POST', '/api/auth/link'], ['GET', '/api/auth/link'],
-      ['POST', `/api/auth/link/${A}`], ['GET', `/login`]]) {
+      ['POST', `/api/auth/link/${A}`], ['GET', `/login`],
+      ['POST', '/api/auth/code'], ['GET', '/api/auth/code'], ['POST', `/l`]]) {
       const { status } = await api(m, p, m === 'GET' ? null : {}, A);
       assert.ok(status === 404 || status === 400, `${m} ${p} answered ${status}`);
     }
