@@ -84,5 +84,7 @@ const qrcode = require('qrcode');
     console.log(await qrcode.toString(short, { type: 'terminal', small: true, errorCorrectionLevel: 'L' }));
     console.log(`  long link (click from a desktop, lasts a week):\n    ${o.link}`);
   }
-  console.log('\nCodes are good for 30 minutes and work once. Re-run for more.');
+  console.log('\nCodes are good for 30 minutes and work once — but OPENING one does');
+  console.log('nothing until the button is tapped, so it is safe to check the link');
+  console.log('yourself, and safe to send through anything that makes preview cards.');
 })();

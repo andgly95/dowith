@@ -400,6 +400,19 @@ async function magicLinks() {
     assert.ok([...c].every(ch => MAGIC.ALPHABET.includes(ch)));
   });
 
+  await t('LOOKING at a code does not spend it', () => {
+    // Every messaging app fetches a URL to build a preview card. A code spent by
+    // a crawler never reaches the person it was for — and the first thing anybody
+    // does with a link is check that it works.
+    const st = { loginCodes: [] };
+    const c = MAGIC.mintCode(st, 'u1').code;
+    for (let i = 0; i < 5; i++) {
+      assert.strictEqual(MAGIC.peekCode(st, c).ok, true, `peek ${i}`);
+    }
+    assert.strictEqual(MAGIC.redeemCode(st, c).ok, true, 'and it still redeems afterwards');
+    assert.strictEqual(MAGIC.peekCode(st, c).ok, false, 'but not twice');
+  });
+
   await t('a short code is single-use, case-insensitive, and short-lived', () => {
     const st = { loginCodes: [] };
     const c = MAGIC.mintCode(st, 'u1').code;
@@ -876,11 +889,24 @@ async function server() {
       await new Promise(r => setTimeout(r, 150));
     }
 
-    const r = await fetch(`${BASE}/l/${code.toLowerCase()}`, { redirect: 'manual' });
+    // A GET is what a link-preview crawler does. It must show the page and spend
+    // nothing — do it several times to be sure.
+    for (let i = 0; i < 3; i++) {
+      const peek = await fetch(`${BASE}/l/${code}`);
+      assert.strictEqual(peek.status, 200, 'a crawler gets a page');
+      assert.ok(!(peek.headers.get('set-cookie') || '').includes(AUTH.COOKIE),
+        'and no session — fetching a link must not sign anybody in');
+      assert.ok(/Sign in as/.test(await peek.text()), 'it says who it is for');
+    }
+
+    // The button behind it is what actually redeems.
+    const r = await fetch(`${BASE}/l/${code.toLowerCase()}`, { method: 'POST', redirect: 'manual' });
     assert.strictEqual(r.status, 302, 'typed in lowercase, still works');
     assert.ok((r.headers.get('set-cookie') || '').includes(AUTH.COOKIE));
-    const again = await fetch(`${BASE}/l/${code}`, { redirect: 'manual' });
+    const again = await fetch(`${BASE}/l/${code}`, { method: 'POST', redirect: 'manual' });
     assert.strictEqual(again.status, 400, 'and only once');
+    const dead = await fetch(`${BASE}/l/${code}`);
+    assert.ok(/already been used/.test(await dead.text()), 'and says so plainly afterwards');
   });
 
   await t('there is NO route that mints a link — that is what keeps it safe', async () => {
