@@ -130,9 +130,11 @@ function render() {
   $('spaceTabs').querySelectorAll('[data-tab]').forEach((b) => {
     const k = b.dataset.tab;
     b.classList.toggle('on', tab === k);
-    // The map tab only appears once something has a place — a permanently empty
-    // tab is worse than no tab.
-    b.hidden = k === 'map' && !placed;
+    // The map tab used to hide until something had a place, on the theory that an
+    // empty tab is clutter. In practice that hid the feature from the only person
+    // who needed to discover it — and the empty state behind it already explains
+    // exactly what to do, which makes the tab an affordance rather than clutter.
+    b.hidden = false;
     b.innerHTML = `${LABEL[k]}${COUNT[k] ? `<span class="n">${COUNT[k]}</span>` : ''}`;
   });
 

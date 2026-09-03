@@ -191,8 +191,8 @@ function connectCdp(wsUrl) {
     // makes finishing worth something.
     check(await evalJs(`document.querySelectorAll('#spaceTabs [data-tab]').length`) === 3,
       'the space has a to-do side, a record, and a map');
-    check(await evalJs(`document.querySelector('#spaceTabs [data-tab="map"]').hidden`) === true,
-      'the map tab stays hidden until something has a place — an empty tab is worse than none');
+    check(await visible('#spaceTabs [data-tab="map"]'),
+      'the map tab is always there — hiding it hid the feature from the person who had to find it');
     const beforeOpen = await evalJs(`document.querySelectorAll('#itemList .it').length`);
     await evalJs(`document.querySelector('#itemList .it [data-tick]').click()`);
     await sleep(1100);
@@ -244,8 +244,6 @@ function connectCdp(wsUrl) {
       await sleep(300);
     }
     if (editable) {
-      check(await evalJs(`document.querySelector('#spaceTabs [data-tab="map"]').hidden`) === false,
-        'a place makes the map tab appear');
       check(/Adams Morgan/.test(await evalJs(`document.getElementById('itemList').innerText`)),
         'and the place shows on the item');
     }
@@ -276,13 +274,17 @@ function connectCdp(wsUrl) {
     // ── the map hides the list, by LAYOUT ───────────────────────────────
     // `.items{display:flex}` beats the UA [hidden] rule, so this regressed once
     // already and the property would have said it was fine.
-    if (await evalJs(`!document.querySelector('#spaceTabs [data-tab="map"]').hidden`)) {
+    {
       await evalJs(`document.querySelector('#spaceTabs [data-tab="map"]').click()`);
       await sleep(1600);
       check(await visible('#mapCanvas'), 'the map should be on screen');
       check(!(await visible('#itemList')), 'and the list should not be above it');
-      check(await evalJs(`document.querySelectorAll('#mapCanvas .pin').length`) >= 1,
-        'with a pin for the place that resolved');
+      // Either pins, or a plain sentence saying why there aren't any. Not asserted
+      // as "there is a pin", because that would make this test depend on
+      // Nominatim being reachable, and a suite must not need the internet.
+      const pins = await evalJs(`document.querySelectorAll('#mapCanvas .pin').length`);
+      check(pins >= 1 || await visible('#mapCanvas .map-empty'),
+        'the map shows pins, or says plainly why it cannot');
       check(await evalJs(`document.querySelector('.composer').hidden`) === true,
         'and nothing to type into');
       await evalJs(`document.querySelector('#spaceTabs [data-tab="open"]').click()`);
