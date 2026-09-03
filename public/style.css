@@ -112,8 +112,39 @@ input,textarea{font:inherit;color:var(--ink)}
   font:italic 400 15.5px/1.7 var(--serif);
 }
 
+/* ─── to do / done ──────────────────────────────────────────────────────── */
+.seg{display:flex;gap:6px;padding:0 18px 10px;max-width:var(--page);margin:0 auto;width:100%}
+.seg button{
+  flex:1;padding:9px 8px;border-radius:10px;background:var(--card);
+  border:1px solid var(--line);color:var(--dim);font-size:13.5px;font-weight:600;
+}
+.seg button.on{background:var(--card2);border-color:var(--faint);color:var(--ink)}
+.seg button .n{color:var(--faint);font-weight:400;margin-left:5px}
+.seg button.on .n{color:var(--dim)}
+
+/* A month is a heading in a record, not a container — the same reasoning as the
+   group headings in trips. */
+.month{
+  font:11px/1 var(--sans);letter-spacing:.15em;text-transform:uppercase;
+  color:var(--faint);margin:22px 0 2px;padding-bottom:8px;
+  border-bottom:1px solid var(--line);
+}
+.month:first-child{margin-top:6px}
+/* In the record, the tick is a statement rather than a control — filled, quiet,
+   and it still un-ticks if something was marked off by mistake. */
+.items.record .it{align-items:baseline}
+.items.record .it-bd b{text-decoration:none;color:var(--ink2)}
+.record-empty{
+  text-align:center;color:var(--dim);padding:46px 26px;
+  font:italic 400 15.5px/1.7 var(--serif);
+}
+
 /* ─── the list ──────────────────────────────────────────────────────────── */
 .items{padding:4px 18px 0;display:flex;flex-direction:column}
+/* An author `display` beats the UA `[hidden]` rule, so switching to the map left
+   the whole list sitting above it. This is the same trap the other apps document
+   — and the reason the tests assert visibility by LAYOUT, not by the property. */
+.items[hidden]{display:none}
 .it{
   display:flex;align-items:flex-start;gap:13px;padding:14px 2px;
   border-bottom:1px solid var(--line);
@@ -149,6 +180,56 @@ input,textarea{font:inherit;color:var(--ink)}
 .chip.public{color:var(--accent2);background:rgba(143,185,168,.13)}
 .chip.elsewhere{font-style:italic;text-transform:none;letter-spacing:0;font-size:11px}
 .chip.place::before{content:'⌖ ';opacity:.8}
+
+/* ─── the map ───────────────────────────────────────────────────────────── */
+#mapWrap{position:relative;padding:0 18px}
+#mapWrap[hidden]{display:none}
+.map-canvas{
+  position:relative;overflow:hidden;touch-action:none;cursor:grab;
+  height:min(66vh,520px);border-radius:14px;background:var(--card2);
+  border:1px solid var(--line);
+}
+.map-canvas:active{cursor:grabbing}
+.map-canvas .pan{position:absolute;inset:0}
+/* Tiles are dimmed and desaturated so the pins are the brightest thing on the
+   map — this is a list with locations, not a map with annotations. */
+.map-canvas .tile{
+  position:absolute;width:256px;height:256px;
+  opacity:.55;filter:saturate(.5) invert(.92) hue-rotate(180deg);
+  user-select:none;-webkit-user-drag:none;
+}
+.map-empty{
+  position:absolute;inset:0;display:grid;place-items:center;padding:30px;
+  text-align:center;color:var(--dim);font:italic 400 15px/1.65 var(--serif);
+}
+.pin{
+  position:absolute;transform:translate(-50%,-100%);
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:0;max-width:130px;
+}
+.pin i{
+  width:13px;height:13px;border-radius:50%;background:var(--accent);
+  border:2px solid var(--bg);box-shadow:0 1px 5px rgba(0,0,0,.6);order:2;
+}
+.pin span{
+  order:1;font:11px/1.25 var(--sans);color:var(--ink);
+  background:rgba(23,19,26,.86);padding:3px 6px;border-radius:5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;
+}
+.pin.done i{background:var(--accent2)}
+.pin.done span{color:var(--dim)}
+.pin.private i{background:var(--accent);box-shadow:0 0 0 3px rgba(242,132,92,.22)}
+.zoomers{position:absolute;right:26px;top:8px;display:flex;flex-direction:column;gap:5px;z-index:3}
+.zoomers button{
+  width:32px;height:32px;border-radius:50%;background:var(--card);color:var(--ink2);
+  border:1px solid var(--line);font:16px/1 var(--sans);display:grid;place-items:center;
+  box-shadow:0 1px 5px rgba(0,0,0,.4);
+}
+.zoomers button:active{background:var(--card2);color:var(--ink)}
+.map-canvas .attrib{
+  position:absolute;right:6px;bottom:5px;font:9.5px/1 var(--sans);
+  color:var(--ink2);background:rgba(23,19,26,.7);padding:2px 5px;border-radius:3px;
+}
 
 /* ─── composer ──────────────────────────────────────────────────────────── */
 .composer{
@@ -223,6 +304,33 @@ input,textarea{font:inherit;color:var(--ink)}
 .row:first-child{border-radius:11px 11px 0 0}
 .row:last-child{border-radius:0 0 11px 11px}
 .row b{color:var(--ink);font-weight:600}
+
+.pick{display:flex;flex-direction:column;gap:6px}
+.pick button{
+  text-align:left;background:var(--card2);border:1px solid var(--line);
+  border-radius:11px;padding:11px 13px;font-size:15px;color:var(--ink2);
+}
+.pick button.on{border-color:var(--accent);color:var(--ink);background:var(--card)}
+.pick button small{display:block;color:var(--dim);font-size:12px;margin-top:2px}
+
+.opt-row{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  background:var(--card2);border-radius:11px;padding:12px 14px;margin:14px 0 0;
+}
+.opt-row span{display:block;min-width:0}
+.opt-row b{display:block;font-size:14.5px}
+.opt-row small{display:block;color:var(--dim);font-size:12px;margin-top:2px}
+.switch{
+  appearance:none;-webkit-appearance:none;flex:none;width:44px;height:26px;
+  border-radius:99px;background:var(--line);position:relative;transition:background .18s;
+}
+.switch::after{
+  content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;
+  border-radius:50%;background:var(--ink2);transition:transform .18s,background .18s;
+}
+.switch:checked{background:var(--accent)}
+.switch:checked::after{transform:translateX(18px);background:#2a1206}
+.switch:disabled{opacity:.45}
 
 .invite-box{background:var(--card2);border-radius:13px;padding:14px;margin:16px 0}
 .ib-hd{font:600 14px/1 var(--sans);margin-bottom:7px}

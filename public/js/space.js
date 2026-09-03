@@ -7,11 +7,13 @@
 import { S } from './state.js';
 import { $, esc, toast, showScreen, ago, openSheet, closeSheet } from './util.js';
 import { get, post, patch, del, applyWire } from './api.js';
+import { initMap, renderMap, resolvePlaces } from './map.js';
 
 let onChange = () => {};
 let onBack = () => {};
 let editing = null;      // item id open in the sheet
 let editingVis = 'shared';
+let tab = 'open';        // 'open' | 'done'
 
 const VIS = [
   { id: 'private', label: 'Just me', hint: 'only you' },
@@ -22,6 +24,7 @@ const VIS = [
 export async function openSpace(id) {
   S.spaceId = id;
   S.compose = 'shared';
+  tab = 'open';
   showScreen('scr-space');
   $('itemList').innerHTML = '<div class="empty">Loading…</div>';
   await refresh();
@@ -79,16 +82,79 @@ function itemHtml(it) {
   </div>`;
 }
 
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+// "September 2026", or just "September" inside the current year — the year is
+// noise until it isn't.
+function monthLabel(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear()
+    ? MONTHS[d.getMonth()]
+    : `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// The record: what you actually did, newest first, under the month it happened
+// in. This is the half of the app that isn't a to-do list — a list you finish is
+// empty, and this is the thing that makes finishing worth something.
+function recordHtml(done) {
+  if (!done.length) {
+    return `<div class="record-empty">Nothing ticked off yet.<br>
+      This fills up on its own.</div>`;
+  }
+  const rows = [];
+  let last = null;
+  for (const it of done) {
+    const label = monthLabel(it.doneAt || it.updatedAt || it.createdAt);
+    if (label !== last) { rows.push(`<div class="month">${esc(label)}</div>`); last = label; }
+    rows.push(itemHtml(it));
+  }
+  return rows.join('');
+}
+
 function render() {
   const sp = S.space;
   if (!sp) return;
   $('spaceTitle').textContent = sp.title;
 
-  $('itemList').innerHTML = S.items.length
-    ? S.items.map(itemHtml).join('')
-    : `<div class="empty">Nothing here yet.<br>What do you keep meaning to do together?</div>`;
+  const open = S.items.filter(i => !i.done);
+  const done = S.items.filter(i => i.done)
+    .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
 
-  $('itemList').querySelectorAll('[data-it]').forEach((row) => {
+  // The counts sit on the tabs, because "12 open / 31 done together" is the one
+  // number that says how the list is going.
+  const placed = S.items.filter(i => i.mod && i.mod.place).length;
+  const LABEL = { open: 'To do', done: 'Done together', map: 'Map' };
+  const COUNT = { open: open.length, done: done.length, map: placed };
+  $('spaceTabs').querySelectorAll('[data-tab]').forEach((b) => {
+    const k = b.dataset.tab;
+    b.classList.toggle('on', tab === k);
+    // The map tab only appears once something has a place — a permanently empty
+    // tab is worse than no tab.
+    b.hidden = k === 'map' && !placed;
+    b.innerHTML = `${LABEL[k]}${COUNT[k] ? `<span class="n">${COUNT[k]}</span>` : ''}`;
+  });
+
+  const list = $('itemList');
+  list.hidden = tab === 'map';
+  $('mapWrap').hidden = tab !== 'map';
+  list.classList.toggle('record', tab === 'done');
+  // The composer has no job in the record or on the map — you do not add things
+  // you have already done, and you do not type into a map.
+  $('spaceScroll').nextElementSibling.hidden = tab !== 'open';
+
+  if (tab === 'map') {
+    renderMap();
+  } else if (tab === 'done') {
+    list.innerHTML = recordHtml(done);
+  } else {
+    list.innerHTML = open.length
+      ? open.map(itemHtml).join('')
+      : `<div class="empty">Nothing here yet.<br>What do you keep meaning to do together?</div>`;
+  }
+
+  list.querySelectorAll('[data-it]').forEach((row) => {
     const id = row.dataset.it;
     row.querySelector('[data-tick]').addEventListener('click', () => toggle(id));
     row.querySelector('[data-open]').addEventListener('click', () => openItem(id));
@@ -119,6 +185,7 @@ async function toggle(id) {
   // it flips back when the server disagrees.
   it.done = !it.done;
   render();
+  if (it.done) toast(`Done — it's in the record now`);
   try {
     const b = await post(`/api/item/${id}/done`, { done: it.done });
     applyWire(b.state);
@@ -244,6 +311,16 @@ export function initSpace(changeHandler, backHandler) {
   onBack = backHandler || (() => {});
 
   $('spaceBack').addEventListener('click', () => onBack());
+  $('spaceTabs').querySelectorAll('[data-tab]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      tab = b.dataset.tab;
+      render();
+      // Resolving a place name costs a request each and Nominatim is one a
+      // second, so it happens when the map is opened rather than on every render.
+      if (tab === 'map' && await resolvePlaces()) { await refresh(); }
+    });
+  });
+  initMap((id) => openItem(id));
   $('spaceMenu').addEventListener('click', openSettings);
   $('btnAdd').addEventListener('click', add);
   $('newItem').addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });

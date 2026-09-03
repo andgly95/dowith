@@ -432,6 +432,212 @@ async function magicLinks() {
   });
 }
 
+/* ── 5c. nudges ──────────────────────────────────────────────────────────────
+   The notification surface is a second, quieter copy of the visibility model —
+   and a worse place to leak, because a lock screen reads itself out loud in a
+   room. So the audience is DERIVED from canSee rather than reasoned about, and
+   these rows are the proof. */
+
+async function nudges() {
+  console.log('\nnudges');
+  // lib/push is the only module here that touches the store, so DATA_FILE is
+  // pointed at scratch space BEFORE requiring it. CONFIG_FILE is already
+  // suite-scoped at the top of this file and cannot be re-pointed now — lib/config
+  // resolved its path at load, which is exactly why that line is at the top.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dw-push-'));
+  process.env.DATA_FILE = path.join(dir, 'store.json');
+  fs.writeFileSync(process.env.DATA_FILE,
+    JSON.stringify({ users: {}, spaces: [], items: [], invites: [], seq: 1 }));
+
+  const store = require('../store');
+  const push = require('../lib/push');
+  assert.ok(store.FILE.startsWith(os.tmpdir()), 'refusing to run against a real store');
+  const st = store.state;
+
+  // Andrew + Linnea, and Andrew + Sam. Linnea and Sam share nothing.
+  const person = (id, name) => ({ id, name, email: `${name}@x.com`, push: [], createdAt: 1 });
+  st.users = { A: person('A', 'Andrew'), L: person('L', 'Linnea'), S: person('S', 'Sam') };
+  st.spaces = [
+    { id: 'sp1', memberIds: ['A', 'L'], createdAt: 1 },
+    { id: 'sp2', memberIds: ['A', 'S'], createdAt: 1 },
+  ];
+  const item = (vis) => ({
+    id: `i-${vis}`, spaceId: 'sp1', authorId: 'A', title: `a ${vis} thing`,
+    visibility: vis, done: false, createdAt: 1,
+  });
+  const names = (list) => list.map(u => u.id).sort();
+
+  await t('a PRIVATE item is told to nobody at all', () => {
+    assert.deepStrictEqual(push.audienceFor(item('private')), [],
+      'a lock screen reads itself out loud in a room — this is the one that must never leak');
+  });
+
+  await t('a shared item is told to the others in that list, and no further', () => {
+    assert.deepStrictEqual(names(push.audienceFor(item('shared'))), ['L'],
+      'Sam is in another list and has no business knowing');
+  });
+
+  await t('a standing wish is told to everyone in your circle', () => {
+    assert.deepStrictEqual(names(push.audienceFor(item('public'))), ['L', 'S']);
+  });
+
+  await t('the author is never told about their own thought', () => {
+    for (const v of ['shared', 'public']) {
+      assert.ok(!push.audienceFor(item(v)).some(u => u.id === 'A'), v);
+    }
+  });
+
+  await t('the audience never exceeds who could see it on a screen', () => {
+    // The property, checked directly rather than trusted: for every visibility
+    // and every person, being in the audience implies being able to see it.
+    const SPmod = require('../lib/spaces');
+    for (const v of ['private', 'shared', 'public']) {
+      const it = item(v);
+      for (const u of push.audienceFor(it)) {
+        assert.ok(SPmod.canSee(it, u.id, st.spaces),
+          `${v}: ${u.id} would be notified about something they cannot see`);
+      }
+    }
+  });
+
+  await t('nothing is sent to somebody with no device subscribed', async () => {
+    assert.strictEqual(await push.itemAdded(item('shared'), () => 'Andrew'), 0,
+      'audience is not the same as reachable');
+  });
+
+  await t('a subscription is validated before it is stored', () => {
+    assert.strictEqual(push.addSub(st.users.L, { endpoint: 'ftp://nope' }), null);
+    assert.strictEqual(push.addSub(st.users.L, { endpoint: 'https://a/x' }), null, 'no keys');
+    const ec = crypto.createECDH('prime256v1'); ec.generateKeys();
+    assert.ok(push.addSub(st.users.L, {
+      endpoint: 'https://127.0.0.1:1/dead',
+      keys: { p256dh: ec.getPublicKey().toString('base64url'), auth: crypto.randomBytes(16).toString('base64url') },
+    }));
+    assert.strictEqual(push.devicesOf(st.users.L).length, 1);
+    // Same device twice must not stack up duplicate notifications.
+    push.addSub(st.users.L, {
+      endpoint: 'https://127.0.0.1:1/dead',
+      keys: { p256dh: ec.getPublicKey().toString('base64url'), auth: crypto.randomBytes(16).toString('base64url') },
+    });
+    assert.strictEqual(push.devicesOf(st.users.L).length, 1);
+  });
+
+  await t('a private item still reaches nobody once devices ARE subscribed', async () => {
+    // The dangerous version of the earlier row: an audience of zero is easy to
+    // get right by accident when nobody is reachable.
+    assert.strictEqual(await push.itemAdded(item('private'), () => 'x'), 0);
+  });
+
+  await t('the weekly digest only fires on its day, at its hour, once', async () => {
+    st.items = Array.from({ length: 4 }, (_, i) => ({
+      id: `d${i}`, spaceId: 'sp1', authorId: 'A', title: `thing ${i}`,
+      visibility: 'shared', done: false, createdAt: i,
+    }));
+    const at = (dow, h) => {
+      const d = new Date(2026, 8, 6, h, 0, 0);       // 2026-09-06 is a Sunday
+      d.setDate(d.getDate() + (dow - d.getDay()));
+      return d;
+    };
+    assert.deepStrictEqual(await push.tick(at(3, 19)), [], 'not a Sunday');
+    assert.deepStrictEqual(await push.tick(at(0, 9)), [], 'too early');
+    // Sunday evening: it tries. The endpoint is dead, so nothing goes out — but
+    // it must not then mark the week as done.
+    await push.tick(at(0, 19));
+    assert.strictEqual(st.users.L.digestOn, undefined,
+      'a failed send must not burn the week');
+    assert.strictEqual(st.users.L.digestTries.n, 1, 'but the attempt is counted');
+  });
+
+  await t('a thin list is not worth a notification, and does not burn retries', async () => {
+    st.items = st.items.slice(0, 2);              // fewer than three open
+    st.users.L.digestTries = undefined;
+    await push.tick(new Date(2026, 8, 6, 19, 0, 0));
+    assert.strictEqual(st.users.L.digestTries, undefined,
+      '"nothing much to say" is not a failure');
+  });
+
+  await t('digest contents obey visibility too', () => {
+    st.items = [
+      { id: 'x1', spaceId: 'sp1', authorId: 'A', title: 'shared one', visibility: 'shared', done: false, createdAt: 1 },
+      { id: 'x2', spaceId: 'sp1', authorId: 'A', title: 'PRIVATE ONE', visibility: 'private', done: false, createdAt: 2 },
+      { id: 'x3', spaceId: 'sp1', authorId: 'A', title: 'done one', visibility: 'shared', done: true, createdAt: 3 },
+    ];
+    const open = push.openFor('L');
+    assert.deepStrictEqual(open.map(i => i.title), ['shared one'],
+      'not the private one, and not the finished one');
+    assert.deepStrictEqual(push.openFor('A').map(i => i.title).sort(),
+      ['PRIVATE ONE', 'shared one'], 'the author sees their own');
+  });
+
+  push.stop();
+  try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
+  delete process.env.DATA_FILE;
+}
+
+/* ── 5d. geocoding ───────────────────────────────────────────────────────── */
+
+async function geocoding() {
+  console.log('\ngeocoding');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dw-geo-'));
+  process.env.DATA_FILE = path.join(dir, 'store.json');
+  fs.writeFileSync(process.env.DATA_FILE,
+    JSON.stringify({ users: {}, spaces: [], items: [], invites: [], places: {}, seq: 1 }));
+  // store is a singleton and nudges() already loaded it against its own temp file,
+  // so this section drives lib/geo with an injected fetch and its own cache object
+  // rather than trying to re-point the store.
+  const geo = require('../lib/geo');
+  const ok = (lat, lon) => async () => ({ ok: true, json: async () => [{ lat: String(lat), lon: String(lon), display_name: 'Somewhere' }] });
+
+  await t('a coordinate off the Earth is refused rather than stored', async () => {
+    assert.strictEqual(geo.onEarth(38.9, -77), true);
+    for (const [la, lo] of [[999, 0], [0, -400], [NaN, 0], [0, 0]]) {
+      assert.strictEqual(geo.onEarth(la, lo), false, `${la},${lo}`);
+    }
+    // 0,0 is in the Gulf of Guinea and is almost always a parse failure.
+    const r = await geo.lookup('gulf of guinea nonsense', { fetchImpl: ok(0, 0) });
+    assert.strictEqual(r.lat, null, 'stored as "not a place", not as a pin in the sea');
+  });
+
+  await t('the same place is looked up once, whatever the casing', async () => {
+    let calls = 0;
+    const counted = async (...a) => { calls++; return ok(38.9217, -77.0425)(...a); };
+    const a = await geo.lookup('Adams Morgan', { fetchImpl: counted });
+    const b = await geo.lookup('  adams   morgan ', { fetchImpl: counted });
+    assert.strictEqual(a.lat, 38.9217);
+    assert.strictEqual(b.lat, 38.9217);
+    assert.strictEqual(calls, 1, 'one request — Nominatim asks you to cache, and it is right to');
+  });
+
+  await t('a name that is not a place is remembered as such', async () => {
+    const empty = async () => ({ ok: true, json: async () => [] });
+    const r = await geo.lookup('asdfqwerzxcv not a place', { fetchImpl: empty });
+    assert.strictEqual(r.lat, null);
+    let calls = 0;
+    await geo.lookup('asdfqwerzxcv not a place', { fetchImpl: async () => { calls++; return empty(); } });
+    assert.strictEqual(calls, 0, 'or it would cost a request on every single render');
+  });
+
+  await t('a network failure is NOT remembered as "not a place"', async () => {
+    const down = async () => { throw new Error('network down'); };
+    assert.strictEqual(await geo.lookup('somewhere real', { fetchImpl: down }), null,
+      'no pin yet, rather than a 500 on a page that is mostly about something else');
+    // And it will try again, because a blip is not evidence.
+    const r = await geo.lookup('somewhere real', { fetchImpl: ok(51.5, -0.12) });
+    assert.strictEqual(r.lat, 51.5);
+  });
+
+  await t('too short to be a place is not asked about', async () => {
+    let calls = 0;
+    for (const q of ['', ' ', 'a']) {
+      assert.strictEqual(await geo.lookup(q, { fetchImpl: async () => { calls++; return ok(1, 1)(); } }), null, JSON.stringify(q));
+    }
+    assert.strictEqual(calls, 0);
+  });
+
+  try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
+  delete process.env.DATA_FILE;
+}
+
 /* ── 6. the API ──────────────────────────────────────────────────────────── */
 
 const PORT = 3907;
@@ -594,6 +800,25 @@ async function server() {
     assert.strictEqual(after.body.items.length, before);
   });
 
+  await t('geocoding is scoped to what you can see', async () => {
+    // It cannot be used to resolve names by proxy, and cannot reveal that a
+    // private item exists by counting how many names it asked about.
+    assert.strictEqual((await api('POST', '/api/space/sp1/geocode', {}, S)).status, 404,
+      'not your list, not your lookup');
+    const { status, body } = await api('POST', '/api/space/sp1/geocode', {}, L);
+    assert.strictEqual(status, 200);
+    assert.ok(typeof body.asked === 'number' && body.asked <= 10, 'and it is batched');
+  });
+
+  await t('a place with no coordinates is simply absent from the map', async () => {
+    const { body } = await api('POST', '/api/space/sp1/item',
+      { title: 'ramen somewhere', mod: { place: { name: 'that ramen bar' } } }, A);
+    const pl = body.item.mod.place;
+    assert.strictEqual(pl.name, 'that ramen bar');
+    assert.strictEqual(pl.lat, null,
+      'a name is a fine place; a guessed pin is worse than no pin');
+  });
+
   await t('the Square bridge refuses over HTTP too, and says why', async () => {
     const st = await api('GET', '/api/square/status', null, A);
     assert.strictEqual(st.status, 200);
@@ -688,6 +913,22 @@ async function server() {
     assert.strictEqual(gate.status, 401, 'reading a token is not believing it');
   });
 
+  await t('/share serves the app so a share survives sign-in', async () => {
+    // The share lives in the URL, which is what makes it survive the round trip
+    // through an identity provider instead of being dropped on the floor.
+    const r = await fetch(`${BASE}/share?title=Khruangbin&url=https%3A%2F%2Fex.com%2Fx`, { redirect: 'manual' });
+    assert.strictEqual(r.status, 200, 'signed out or in, it serves the shell');
+    const html = await r.text();
+    assert.ok(/\/js-[a-z0-9]+\/app\.js/.test(html), 'and it is the stamped shell, not a bare page');
+  });
+
+  await t('the manifest declares a share target', async () => {
+    const m = await (await fetch(`${BASE}/manifest.json`)).json();
+    assert.strictEqual(m.share_target.action, '/share');
+    assert.strictEqual(m.share_target.method, 'GET',
+      'GET so the same URL works from a Shortcut or a bookmarklet — iOS has no share target at all');
+  });
+
   await t('the shell is cache-busted and the stamped js path resolves', async () => {
     const html = await (await fetch(`${BASE}/`)).text();
     assert.ok(/style\.css\?v=[a-z0-9]+/.test(html));
@@ -740,6 +981,8 @@ async function server() {
   await inviteRules();
   await squareBridge();
   await magicLinks();
+  await nudges();
+  await geocoding();
   await server();
 
   console.log(`\n${pass} passed, ${fails.length} failed`);

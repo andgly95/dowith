@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 43 assertions + a headless-chromium check
+- **Tests:** `npm test` — 81 assertions + a headless-chromium check
 
 ## The model
 
@@ -141,6 +141,112 @@ exists so the shape is decided while the reasons are fresh.
 - `squareStorePath` in config, not hardcoded — a bridge that assumes a sibling
   directory breaks the moment either app moves.
 
+## Getting things in — the load-bearing feature
+
+A shared list dies because adding to it was three taps too many, not because
+nobody cared. So there is one route, `GET /share?title=&text=&url=`, and every way
+in points at it:
+
+- `share_target` in the manifest, for Android and desktop Chrome.
+- **iOS Safari has no Web Share Target API at all**, so on a phone the real path
+  is an iOS Shortcut hitting the same URL. Recipe: *Share Sheet → Get URLs →
+  Open URL* with `https://…/share?url=` + the input.
+- A bookmarklet, or just a link somebody sends you.
+
+GET rather than POST for exactly that reason: no multipart handling, and the same
+URL works from all four. `app.js` reads the query after auth resolves, so a share
+**survives the sign-in round trip** instead of being dropped — it lives in the URL,
+which is the only place that survives a redirect through an identity provider.
+
+`share.js` guesses everything it can, because you are standing in a shop: the list
+you used last, `shared` visibility (a thing you bothered to share is rarely a
+secret), and the URL dug out of `text` as well as `url`, since Android puts it in
+either. One tap on the list, one on Add. The share is then stripped from the URL so
+a reload can't add it twice.
+
+## The record
+
+Done items leave the to-do list and appear under **Done together**, newest first,
+grouped by the month they happened in, with who ticked each one off.
+
+A to-do list you finish is empty; a record of what you did with someone is not.
+That is the whole argument for the feature, and it cost almost nothing —
+`done`, `doneAt` and `doneBy` were already on every item, so this is presentation.
+
+- The composer is hidden in the record and on the map. You don't add things you've
+  already done, and you don't type into a map.
+- The month is a heading, not a container — same reasoning as the group headings in
+  trips.
+- **`.items[hidden]{display:none}` is load-bearing.** An author `display` beats the
+  UA `[hidden]` rule, so switching to the map left the entire list sitting above
+  it. Asserted by LAYOUT in `client-check.js`, because the property said it was fine.
+
+## Nudges
+
+`lib/push.js`. The transport half is lifted from the workout app — lazily-minted
+VAPID keys, subscriptions in the store, 404/410 pruning, bounded retries — because
+that is solved and tested.
+
+**What is different, and what matters: who is allowed to be told.** In the workout
+app a notification was about your own training, so there was no audience question.
+Here every nudge is about somebody else's item, which makes the notification
+surface a second, quieter copy of the visibility model — and a worse place to leak,
+because a lock screen reads itself out loud in a room.
+
+- **`audienceFor()` derives from `SP.canSee`** rather than reasoning about it. A
+  nudge must never reach further than a screen would, and asking the same function
+  is the only way to guarantee that. There is a test asserting the property
+  directly: for every visibility and every person, being in the audience implies
+  being able to see it.
+- A **private item notifies nobody**, and there is a second test for that with
+  devices actually subscribed — an audience of zero is easy to get right by
+  accident when nobody is reachable.
+- The author is never told about their own thought.
+- `itemAdded` fires **after the response and is never awaited** — a slow push
+  service must not make adding something feel slow.
+- The weekly digest goes out Sunday evening, needs at least three open things to be
+  worth sending, and a failed send doesn't burn the week. "Not much on the list" is
+  not a failure and doesn't count against the retry budget.
+
+## The map
+
+`public/js/map.js` — a second view over items carrying `place`. No mapping library:
+tiles are plain `<img>` at an integer zoom in Web Mercator, the same approach trips
+uses. Eighty lines, no dependency to break, and it degrades to pins-on-a-blank-
+ground if the tiles don't load, which still answers "is there anything near us".
+
+- Pan and zoom are hand-rolled pointer handling. During a drag the layer moves
+  under a CSS transform and only re-renders on release — re-rendering per
+  `pointermove` re-requests every tile. `moved` suppresses the click after a drag
+  and **clears on the next tick**, or one pan disables every pin until you drag again.
+- `view.z === null` means auto-fit; the first gesture pins it.
+- The map tab only appears once something has a place. A permanently empty tab is
+  worse than no tab.
+
+### Geocoding
+
+`lib/geo.js` uses **Nominatim, not a model**. This is geocoding — a solved problem
+with a right answer — and asking a language model where something is gets you a
+plausible coordinate rather than a correct one, which on a map is worse than
+nothing because a wrong pin looks exactly like a right one.
+
+Their usage policy shapes the file: one request a second, a real User-Agent, cache
+hard. So lookups are serialised behind a single queue, the cache is checked again
+*inside* the queue (several items with the same place become one request), and:
+
+- **Coordinates are range-checked before they are stored** — including `0,0`, which
+  is in the Gulf of Guinea and is almost always a parse failure. A bad pin sits in
+  the sea forever; refusing it on the way in is far cheaper than finding it later.
+- **A name that isn't a place is remembered as such**, or it would cost a request
+  on every render.
+- **A network failure is NOT remembered.** A blip is not evidence that somewhere
+  doesn't exist, and caching that would be wrong for a week.
+- `POST /api/space/:id/geocode` is scoped to items *you can see*, so it can't be
+  used to geocode by proxy, and the count it returns can't reveal that a private
+  item exists.
+- The cache is shared across everybody and lives in `state.places` — a place's
+  coordinates are not anybody's private business.
+
 ## HTTP routes
 
 | Route | Purpose |
@@ -154,6 +260,9 @@ exists so the shape is decided while the reasons are fresh.
 | `POST /api/space/:id/invite` | mint an invite into this list |
 | `PATCH`·`DELETE /api/item/:id` · `POST /api/item/:id/done` | one thing |
 | `GET /api/square/status` · `POST /api/square/import` | the bridge (501) |
+| `GET /share` | share target / Shortcut / bookmarklet — serves the shell |
+| `POST /api/space/:id/geocode` | resolve place names you can see, batched |
+| `POST /api/push/subscribe` · `/unsubscribe` · `/test` | nudges |
 
 `mySpace()` and `myItem()` resolve from the session plus a membership/visibility
 check in one step, so no handler below them ever sees something the caller is not
@@ -192,14 +301,16 @@ Not deployed yet. To bring it up:
 
 ## Open threads
 
-- **The map view.** `place` items carry coordinates; the renderer is the next
-  module. `~/trips/public/js/map.js` and `lib/geo.js` are the reference — Web
-  Mercator at an integer zoom, tiles as plain `<img>`, no mapping library.
 - **AI, quietly.** The obvious first use is paste-to-item — drop
   "Khruangbin at the Anthem, March 4" in and have it come back as a title, a place
   and a date. It should never be labelled as such; it is just the box being clever.
+  The `/share` sheet is where it belongs.
 - **Offline.** Notes-style outbox as in trips: queue writes in `localStorage`,
   replay on reconnect. Items get server ids the moment they exist, so an optimistic
   one needs a reconciliation story — same reason trips scoped its outbox to notes.
-- **Nudges.** `~/workout/lib/push.js` is portable as-is if "Linnea added something"
-  turns out to be wanted.
+- **Wish matching.** Two people in your circle with the same standing wish and
+  neither knows. The data is already there — `public` items across your spaces —
+  and it's the best idea on the roadmap.
+- **The Square link.** Plumbing is in and refuses; it needs the one-time-code proof
+  step described above.
+- **Tags.** `cleanTags` folds and caps them already; there is no UI at all.

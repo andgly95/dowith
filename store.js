@@ -19,6 +19,9 @@ function defaultState() {
     items: [],
     // One-shot codes. The only way anybody gets an account or joins a space.
     invites: [],
+    // Geocode cache, shared across everybody — a place's coordinates are not
+    // anybody's private business, and looking one up twice is rude to OSM.
+    places: {},
     seq: 1,
   };
 }

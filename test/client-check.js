@@ -185,13 +185,37 @@ function connectCdp(wsUrl) {
       `a private item reached her screen — this is the bug the app cannot have:\n${hers}`);
     check(await evalJs(`document.querySelectorAll('#itemList .it').length`) === 2, 'two, not three');
 
-    // She can tick his shared one off, and gets the credit.
+    // ── the record ──────────────────────────────────────────────────────
+    // She ticks his shared one off. It leaves the to-do list and turns up in the
+    // record with her name on it — a list you finish is empty, and this is what
+    // makes finishing worth something.
+    check(await evalJs(`document.querySelectorAll('#spaceTabs [data-tab]').length`) === 3,
+      'the space has a to-do side, a record, and a map');
+    check(await evalJs(`document.querySelector('#spaceTabs [data-tab="map"]').hidden`) === true,
+      'the map tab stays hidden until something has a place — an empty tab is worse than none');
+    const beforeOpen = await evalJs(`document.querySelectorAll('#itemList .it').length`);
     await evalJs(`document.querySelector('#itemList .it [data-tick]').click()`);
-    await sleep(1000);
-    check(/ticked it off/.test(await evalJs(`document.getElementById('itemList').innerText`)),
-      'whoever does the thing gets to say so');
+    await sleep(1100);
+    check(await evalJs(`document.querySelectorAll('#itemList .it').length`) === beforeOpen - 1,
+      'it leaves the to-do list rather than sitting there struck through');
 
-    // ...but cannot rewrite his sentence.
+    await evalJs(`document.querySelector('#spaceTabs [data-tab="done"]').click()`);
+    await sleep(400);
+    const record = await evalJs(`document.getElementById('itemList').innerText`);
+    check(/ticked it off/.test(record), `whoever does the thing gets to say so:\n${record}`);
+    check(/Linnea/.test(record), 'and it is her name on it');
+    check(await evalJs(`document.querySelectorAll('#itemList .month').length`) >= 1,
+      'grouped under the month it happened in');
+    // Nothing to add to a list of things already done.
+    check(await evalJs(`document.querySelector('.composer').hidden`) === true,
+      'the composer has no job in the record');
+
+    await evalJs(`document.querySelector('#spaceTabs [data-tab="open"]').click()`);
+    await sleep(400);
+    check(await evalJs(`document.querySelector('.composer').hidden`) === false,
+      'and comes back on the to-do side');
+
+    // ...but she cannot rewrite his sentence.
     await evalJs(`document.querySelector('#itemList .it [data-open]').click()`);
     await sleep(500);
     check(await visible('#itemSheet .modal-in'), 'she can open it');
@@ -203,8 +227,71 @@ function connectCdp(wsUrl) {
     check(!(await visible('#itemSheet .modal-in')), 'the sheet closes');
     check(await evalJs(`window.scrollY`) === 0, 'and the viewport goes back to the top');
 
+    // ── the map ─────────────────────────────────────────────────────────
+    // The tab appears only once something has a place, and a pin is drawn from
+    // coordinates the server resolved — never guessed.
+    await evalJs(`document.querySelector('#spaceTabs [data-tab="open"]').click()`);
+    await sleep(300);
+    await evalJs(`document.querySelector('#itemList .it [data-open]').click()`);
+    await sleep(400);
+    const editable = await evalJs(`!document.getElementById('isName').disabled`);
+    if (editable) {
+      await evalJs(`document.getElementById('isPlace').value = 'Adams Morgan, Washington DC'`);
+      await evalJs(`document.getElementById('isSave').click()`);
+      await sleep(1200);
+    } else {
+      await evalJs(`document.getElementById('isCancel').click()`);
+      await sleep(300);
+    }
+    if (editable) {
+      check(await evalJs(`document.querySelector('#spaceTabs [data-tab="map"]').hidden`) === false,
+        'a place makes the map tab appear');
+      check(/Adams Morgan/.test(await evalJs(`document.getElementById('itemList').innerText`)),
+        'and the place shows on the item');
+    }
+
+    // ── share in ────────────────────────────────────────────────────────
+    // Arriving from a share sheet: the sheet opens pre-filled, you pick a list,
+    // and it lands. One tap on the list, one on Add.
+    await S('Page.navigate', {
+      url: `${BASE}/share?title=${encodeURIComponent('Khruangbin at the Anthem')}&url=${encodeURIComponent('https://example.com/gig')}`,
+    });
+    await sleep(2400);
+    check(await visible('#shareSheet .modal-in'), 'a share should open the add sheet');
+    check(await evalJs(`document.getElementById('shTitle').value`) === 'Khruangbin at the Anthem',
+      'pre-filled from the share');
+    check(await evalJs(`document.querySelectorAll('#shWhere [data-w]').length`) >= 1,
+      'and offers the lists to put it in');
+    check(await evalJs(`!!document.querySelector('#shWhere [data-w].on')`),
+      'with one already chosen, so Add is one tap away');
+    await evalJs(`document.getElementById('shSave').click()`);
+    await sleep(1200);
+    check(!(await visible('#shareSheet .modal-in')), 'the sheet closes');
+    // The share is taken out of the URL so a reload cannot add it twice.
+    check(await evalJs(`location.search`) === '' && await evalJs(`location.pathname`) === '/',
+      'and the URL is cleaned so a reload does not re-add it');
+    const after = await evalJs(`document.getElementById('itemList').innerText`);
+    check(/Khruangbin at the Anthem/.test(after), `the shared thing landed:\n${after}`);
+
+    // ── the map hides the list, by LAYOUT ───────────────────────────────
+    // `.items{display:flex}` beats the UA [hidden] rule, so this regressed once
+    // already and the property would have said it was fine.
+    if (await evalJs(`!document.querySelector('#spaceTabs [data-tab="map"]').hidden`)) {
+      await evalJs(`document.querySelector('#spaceTabs [data-tab="map"]').click()`);
+      await sleep(1600);
+      check(await visible('#mapCanvas'), 'the map should be on screen');
+      check(!(await visible('#itemList')), 'and the list should not be above it');
+      check(await evalJs(`document.querySelectorAll('#mapCanvas .pin').length`) >= 1,
+        'with a pin for the place that resolved');
+      check(await evalJs(`document.querySelector('.composer').hidden`) === true,
+        'and nothing to type into');
+      await evalJs(`document.querySelector('#spaceTabs [data-tab="open"]').click()`);
+      await sleep(400);
+      check(await visible('#itemList'), 'and the list comes back');
+    }
+
     if (errors.length) throw new Error(`page errors:\n${errors.join('\n')}`);
-    console.log('client-check: ok — gate, mirroring, and a private thing staying private');
+    console.log('client-check: ok — gate, mirroring, share-in, the record, and a private thing staying private');
   } catch (e) {
     fail = e;
     console.error('client-check FAILED:', e.message);

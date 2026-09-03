@@ -58,8 +58,21 @@
         <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
       </button>
     </header>
+    <div class="seg" id="spaceTabs">
+      <button data-tab="open" class="on">To do</button>
+      <button data-tab="done">Done together</button>
+      <button data-tab="map" id="tabMap" aria-label="Map">Map</button>
+    </div>
     <div class="scroll" id="spaceScroll">
       <div id="itemList" class="items"></div>
+      <div id="mapWrap" hidden>
+        <div class="map-canvas" id="mapCanvas"></div>
+        <div class="zoomers">
+          <button id="mapIn" aria-label="Zoom in">+</button>
+          <button id="mapOut" aria-label="Zoom out">−</button>
+          <button id="mapFit" aria-label="Fit everything">⤢</button>
+        </div>
+      </div>
       <div class="pad-lg"></div>
     </div>
     <div class="composer">
@@ -71,6 +84,18 @@
     </div>
   </section>
 
+</div>
+
+<!-- something shared in from elsewhere -->
+<div id="shareSheet" class="modal" hidden>
+  <div class="modal-in">
+    <div class="modal-hd"><b>Add this</b><span id="shShared"></span></div>
+    <label class="fld"><span>What</span><input id="shTitle" type="text" maxlength="200"></label>
+    <label class="fld"><span>Which list</span><div class="pick" id="shWhere"></div></label>
+    <div class="vis-row" id="shVis"></div>
+    <button class="primary" id="shSave">Add it</button>
+    <button class="ghost" id="shCancel">Not now</button>
+  </div>
 </div>
 
 <!-- one item, opened -->
@@ -113,6 +138,10 @@
       <div class="row"><span>People you can share with</span><b id="meCircle">0</b></div>
       <div class="row" id="squareRow"><span>The Square</span><b id="squareState">—</b></div>
     </div>
+    <label class="opt-row" id="nudgeRow">
+      <span><b>Nudges</b><small id="nudgeSub">when someone adds something</small></span>
+      <input type="checkbox" id="optNudge" class="switch">
+    </label>
     <button class="ghost" id="meSignOut">Sign out</button>
     <button class="ghost" id="meCancel">Close</button>
   </div>
