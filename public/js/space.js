@@ -161,6 +161,7 @@ function render() {
 
   const list = $('itemList');
   list.hidden = tab === 'map';
+  list.classList.remove('after-groups');
   $('mapWrap').hidden = tab !== 'map';
   list.classList.toggle('record', tab === 'done');
   // The composer has no job in the record or on the map — you do not add things
@@ -182,26 +183,24 @@ function render() {
   } else if (tab === 'done') {
     list.innerHTML = recordHtml(done);
   } else if (showGroups) {
-    // Tap a group to go into it. The untagged bucket is last and reads as a
-    // leftover on purpose — it is one, and pretending otherwise would invite
-    // people to file things that do not want filing.
-    list.innerHTML = '';
+    // Groups you tap into, and then — right there underneath, not behind another
+    // tap — everything that isn't in one. Untagged things are the majority in
+    // most lists and they are not a category; putting them behind an "Everything
+    // else" row made you navigate to reach the ordinary case.
     $('groupList').innerHTML = gs.map(g => `<button class="g-row" data-g="${esc(g.key)}">
         <div class="g-bd"><b>${esc(g.name)}</b><small>${g.open} to do${
           g.count > g.open ? ` · ${g.count - g.open} done` : ''}</small></div>
         <div class="g-n">${g.open || '·'}</div><div class="chev">›</div>
-      </button>`).join('')
-      + (S.ungrouped
-        ? `<button class="g-row loose" data-g=""><div class="g-bd"><b>Everything else</b>
-             <small>${S.ungrouped} not in a group</small></div>
-           <div class="g-n">${S.ungrouped}</div><div class="chev">›</div></button>`
-        : '');
+      </button>`).join('');
     $('groupList').querySelectorAll('[data-g]').forEach((b) => {
       b.addEventListener('click', () => {
-        group = b.dataset.g === '' ? null : gs.find(g => g.key === b.dataset.g).name;
+        group = gs.find(g => g.key === b.dataset.g).name;
         render();
       });
     });
+    const loose = inGroup(open, null);
+    list.innerHTML = loose.map(itemHtml).join('');
+    list.classList.add('after-groups');
   } else {
     const shown = group === undefined ? open : inGroup(open, group);
     list.innerHTML = shown.length

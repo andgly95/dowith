@@ -171,8 +171,10 @@ The same conclusion the trips app reached about note groups, for the same reason
 - A group you are inside can stop existing while you are in it — somebody untagged
   the last item. The client falls back to the group list rather than showing an
   empty screen under a crumb pointing at nothing.
-- The untagged bucket reads as a leftover on purpose. It is one, and dressing it up
-  would invite people to file things that do not want filing.
+- **Untagged items are listed directly under the group cards**, separated by a
+  hairline, not put behind an "Everything else" row. They are the majority in most
+  lists and they are not a category — making you navigate to reach the ordinary
+  case was backwards.
 
 **This is the seam auto-tagging drops into.** Trips' discovery mode is a solved
 version of the hard part — groups that emerge from the content and then *stay put*

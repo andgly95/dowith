@@ -160,6 +160,14 @@ input,textarea{font:inherit;color:var(--ink)}
 .g-row .chev{color:var(--faint);flex:none;font-size:16px;line-height:1}
 .g-row.loose .g-bd b{font-style:italic;font-weight:400;color:var(--ink2)}
 
+/* Loose items sit directly under the group cards. A hairline rather than a
+   heading, because they are not a category — they are just the rest of the list. */
+.items.after-groups{margin-top:16px;padding-top:2px}
+.items.after-groups::before{
+  content:'';display:block;height:1px;background:var(--line);
+  margin:0 2px 4px;
+}
+
 .crumb{
   display:flex;align-items:center;gap:6px;
   padding:2px 18px 10px;max-width:var(--page);margin:0 auto;width:100%;

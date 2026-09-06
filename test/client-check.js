@@ -251,7 +251,12 @@ function connectCdp(wsUrl) {
       check(await visible('#groupList'), 'one group and something outside it is worth showing');
       const gs = await evalJs(`document.getElementById('groupList').innerText`);
       check(/Films/.test(gs), `the group is named after the tag:\n${gs}`);
-      check(/Everything else/.test(gs), 'and the untagged things are their own bucket');
+      check(!/Everything else/.test(gs), 'untagged things are not a group');
+      // They are listed right underneath instead — the ordinary case must not be
+      // behind an extra tap.
+      check(await visible('#itemList'), 'the loose items are on screen with the groups');
+      check(await evalJs(`document.querySelectorAll('#itemList .it').length`) >= 1,
+        'and there are some');
 
       // Tap into it.
       await evalJs(`document.querySelector('#groupList [data-g]').click()`);
