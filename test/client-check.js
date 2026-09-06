@@ -227,11 +227,63 @@ function connectCdp(wsUrl) {
     check(!(await visible('#itemSheet .modal-in')), 'the sheet closes');
     check(await evalJs(`window.scrollY`) === 0, 'and the viewport goes back to the top');
 
+    // ── groups ──────────────────────────────────────────────────────────
+    // Tag two things and the to-do side becomes a set of groups you tap into.
+    // A group is derived from the tags, so there is nothing to file into and
+    // nothing that can outlive its members.
+    await evalJs(`document.querySelector('#spaceTabs [data-tab="open"]').click()`);
+    await sleep(300);
+    check(!(await visible('#groupList')), 'no tags, no groups — the list is just a list');
+
+    const tagFirst = async (tags) => {
+      await evalJs(`document.querySelector('#itemList .it [data-open]').click()`);
+      await sleep(400);
+      if (await evalJs(`document.getElementById('isName').disabled`)) {
+        await evalJs(`document.getElementById('isCancel').click()`); await sleep(300); return false;
+      }
+      await evalJs(`document.getElementById('isTags').value = ${JSON.stringify(tags)}`);
+      await evalJs(`document.getElementById('isSave').click()`);
+      await sleep(1100);
+      return true;
+    };
+    const tagged = await tagFirst('Films');
+    if (tagged) {
+      check(await visible('#groupList'), 'one group and something outside it is worth showing');
+      const gs = await evalJs(`document.getElementById('groupList').innerText`);
+      check(/Films/.test(gs), `the group is named after the tag:\n${gs}`);
+      check(/Everything else/.test(gs), 'and the untagged things are their own bucket');
+
+      // Tap into it.
+      await evalJs(`document.querySelector('#groupList [data-g]').click()`);
+      await sleep(400);
+      check(!(await visible('#groupList')), 'tapping a group goes into it');
+      check(await visible('#crumb'), 'with a way back');
+      check(await evalJs(`document.querySelectorAll('#itemList .it').length`) === 1,
+        'showing only what is in it');
+
+      // Something written inside a group joins it.
+      await evalJs(`(() => { const i = document.getElementById('newItem');
+        i.value = 'Another film'; })()`);
+      await evalJs(`document.getElementById('btnAdd').click()`);
+      await sleep(1100);
+      check(await evalJs(`document.querySelectorAll('#itemList .it').length`) === 2,
+        'typing inside a group puts the thing in it');
+
+      await evalJs(`document.getElementById('crumb').click()`);
+      await sleep(400);
+      check(await visible('#groupList'), 'and back out again');
+    }
+
     // ── the map ─────────────────────────────────────────────────────────
     // The tab appears only once something has a place, and a pin is drawn from
     // coordinates the server resolved — never guessed.
     await evalJs(`document.querySelector('#spaceTabs [data-tab="open"]').click()`);
     await sleep(300);
+    // Groups may be on screen now; drill into one so there is an item to open.
+    if (await visible('#groupList')) {
+      await evalJs(`document.querySelector('#groupList [data-g]').click()`);
+      await sleep(400);
+    }
     await evalJs(`document.querySelector('#itemList .it [data-open]').click()`);
     await sleep(400);
     const editable = await evalJs(`!document.getElementById('isName').disabled`);

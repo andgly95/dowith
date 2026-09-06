@@ -63,7 +63,12 @@
       <button data-tab="done">Done together</button>
       <button data-tab="map" id="tabMap" aria-label="Map">Map</button>
     </div>
+    <button class="crumb" id="crumb" hidden>
+      <svg viewBox="0 0 24 24" width="15" height="15"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span id="crumbName">All</span>
+    </button>
     <div class="scroll" id="spaceScroll">
+      <div id="groupList" class="groups" hidden></div>
       <div id="itemList" class="items"></div>
       <div id="mapWrap" hidden>
         <div class="map-canvas" id="mapCanvas"></div>
@@ -106,6 +111,9 @@
     <label class="fld"><span>Notes <em>optional</em></span><textarea id="isNotes" rows="3" maxlength="2000"></textarea></label>
     <label class="fld"><span>Where <em>optional</em></span><input id="isPlace" type="text" maxlength="120" placeholder="that ramen bar in Adams Morgan"></label>
     <label class="fld"><span>Link <em>optional</em></span><input id="isLink" type="url" maxlength="500" placeholder="https://"></label>
+    <label class="fld"><span>Groups <em>comma separated</em></span>
+      <input id="isTags" type="text" maxlength="200" placeholder="films, cheap, rainy day"></label>
+    <div class="tag-hints" id="isTagHints"></div>
     <div class="vis-row" id="isVis"></div>
     <button class="primary" id="isSave">Save</button>
     <button class="danger" id="isDelete">Delete</button>

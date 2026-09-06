@@ -13,7 +13,10 @@ let onChange = () => {};
 let onBack = () => {};
 let editing = null;      // item id open in the sheet
 let editingVis = 'shared';
-let tab = 'open';        // 'open' | 'done'
+let tab = 'open';        // 'open' | 'done' | 'map'
+// Which group you have tapped into. `undefined` = the group list itself,
+// `null` = the untagged bucket, a string = that tag.
+let group;
 
 const VIS = [
   { id: 'private', label: 'Just me', hint: 'only you' },
@@ -25,6 +28,7 @@ export async function openSpace(id) {
   S.spaceId = id;
   S.compose = 'shared';
   tab = 'open';
+  group = undefined;
   showScreen('scr-space');
   $('itemList').innerHTML = '<div class="empty">Loading…</div>';
   await refresh();
@@ -36,6 +40,14 @@ export async function refresh() {
     const b = await get(`/api/space/${S.spaceId}/items`);
     S.space = b.space;
     S.items = b.items;
+    S.groups = b.groups || [];
+    S.ungrouped = b.ungrouped || 0;
+    S.grouped = !!b.grouped;
+    // A group you were inside can stop existing while you are in it — somebody
+    // untagged the last item. Fall back to the group list rather than showing an
+    // empty screen with a crumb pointing at nothing.
+    if (group !== undefined && group !== null
+        && !S.groups.some(g => fold(g.name) === fold(group))) group = undefined;
     render();
   } catch (_) { toast('Could not load that list'); }
 }
@@ -65,6 +77,7 @@ function itemHtml(it) {
   // "Andrew wants to do this with anyone" reads differently from something
   // written here for you.
   if (it.fromElsewhere) bits.push(`<span class="chip elsewhere">${esc(it.author.name)}'s standing wish</span>`);
+  for (const t of it.tags || []) bits.push(`<span class="chip tag-chip">${esc(t)}</span>`);
   const place = it.mod && it.mod.place;
   if (place) bits.push(`<span class="chip place">${esc(place.name)}</span>`);
   const link = it.mod && it.mod.link;
@@ -81,6 +94,14 @@ function itemHtml(it) {
     </div>
   </div>`;
 }
+
+// The same fold as lib/groups.js. Duplicated deliberately and kept to one line:
+// the server decides WHICH groups exist and ships them; this only has to answer
+// "is this item in the one I tapped".
+const fold = (t) => String(t == null ? '' : t).trim().toLowerCase().replace(/\s+/g, ' ');
+const inGroup = (items, name) => (name === null
+  ? items.filter(i => !(i.tags || []).some(t => fold(t)))
+  : items.filter(i => (i.tags || []).some(t => fold(t) === fold(name))));
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
@@ -146,13 +167,45 @@ function render() {
   // you have already done, and you do not type into a map.
   $('spaceScroll').nextElementSibling.hidden = tab !== 'open';
 
+  // Groups only exist on the to-do side, and only when they say something. The
+  // server decides that (lib/groups.js) so the rule lives in one place.
+  const gs = (S.groups || []);
+  const showGroups = tab === 'open' && S.grouped && group === undefined;
+  $('groupList').hidden = !showGroups;
+  $('crumb').hidden = !(tab === 'open' && group !== undefined);
+  if (group !== undefined) {
+    $('crumbName').textContent = group === null ? 'Everything else' : group;
+  }
+
   if (tab === 'map') {
     renderMap();
   } else if (tab === 'done') {
     list.innerHTML = recordHtml(done);
+  } else if (showGroups) {
+    // Tap a group to go into it. The untagged bucket is last and reads as a
+    // leftover on purpose — it is one, and pretending otherwise would invite
+    // people to file things that do not want filing.
+    list.innerHTML = '';
+    $('groupList').innerHTML = gs.map(g => `<button class="g-row" data-g="${esc(g.key)}">
+        <div class="g-bd"><b>${esc(g.name)}</b><small>${g.open} to do${
+          g.count > g.open ? ` · ${g.count - g.open} done` : ''}</small></div>
+        <div class="g-n">${g.open || '·'}</div><div class="chev">›</div>
+      </button>`).join('')
+      + (S.ungrouped
+        ? `<button class="g-row loose" data-g=""><div class="g-bd"><b>Everything else</b>
+             <small>${S.ungrouped} not in a group</small></div>
+           <div class="g-n">${S.ungrouped}</div><div class="chev">›</div></button>`
+        : '');
+    $('groupList').querySelectorAll('[data-g]').forEach((b) => {
+      b.addEventListener('click', () => {
+        group = b.dataset.g === '' ? null : gs.find(g => g.key === b.dataset.g).name;
+        render();
+      });
+    });
   } else {
-    list.innerHTML = open.length
-      ? open.map(itemHtml).join('')
+    const shown = group === undefined ? open : inGroup(open, group);
+    list.innerHTML = shown.length
+      ? shown.map(itemHtml).join('')
       : `<div class="empty">Nothing here yet.<br>What do you keep meaning to do together?</div>`;
   }
 
@@ -173,7 +226,13 @@ async function add() {
   if (!title) return;
   input.value = '';
   try {
-    const b = await post(`/api/space/${S.spaceId}/item`, { title, visibility: S.compose });
+    const b = await post(`/api/space/${S.spaceId}/item`, {
+      title,
+      visibility: S.compose,
+      // Written while inside a group, so it belongs to it. Typing into a group and
+      // having the thing land outside it would be baffling.
+      tags: group ? [group] : [],
+    });
     applyWire(b.state);
     await refresh();
     onChange();
@@ -212,10 +271,23 @@ function openItem(id) {
   $('isNotes').value = it.notes || '';
   $('isPlace').value = (it.mod && it.mod.place && it.mod.place.name) || '';
   $('isLink').value = (it.mod && it.mod.link && it.mod.link.url) || '';
+  $('isTags').value = (it.tags || []).join(', ');
+  // The groups already in use, one tap each — typing a tag from memory is how you
+  // end up with "films" and "movies" meaning the same thing.
+  const used = (S.groups || []).map(g => g.name).filter(n => !(it.tags || []).some(t => fold(t) === fold(n)));
+  $('isTagHints').innerHTML = used.slice(0, 8).map(n => `<button data-t="${esc(n)}">+ ${esc(n)}</button>`).join('');
+  $('isTagHints').querySelectorAll('[data-t]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const cur = $('isTags').value.trim();
+      $('isTags').value = cur ? `${cur}, ${b.dataset.t}` : b.dataset.t;
+      b.remove();
+    });
+  });
   // Somebody else's wording is theirs. You can see it and tick it off; you cannot
   // rewrite it.
   const ro = !it.canEdit;
-  for (const f of ['isName', 'isNotes', 'isPlace', 'isLink']) $(f).disabled = ro;
+  for (const f of ['isName', 'isNotes', 'isPlace', 'isLink', 'isTags']) $(f).disabled = ro;
+  $('isTagHints').hidden = ro;
   $('isSave').hidden = ro;
   $('isDelete').hidden = ro;
   $('isVis').hidden = ro;
@@ -236,6 +308,7 @@ async function saveItem() {
       title,
       notes: $('isNotes').value.trim(),
       visibility: editingVis,
+      tags: $('isTags').value.split(',').map(t => t.trim()).filter(Boolean),
       // The module bag. The server drops anything it has no rules for.
       mod: {
         ...(place ? { place: { name: place } } : {}),
@@ -312,7 +385,12 @@ export function initSpace(changeHandler, backHandler) {
   onChange = changeHandler || (() => {});
   onBack = backHandler || (() => {});
 
-  $('spaceBack').addEventListener('click', () => onBack());
+  // Inside a group, back means back to the groups — not out of the list entirely.
+  $('spaceBack').addEventListener('click', () => {
+    if (tab === 'open' && group !== undefined) { group = undefined; return render(); }
+    onBack();
+  });
+  $('crumb').addEventListener('click', () => { group = undefined; render(); });
   $('spaceTabs').querySelectorAll('[data-tab]').forEach((b) => {
     b.addEventListener('click', async () => {
       tab = b.dataset.tab;

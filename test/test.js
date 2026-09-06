@@ -181,7 +181,8 @@ async function gate() {
 
   await t('tags are folded and capped so a filter cannot show half of what it should', () => {
     const it = ITEMS.cleanItem({ title: 'x', tags: ['Records', 'records', ' RECORDS ', 'dc', ''] }, ctx);
-    assert.deepStrictEqual(it.tags, ['records', 'dc']);
+    assert.deepStrictEqual(it.tags, ['Records', 'dc'],
+      'deduped by fold, but the first spelling is kept — AFI must not become Afi');
     assert.strictEqual(ITEMS.cleanItem({ title: 'x', tags: Array(50).fill(0).map((_, i) => `t${i}`) }, ctx)
       .tags.length, ITEMS.MAX_TAGS);
   });
@@ -192,6 +193,78 @@ async function gate() {
     assert.deepStrictEqual([it.done, it.doneBy, it.doneAt], [true, 'linnea', 5000]);
     ITEMS.setDone(it, false, 'linnea', 6000);
     assert.deepStrictEqual([it.done, it.doneBy, it.doneAt], [false, null, null]);
+  });
+}
+
+/* ── 2b. groups ──────────────────────────────────────────────────────────────
+   A group is the set of items carrying a tag, computed on the way out. Nothing
+   is stored, so there is nothing to drift — these rows are mostly about the
+   things that CANNOT happen as a result. */
+
+async function groupRules() {
+  console.log('\ngroups');
+  const G = require('../lib/groups');
+  const it = (title, tags, done = false) => ({ id: title, title, tags, done });
+
+  await t('a group is just the items carrying a tag', () => {
+    const items = [it('a', ['films']), it('b', ['films']), it('c', ['museums'])];
+    assert.deepStrictEqual(G.groupsOf(items).map(g => [g.name, g.count]),
+      [['films', 2], ['museums', 1]]);
+  });
+
+  await t('an item can be in two groups, because things genuinely are', () => {
+    const items = [it('dinner and a film', ['films', 'food'])];
+    assert.deepStrictEqual(G.groupsOf(items).map(g => g.name).sort(), ['films', 'food']);
+    assert.strictEqual(G.inGroup(items, 'films').length, 1);
+    assert.strictEqual(G.inGroup(items, 'food').length, 1);
+  });
+
+  await t('one tag, however it is typed — but the first spelling is what shows', () => {
+    const items = [it('a', ['AFI']), it('b', ['afi']), it('c', ['  AFI  '])];
+    const gs = G.groupsOf(items);
+    assert.strictEqual(gs.length, 1, 'case and spacing do not make a second group');
+    assert.strictEqual(gs[0].name, 'AFI', 'and it is not mangled into Afi');
+    assert.strictEqual(gs[0].count, 3);
+    assert.strictEqual(G.inGroup(items, 'aFi').length, 3, 'lookup folds too');
+  });
+
+  await t('untagged things are their own bucket, not a leftover', () => {
+    const items = [it('a', ['films']), it('b', []), it('c', undefined), it('d', ['  '])];
+    assert.strictEqual(G.ungroupedCount(items), 3, 'a whitespace tag is not a tag');
+    assert.deepStrictEqual(G.inGroup(items, null).map(x => x.title), ['b', 'c', 'd']);
+  });
+
+  await t('a group cannot outlive its members', () => {
+    // The property folders get wrong: untag the last item and the group is gone,
+    // with nothing to clean up and nothing left pointing at nothing.
+    const items = [it('a', ['films'])];
+    assert.strictEqual(G.groupsOf(items).length, 1);
+    items[0].tags = [];
+    assert.strictEqual(G.groupsOf(items).length, 0);
+  });
+
+  await t('the busiest group comes first, and ties break predictably', () => {
+    const items = [
+      it('a', ['zoos']), it('b', ['films']), it('c', ['films']), it('d', ['films']),
+      it('e', ['bars']), it('f', ['bars']),
+    ];
+    assert.deepStrictEqual(G.groupsOf(items).map(g => g.name), ['films', 'bars', 'zoos']);
+  });
+
+  await t('a group of everything is not worth showing', () => {
+    const all = [it('a', ['films']), it('b', ['films'])];
+    assert.strictEqual(G.worthGrouping(all), false,
+      'one group holding the whole list tells you nothing');
+    assert.strictEqual(G.worthGrouping([...all, it('c', [])]), true, 'now it says something');
+    assert.strictEqual(G.worthGrouping([it('a', ['x']), it('b', ['y'])]), true);
+    assert.strictEqual(G.worthGrouping([it('a', []), it('b', [])]), false, 'no tags, no groups');
+    assert.strictEqual(G.worthGrouping([]), false);
+  });
+
+  await t('a tag is capped and folded at the gate, so groups cannot be spammed', () => {
+    const many = ITEMS.cleanItem({ title: 'x', tags: Array.from({ length: 40 }, (_, i) => `t${i}`) },
+      { id: 'i', authorId: 'a', spaceId: 's' });
+    assert.strictEqual(many.tags.length, ITEMS.MAX_TAGS);
   });
 }
 
@@ -813,6 +886,29 @@ async function server() {
     assert.strictEqual(after.body.items.length, before);
   });
 
+  await t('groups on the wire are derived from what YOU can see', async () => {
+    // The important one. A tag living only on somebody's private items must make
+    // a group on their screen and no group at all on anybody else's.
+    await api('POST', '/api/space/sp1/item',
+      { title: 'a secret film', visibility: 'private', tags: ['Gifts'] }, A);
+    await api('POST', '/api/space/sp1/item',
+      { title: 'a film for us', visibility: 'shared', tags: ['Films'] }, A);
+
+    const mine = (await api('GET', '/api/space/sp1/items', null, A)).body;
+    const hers = (await api('GET', '/api/space/sp1/items', null, L)).body;
+    assert.ok(mine.groups.some(g => g.name === 'Gifts'), 'the author sees their own group');
+    assert.ok(!hers.groups.some(g => g.name === 'Gifts'),
+      'and nobody else learns it exists — not even that the tag does');
+    assert.ok(hers.groups.some(g => g.name === 'Films'), 'the shared one is shared');
+  });
+
+  await t('a tag arrives as typed and is capped at the gate', async () => {
+    const { body } = await api('POST', '/api/space/sp1/item',
+      { title: 'tagged', tags: ['AFI', 'afi', '  AFI ', 'Rainy Day'] }, A);
+    assert.deepStrictEqual(body.item.tags, ['AFI', 'Rainy Day'],
+      'deduped by fold, first spelling kept');
+  });
+
   await t('geocoding is scoped to what you can see', async () => {
     // It cannot be used to resolve names by proxy, and cannot reveal that a
     // private item exists by counting how many names it asked about.
@@ -1003,6 +1099,7 @@ async function server() {
 (async () => {
   await visibility();
   await gate();
+  await groupRules();
   await moduleSeam();
   await inviteRules();
   await squareBridge();

@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 81 assertions + a headless-chromium check
+- **Tests:** `npm test` — 92 assertions + a headless-chromium check
 
 ## The model
 
@@ -140,6 +140,44 @@ exists so the shape is decided while the reasons are fresh.
   that dumps the projection and asserts no message content survives.
 - `squareStorePath` in config, not hardcoded — a bridge that assumes a sibling
   directory breaks the moment either app moves.
+
+## Groups within a list
+
+`lib/groups.js` is PURE. **A group is not a container — it is the set of items
+carrying a tag, computed on the way out.** Folders are the obvious build and they
+are the wrong one, and everything good here follows from not building them:
+
+- Nothing is stored, so nothing can drift. A group cannot orphan itself, sit
+  empty, or outlive its members — untag the last item and it is simply gone.
+- An item can be in two groups honestly. "Dinner and a film" is both.
+- Deleting a group is untagging, so it can never eat the items inside it.
+- **Adding stays one tap.** There is no "where does this go?" at write time, which
+  is the tax folders charge and a large part of why lists go stale.
+
+The same conclusion the trips app reached about note groups, for the same reasons.
+
+- **Derived per VIEWER.** Groups come from the items a person can see, so a tag
+  living only on somebody's private items makes a group on their screen and no
+  group at all on anybody else's — not even the knowledge that the tag exists.
+  This falls out for free because the route derives from `SP.visibleIn`, and it
+  has a test.
+- **First spelling wins.** `cleanTags` dedupes by fold but stores as typed, so
+  `AFI` and `afi` are one tag and it displays as `AFI`. Matching and display are
+  different jobs; folding for display throws away what somebody deliberately typed.
+- **`worthGrouping` decides whether to show them at all**, on the server, so the
+  rule lives in one place. One group holding the entire list says nothing.
+- **Writing inside a group joins it.** Typing into Films and having the thing land
+  outside Films would be baffling.
+- A group you are inside can stop existing while you are in it — somebody untagged
+  the last item. The client falls back to the group list rather than showing an
+  empty screen under a crumb pointing at nothing.
+- The untagged bucket reads as a leftover on purpose. It is one, and dressing it up
+  would invite people to file things that do not want filing.
+
+**This is the seam auto-tagging drops into.** Trips' discovery mode is a solved
+version of the hard part — groups that emerge from the content and then *stay put*
+instead of reshuffling on every write. Nothing here needs to change for it: an
+assign call writes `tags`, and the groups follow.
 
 ## Getting things in — the load-bearing feature
 
@@ -313,4 +351,5 @@ Not deployed yet. To bring it up:
   and it's the best idea on the roadmap.
 - **The Square link.** Plumbing is in and refuses; it needs the one-time-code proof
   step described above.
-- **Tags.** `cleanTags` folds and caps them already; there is no UI at all.
+- **Auto-tagging.** The groups seam is ready; trips' discovery mode is the
+  reference for making them emerge and then hold still.
