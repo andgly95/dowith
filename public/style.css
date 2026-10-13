@@ -204,10 +204,101 @@ input,textarea{font:inherit;color:var(--ink)}
 .tick{
   width:23px;height:23px;border-radius:50%;flex:none;margin-top:2px;
   border:1.5px solid var(--faint);display:grid;place-items:center;
-  color:transparent;font-size:12px;transition:all .15s ease;
+  position:relative;padding:0;
+  transition:border-color .15s ease, background .15s ease;
 }
 .tick:active{transform:scale(.9)}
-.it.done .tick{border-color:var(--accent2);background:var(--accent2);color:var(--bg)}
+.it.done .tick{border-color:var(--accent2);background:var(--accent2)}
+
+/* The tick is drawn, not typed — a stroked path can be animated on, and a text
+   glyph cannot. */
+.tick svg{width:13px;height:13px;display:block;overflow:visible}
+.tick svg path{
+  fill:none;stroke:var(--bg);stroke-width:3.2;
+  stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:24;stroke-dashoffset:24;
+}
+/* Already-done items render with the mark simply there. Only a fresh completion
+   draws it — see .celebrating below. */
+.it.done .tick svg path{stroke-dashoffset:0}
+
+/* ─── finishing something ───────────────────────────────────────────────────
+   The one moment in this app worth marking. It used to be a silent reflow: the
+   row vanished on the next render and a toast explained what had happened, which
+   is the wrong way round — the feedback should BE the thing, not a caption.
+
+   Roughly 700ms, in four beats: the ring springs and fills, the mark draws, a
+   ripple and a few sparks go out, then the row collapses and the list closes up.
+   Nothing here blocks the network call; the POST goes out at beat one. */
+@keyframes tick-pop{
+  0%{transform:scale(1)} 28%{transform:scale(.78)} 60%{transform:scale(1.18)} 100%{transform:scale(1)}
+}
+@keyframes tick-draw{ to{stroke-dashoffset:0} }
+@keyframes ripple{
+  0%{transform:scale(.6);opacity:.55} 100%{transform:scale(2.6);opacity:0}
+}
+@keyframes spark{
+  /* Starts at the rim, not at the centre: inside the filled ring a sage spark on
+     a sage disc is invisible, so the first third of the flight was wasted. */
+  0%{transform:rotate(var(--a)) translateX(10px) scale(.6);opacity:0}
+  25%{transform:rotate(var(--a)) translateX(13px) scale(1);opacity:1}
+  100%{transform:rotate(var(--a)) translateX(26px) scale(.2);opacity:0}
+}
+@keyframes row-go{
+  0%{opacity:1;transform:none}
+  100%{opacity:0;transform:translateX(14px)}
+}
+
+.it.celebrating .tick{
+  border-color:var(--accent2);background:var(--accent2);
+  animation:tick-pop .44s cubic-bezier(.2,1.5,.4,1) forwards;
+}
+.it.celebrating .tick svg path{animation:tick-draw .26s ease .13s forwards}
+.it.celebrating .ripple{
+  position:absolute;inset:-2px;border-radius:50%;
+  border:2px solid var(--accent2);pointer-events:none;
+  animation:ripple .55s ease-out forwards;
+}
+.it.celebrating .spark{
+  position:absolute;top:50%;left:50%;width:4px;height:4px;margin:-2px 0 0 -2px;
+  border-radius:50%;background:var(--accent2);pointer-events:none;
+  transform-origin:center;
+  animation:spark .55s cubic-bezier(.2,.75,.3,1) forwards;
+}
+/* Every other spark in coral, so it reads as a flourish rather than a status. */
+.it.celebrating .spark:nth-child(even){background:var(--accent)}
+/* The strike fades in rather than sweeping across.
+   A sweeping pseudo-element was the prettier idea and it was wrong: on a title
+   that wraps to two lines it renders as a stub in the gap between them, because
+   a single absolutely-positioned bar cannot follow text it does not know the
+   shape of. `text-decoration-color` is animatable and the browser already knows
+   where every line is — so it is correct at one line or four, which matters in a
+   shared list where titles are whatever somebody typed. */
+.it.celebrating .it-bd b{
+  text-decoration:line-through;
+  text-decoration-thickness:1px;
+  text-decoration-color:transparent;
+  animation:strike .34s ease .16s forwards;
+}
+@keyframes strike{to{text-decoration-color:var(--faint);color:var(--faint)}}
+.it.leaving{
+  overflow:hidden;
+  animation:row-go .26s ease forwards;
+  transition:max-height .26s ease, padding .26s ease, margin .26s ease;
+}
+
+/* Somebody who has asked for less movement gets the state change and nothing
+   else — not a shortened version of the same thing. */
+@media (prefers-reduced-motion: reduce){
+  .it.celebrating .tick,
+  .it.celebrating .tick svg path,
+  .it.celebrating .ripple,
+  .it.celebrating .spark,
+  .it.leaving{animation:none}
+  .it.celebrating .ripple,.it.celebrating .spark{display:none}
+  .it.celebrating .tick svg path{stroke-dashoffset:0}
+  .it.celebrating .it-bd b{animation:none;color:var(--faint);text-decoration-color:var(--faint)}
+}
 .it-bd{flex:1;min-width:0}
 .it-bd b{
   display:block;font:400 17px/1.4 var(--serif);letter-spacing:-.005em;

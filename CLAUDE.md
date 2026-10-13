@@ -181,6 +181,37 @@ version of the hard part — groups that emerge from the content and then *stay 
 instead of reshuffling on every write. Nothing here needs to change for it: an
 assign call writes `tags`, and the groups follow.
 
+## Finishing something
+
+The one moment in the app worth marking, and it used to be a silent reflow — the
+row vanished on the next render and a toast explained what had happened, which is
+the wrong way round. The feedback should BE the thing, not a caption. The toast is
+gone; the animation replaced it.
+
+About 700ms in four beats: the ring springs and fills, the mark draws itself, a
+ripple and six sparks go out, then the row collapses from its measured height and
+the list closes up.
+
+- **The row is animated IN PLACE and only then re-rendered.** A re-render destroys
+  the element, so anything scheduled after it has nothing left to animate. This is
+  the whole reason `toggle()` is shaped the way it is.
+- **The POST goes out at beat one**, in parallel — the network is never what you
+  are waiting for. If it fails, the animation is allowed to finish rather than
+  being yanked, and then the row comes back and says why.
+- **Only completing.** Un-ticking is a state change, not an occasion.
+- **The mark is a stroked SVG path**, not a `✓` glyph: a path can be drawn on and
+  a character cannot.
+- **The strike FADES IN via `text-decoration-color`.** A sweeping pseudo-element
+  was prettier and was wrong — on a title that wraps to two lines it renders as a
+  stub in the gap between them, because one absolutely-positioned bar cannot
+  follow text whose shape it does not know. The browser already knows where every
+  line is. In a shared list the titles are whatever somebody typed, so correct at
+  four lines beats pretty at one.
+- **`prefers-reduced-motion` gets the state change and nothing else** — not a
+  shortened version of the same thing.
+- `client-check.js` catches it mid-flight at 160ms, because an assertion made
+  after it finishes would pass just as well with no animation at all.
+
 ## Getting things in — the load-bearing feature
 
 A shared list dies because adding to it was three taps too many, not because

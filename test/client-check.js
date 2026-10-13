@@ -195,6 +195,14 @@ function connectCdp(wsUrl) {
       'the map tab is always there — hiding it hid the feature from the person who had to find it');
     const beforeOpen = await evalJs(`document.querySelectorAll('#itemList .it').length`);
     await evalJs(`document.querySelector('#itemList .it [data-tick]').click()`);
+    // Finishing something plays a ~700ms moment before the row leaves. Catch it
+    // mid-flight: the row must still be there, marked, with the flourish on it —
+    // a re-render that landed first would have destroyed the element.
+    await sleep(160);
+    check(await evalJs(`!!document.querySelector('#itemList .it.celebrating')`),
+      'completing something should be an occasion, not a silent reflow');
+    check(await evalJs(`document.querySelectorAll('#itemList .it.celebrating .spark').length`) === 6,
+      'with the flourish actually in the DOM');
     await sleep(1100);
     check(await evalJs(`document.querySelectorAll('#itemList .it').length`) === beforeOpen - 1,
       'it leaves the to-do list rather than sitting there struck through');

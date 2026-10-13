@@ -86,7 +86,9 @@ function itemHtml(it) {
   else if (!it.mine) bits.push(`<span class="who">${esc(it.author.name)}</span>`);
 
   return `<div class="it ${it.done ? 'done' : ''}" data-it="${esc(it.id)}">
-    <button class="tick" data-tick aria-label="${it.done ? 'Not done after all' : 'Done'}">✓</button>
+    <button class="tick" data-tick aria-label="${it.done ? 'Not done after all' : 'Done'}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"/></svg>
+    </button>
     <div class="it-bd" data-open>
       <b>${esc(it.title)}</b>
       ${it.notes ? `<p>${esc(it.notes)}</p>` : ''}
@@ -238,21 +240,65 @@ async function add() {
   } catch (_) { toast('Could not add that'); input.value = title; }
 }
 
+const calm = () => window.matchMedia
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Finishing something, played out rather than announced.
+//
+// The row is animated IN PLACE and only then re-rendered — a re-render destroys
+// the element, so anything that runs after it has nothing left to animate. The
+// POST goes out at the same moment, so the network is never what you are waiting
+// for; if it fails the row comes back and says why.
+function celebrate(row) {
+  if (!row || calm()) return Promise.resolve();
+  const tick = row.querySelector('.tick');
+  if (tick) {
+    const bits = ['<i class="ripple"></i>'];
+    // Six, spread evenly, each carrying its own angle. Enough to read as a
+    // flourish; more would be a party.
+    for (let i = 0; i < 6; i++) bits.push(`<i class="spark" style="--a:${i * 60}deg"></i>`);
+    tick.insertAdjacentHTML('beforeend', bits.join(''));
+  }
+  row.classList.add('celebrating');
+
+  return new Promise((done) => {
+    setTimeout(() => {
+      // Collapse from its real height, so the list closes up rather than snapping
+      // when the re-render lands.
+      row.style.maxHeight = `${row.scrollHeight}px`;
+      row.classList.add('leaving');
+      requestAnimationFrame(() => {
+        row.style.maxHeight = '0px';
+        row.style.paddingTop = '0px';
+        row.style.paddingBottom = '0px';
+      });
+      setTimeout(done, 280);
+    }, 420);
+  });
+}
+
 async function toggle(id) {
   const it = S.items.find(x => x.id === id);
   if (!it) return;
-  // Optimistic: ticking something off should feel instant, and the worst case is
-  // it flips back when the server disagrees.
-  it.done = !it.done;
-  render();
-  if (it.done) toast(`Done — it's in the record now`);
+  const finishing = !it.done;
+  const row = $('itemList').querySelector(`[data-it="${CSS.escape(id)}"]`);
+
+  // Optimistic, and in parallel: the animation and the request start together so
+  // neither waits on the other.
+  const sent = post(`/api/item/${id}/done`, { done: finishing });
+  const shown = finishing ? celebrate(row) : Promise.resolve();
+
+  it.done = finishing;
+  if (!finishing) render();   // un-ticking is a state change, not an occasion
+
   try {
-    const b = await post(`/api/item/${id}/done`, { done: it.done });
+    const [b] = await Promise.all([sent, shown]);
     applyWire(b.state);
     await refresh();
     onChange();
   } catch (e) {
-    it.done = !it.done;
+    await shown;              // let it finish rather than yanking it mid-flight
+    it.done = !finishing;
     render();
     toast(e.status === 403 ? 'That one is not yours to tick off' : 'Could not save that');
   }
