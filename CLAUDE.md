@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 92 assertions + a headless-chromium check
+- **Tests:** `npm test` — 105 assertions + a headless-chromium check
 
 ## The model
 
@@ -140,6 +140,48 @@ exists so the shape is decided while the reasons are fresh.
   that dumps the projection and asserts no message content survives.
 - `squareStorePath` in config, not hardcoded — a bridge that assumes a sibling
   directory breaks the moment either app moves.
+
+## Kinds — what a thing IS (`lib/kinds.js`)
+
+A list of things to do with someone is not homogeneous. *Watch Obsession*, *go to
+that ramen bar*, *make the ragù from the NYT* and *go swing dancing* are four
+different shapes of plan, and a recipe without its link is a reminder that you once
+saw a recipe. Five kinds: **thing** (default) · **movie** · **show** · **place** ·
+**recipe**.
+
+**Why a kind and not another tag.** `groups.js` is right that a group is a tag and
+nothing more — "rainy day" and "cheap" are opinions, they overlap, and they belong to
+whoever typed them. A kind is not an opinion: it is mutually exclusive, it is a fact
+about the thing, and it decides **which fields are worth showing**. A tag cannot do
+that job. The two live side by side: a film tagged "rainy day" is a film *and* in that
+group, and there is a test saying so.
+
+- **A KIND SUGGESTS; IT NEVER CONFISCATES.** `mods` is what the editor *offers*, not
+  what the item may carry. Seeing a film at the AFI is a film with a place on it, so
+  changing the kind drops nothing — and in the editor a field that already **holds
+  something stays on screen** whatever the kind says, or reclassifying a row would
+  hide and then silently discard an address somebody typed.
+- **`thing` offers both fields and leads with neither.** That is the whole reason it
+  is the default rather than the emptiest kind: before kinds existed every item could
+  carry a place and a link, and a default that took both away would make classifying
+  compulsory just to get back what you already had. The first cut had
+  `mods: []` and was a quiet downgrade.
+- **An unrecognised kind becomes a thing**, never a refused write. A kind is a
+  convenience; losing an item because a client sent a word this server hasn't heard of
+  would be the tail wagging the dog.
+- **Normalised on the way OUT** (`itemWire`), so every item written before kinds
+  existed reads as a plain thing with no migration and nothing downstream defending
+  against `undefined`.
+- **`go` is what the LINK is for, and never the same word as the badge.** The first
+  version used the label for both and a show rendered `SHOW` twice in a row — correct
+  twice over and reading as a bug. Now: `RECIPE · COOK ↗`, `SHOW · WATCH ↗`. A test
+  asserts no kind can ever render its own name twice.
+- **The filter row appears only when the list is genuinely mixed.** One kind is not a
+  choice, and a row of chips that all say the same thing is noise on a phone. Adding
+  while filtered to Films makes a film — the same reason adding inside a group tags it.
+- **The kind rides on top of the module seam rather than beside it.** No new storage,
+  no kind-specific columns: `recipe` is `['link']`, `place` is `['place']`, and a
+  `javascript:` URL is refused on a recipe exactly as it is anywhere else.
 
 ## Groups within a list
 

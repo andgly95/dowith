@@ -29,6 +29,10 @@ export async function openSpace(id) {
   S.compose = 'shared';
   tab = 'open';
   group = undefined;
+  // A filter that survived switching lists would leave you staring at an empty
+  // screen wondering where everything went.
+  kindFilter = null;
+  composeKind = 'thing';
   showScreen('scr-space');
   $('itemList').innerHTML = '<div class="empty">Loading…</div>';
   await refresh();
@@ -71,6 +75,12 @@ function visRow(el, read, write) {
 
 function itemHtml(it) {
   const bits = [];
+  // What it is, first and quietly. A plain thing says nothing — the badge is
+  // for telling a film from a recipe at a glance, and when everything is a
+  // thing there is nothing to tell apart.
+  if (it.kind && it.kind !== 'thing') {
+    bits.push(`<span class="chip kind k-${esc(it.kind)}">${esc(kindOf(it.kind).label)}</span>`);
+  }
   if (it.visibility === 'private') bits.push('<span class="chip private">just you</span>');
   if (it.visibility === 'public') bits.push('<span class="chip public">anyone</span>');
   // A wish that drifted in from one of the author's other lists. Worth saying —
@@ -81,7 +91,17 @@ function itemHtml(it) {
   const place = it.mod && it.mod.place;
   if (place) bits.push(`<span class="chip place">${esc(place.name)}</span>`);
   const link = it.mod && it.mod.link;
-  if (link) bits.push(`<a href="${esc(link.url)}" target="_blank" rel="noopener noreferrer">link</a>`);
+  // The link is the whole point of a recipe — you do not cook from a title —
+  // so for the kinds that lead with one it is named rather than called "link".
+  if (link) {
+    const k = kindOf(it.kind);
+    const lead = (k.mods || [])[0] === 'link';
+    // Never the same word as the badge beside it: "Watch ↗" on a show, not a
+    // second "SHOW".
+    bits.push(`<a class="${lead ? 'go' : ''}" href="${esc(link.url)}"
+      target="_blank" rel="noopener noreferrer">${
+      lead ? `${esc(k.go || 'Open')} ↗` : 'link'}</a>`);
+  }
   if (it.done && it.doneByName) bits.push(`<span class="who">${esc(it.doneByName)} ticked it off ${esc(ago(it.doneAt))}</span>`);
   else if (!it.mine) bits.push(`<span class="who">${esc(it.author.name)}</span>`);
 
@@ -100,6 +120,19 @@ function itemHtml(it) {
 // The same fold as lib/groups.js. Duplicated deliberately and kept to one line:
 // the server decides WHICH groups exist and ships them; this only has to answer
 // "is this item in the one I tapped".
+// Which kind the list is filtered to, or null for all of them. Reset whenever
+// the space changes — a filter that survives switching lists leaves you staring
+// at an empty screen wondering where everything went.
+let kindFilter = null;
+
+// What the composer is making. Sticky within a session — adding three films in
+// a row should not mean tapping "Film" three times.
+let composeKind = 'thing';
+
+// The kind being edited in the item sheet, held separately so cancelling leaves
+// the stored item untouched — the same shape as `editingVis` beside it.
+let editingKind = 'thing';
+
 const fold = (t) => String(t == null ? '' : t).trim().toLowerCase().replace(/\s+/g, ' ');
 const inGroup = (items, name) => (name === null
   ? items.filter(i => !(i.tags || []).some(t => fold(t)))
@@ -141,9 +174,33 @@ function render() {
   if (!sp) return;
   $('spaceTitle').textContent = sp.title;
 
-  const open = S.items.filter(i => !i.done);
-  const done = S.items.filter(i => i.done)
+  // The filter applies to both sides of the list, because "show me the films"
+  // means the ones we've seen as well as the ones we haven't.
+  const ofKind = (list) => (kindFilter ? list.filter(i => (i.kind || 'thing') === kindFilter) : list);
+  const open = ofKind(S.items.filter(i => !i.done));
+  const done = ofKind(S.items.filter(i => i.done))
     .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+
+  // Only worth a row once the list is genuinely mixed. One kind is not a
+  // choice, and a control offering none is noise on a phone.
+  const kinds = kindList();
+  const here = kinds
+    .map(k => ({ ...k, n: S.items.filter(i => (i.kind || 'thing') === k.id).length }))
+    .filter(k => k.n > 0);
+  const kf = $('kindFilter');
+  kf.hidden = here.length < 2 || tab === 'map';
+  if (!kf.hidden) {
+    kf.innerHTML = `<button data-kf="" class="${kindFilter ? '' : 'on'}">All</button>`
+      + here.map(k => `<button data-kf="${esc(k.id)}"
+          class="${kindFilter === k.id ? 'on' : ''}">${esc(k.plural)} <i>${k.n}</i></button>`).join('');
+    kf.querySelectorAll('[data-kf]').forEach((b) => {
+      b.addEventListener('click', () => { kindFilter = b.dataset.kf || null; render(); });
+    });
+  } else if (kindFilter && here.length < 2) {
+    // The last film was deleted while filtered to films. Drop the filter rather
+    // than showing an empty list with no visible reason for being empty.
+    kindFilter = null;
+  }
 
   // The counts sit on the tabs, because "12 open / 31 done together" is the one
   // number that says how the list is going.
@@ -217,6 +274,33 @@ function render() {
   });
 
   visRow($('visRow'), () => S.compose, (v) => { S.compose = v; });
+  // Adding while filtered to Films makes a film. Typing into a filter and
+  // getting something that then vanishes from it would be baffling — the same
+  // reason adding inside a group tags it with that group.
+  if (kindFilter && composeKind === 'thing') composeKind = kindFilter;
+  kindPicker($('kindRow'), () => composeKind, (k) => { composeKind = k; });
+}
+
+/* ── kinds ──────────────────────────────────────────────────────────────── */
+
+// The table lives on the server (lib/kinds.js) and arrives on the wire, so
+// there is no second list here to fall out of step with it.
+const kindList = () => ((S.wire && S.wire.kinds) && S.wire.kinds.length
+  ? S.wire.kinds
+  : [{ id: 'thing', label: 'Thing', plural: 'Things', mods: [] }]);
+const kindOf = (id) => kindList().find(k => k.id === id) || kindList()[0];
+
+// A row of kinds, used by both the composer and the item sheet — the same
+// shape as visRow, and for the same reason: two copies of a control drift.
+function kindPicker(el, read, write) {
+  const paint = () => {
+    const cur = read();
+    el.innerHTML = kindList().map(k => `<button data-k="${esc(k.id)}"
+      class="${k.id === cur ? 'on' : ''}">${esc(k.label)}</button>`).join('');
+    el.querySelectorAll('[data-k]').forEach(b =>
+      b.addEventListener('click', () => { write(b.dataset.k); paint(); }));
+  };
+  paint();
 }
 
 /* ── writing ────────────────────────────────────────────────────────────── */
@@ -229,6 +313,7 @@ async function add() {
   try {
     const b = await post(`/api/space/${S.spaceId}/item`, {
       title,
+      kind: composeKind,
       visibility: S.compose,
       // Written while inside a group, so it belongs to it. Typing into a group and
       // having the thing land outside it would be baffling.
@@ -316,6 +401,9 @@ function openItem(id) {
   $('isNotes').value = it.notes || '';
   $('isPlace').value = (it.mod && it.mod.place && it.mod.place.name) || '';
   $('isLink').value = (it.mod && it.mod.link && it.mod.link.url) || '';
+  editingKind = it.kind || 'thing';
+  kindPicker($('isKind'), () => editingKind, (k) => { editingKind = k; kindFields(); });
+  kindFields();
   $('isTags').value = (it.tags || []).join(', ');
   // The groups already in use, one tap each — typing a tag from memory is how you
   // end up with "films" and "movies" meaning the same thing.
@@ -332,6 +420,7 @@ function openItem(id) {
   // rewrite it.
   const ro = !it.canEdit;
   for (const f of ['isName', 'isNotes', 'isPlace', 'isLink', 'isTags']) $(f).disabled = ro;
+  $('isKind').hidden = ro;
   $('isTagHints').hidden = ro;
   $('isSave').hidden = ro;
   $('isDelete').hidden = ro;
@@ -339,6 +428,24 @@ function openItem(id) {
   editingVis = it.visibility;
   if (!ro) visRow($('isVis'), () => editingVis, (v) => { editingVis = v; });
   openSheet('itemSheet');
+}
+
+// Which fields the chosen kind puts in front of you.
+//
+// The kind SUGGESTS; it never confiscates. A field that already holds something
+// stays on screen whatever the kind says, so reclassifying a row can never hide
+// — and then, on save, silently drop — an address you typed. Only genuinely
+// empty irrelevant fields fold away.
+function kindFields() {
+  const k = kindOf(editingKind);
+  const mods = k.mods || [];
+  const show = (id, wanted, keep) => { $(id).hidden = !(wanted || keep); };
+  show('isLinkFld', mods.includes('link'), !!$('isLink').value.trim());
+  show('isPlaceFld', mods.includes('place'), !!$('isPlace').value.trim());
+  // "Recipe link" says what to paste. "Link" makes you guess.
+  $('isLinkLabel').innerHTML = mods[0] === 'link'
+    ? `${esc(k.label)} link <em>the point of it</em>`
+    : 'Link <em>optional</em>';
 }
 
 async function saveItem() {
@@ -351,6 +458,7 @@ async function saveItem() {
   try {
     const b = await patch(`/api/item/${editing}`, {
       title,
+      kind: editingKind,
       notes: $('isNotes').value.trim(),
       visibility: editingVis,
       tags: $('isTags').value.split(',').map(t => t.trim()).filter(Boolean),

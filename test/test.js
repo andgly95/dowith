@@ -270,6 +270,178 @@ async function groupRules() {
 
 /* ── 3. the module seam ──────────────────────────────────────────────────── */
 
+/* ── kinds: what a thing IS ─────────────────────────────────────────────── */
+
+async function kindRules() {
+  console.log('\nkinds');
+  const kinds = require('../lib/kinds');
+  const items = require('../lib/items');
+
+  const made = (raw) => items.cleanItem(raw, { id: 'i1', authorId: 'u1', spaceId: 's1' });
+
+  await t('the kinds are the four that were asked for, plus a plain thing', () => {
+    assert.deepStrictEqual(kinds.manifest().map(k => k.id),
+      ['thing', 'movie', 'show', 'place', 'recipe']);
+    // `thing` is first and is the default, so a list that existed before kinds
+    // did keeps working and nobody is made to classify anything.
+    assert.strictEqual(kinds.DEFAULT, 'thing');
+  });
+
+  await t('an unrecognised kind becomes a thing rather than losing the item', () => {
+    // A kind is a convenience. Refusing the write because a client sent a word
+    // this server has not heard of would be the tail wagging the dog.
+    assert.strictEqual(made({ title: 'x', kind: 'spaceship' }).kind, 'thing');
+    assert.strictEqual(made({ title: 'x', kind: '' }).kind, 'thing');
+    assert.strictEqual(made({ title: 'x', kind: null }).kind, 'thing');
+    assert.strictEqual(made({ title: 'x' }).kind, 'thing');
+    assert.strictEqual(made({ title: 'x', kind: { id: 'movie' } }).kind, 'thing');
+  });
+
+  await t('A RECIPE KEEPS ITS LINK — the whole point of a recipe', () => {
+    const it = made({
+      title: 'The NYT ragù', kind: 'recipe',
+      mod: { link: { url: 'https://cooking.nytimes.com/recipes/1018069' } },
+    });
+    assert.strictEqual(it.kind, 'recipe');
+    assert.strictEqual(it.mod.link.url, 'https://cooking.nytimes.com/recipes/1018069');
+    // And the kind says the link leads, which is what makes the field read
+    // "Recipe link" rather than "Link" and the row's action worth tapping.
+    assert.strictEqual(kinds.leadsWithLink('recipe'), true);
+    assert.deepStrictEqual(kinds.modsFor('recipe'), ['link']);
+    // And the action is named for what the link is FOR. Never the same word as
+    // the badge beside it: the first version used the label for both and a show
+    // rendered "SHOW" twice in a row, which reads as a bug even though both
+    // were correct.
+    for (const k of kinds.KINDS) {
+      assert.ok(k.go, `${k.id} needs a word for its link`);
+      assert.notStrictEqual(k.go.toLowerCase(), k.label.toLowerCase(),
+        `${k.id} would render its own name twice`);
+    }
+  });
+
+  await t('a javascript: URL is still refused on a recipe', () => {
+    // The kind must not become a way around the module gate — this app shows
+    // other people's items to you, and an href is a script injection with
+    // extra steps.
+    const it = made({
+      title: 'Nasty', kind: 'recipe',
+      mod: { link: { url: 'javascript:alert(1)' } },
+    });
+    assert.strictEqual(it.kind, 'recipe');
+    assert.deepStrictEqual(it.mod, {}, 'the slice is dropped, the item survives');
+  });
+
+  await t('films and shows lead with a link; a place leads with a place', () => {
+    assert.deepStrictEqual(kinds.modsFor('movie'), ['link']);
+    assert.deepStrictEqual(kinds.modsFor('show'), ['link']);
+    assert.deepStrictEqual(kinds.modsFor('place'), ['place']);
+    assert.strictEqual(kinds.leadsWithLink('place'), false);
+    // A plain thing offers BOTH and leads with neither. That is the point of it
+    // being the default: before kinds existed every item could carry a place
+    // and a link, and a default that took both away would make classifying
+    // compulsory just to get back what you already had.
+    assert.deepStrictEqual(kinds.modsFor('thing'), ['place', 'link']);
+    assert.strictEqual(kinds.leadsWithLink('thing'), false);
+  });
+
+  await t('A KIND SUGGESTS AND NEVER CONFISCATES', () => {
+    // Seeing a film at the AFI is a film with a place on it. Reclassifying a
+    // row must never silently delete something that was typed — so nothing in
+    // the kind rules drops a slice the module gate recognises.
+    const it = made({
+      title: 'Obsession at the AFI', kind: 'movie',
+      mod: {
+        link: { url: 'https://example.com/obsession' },
+        place: { name: 'AFI Silver', address: '8633 Colesville Rd' },
+      },
+    });
+    assert.strictEqual(it.mod.place.name, 'AFI Silver');
+    assert.strictEqual(it.mod.link.url, 'https://example.com/obsession');
+
+    // And changing the kind afterwards keeps both.
+    items.applyPatch(it, { kind: 'place' });
+    assert.strictEqual(it.kind, 'place');
+    assert.strictEqual(it.mod.link.url, 'https://example.com/obsession',
+      'the link survived being reclassified as a place');
+    assert.strictEqual(it.mod.place.name, 'AFI Silver');
+  });
+
+  await t('a patch can change the kind, and garbage still lands on thing', () => {
+    const it = made({ title: 'x' });
+    items.applyPatch(it, { kind: 'show' });
+    assert.strictEqual(it.kind, 'show');
+    items.applyPatch(it, { kind: 'nonsense' });
+    assert.strictEqual(it.kind, 'thing');
+    // A patch that mentions no kind leaves it alone — the usual PATCH rule.
+    items.applyPatch(it, { kind: 'recipe' });
+    items.applyPatch(it, { title: 'y' });
+    assert.strictEqual(it.kind, 'recipe');
+  });
+
+  await t('a kind is NOT a tag — they are different axes and both survive', () => {
+    // groups.js is emphatic that a group is a tag. A film tagged "rainy day"
+    // is a film AND in that group; neither displaces the other.
+    const it = made({ title: 'Obsession', kind: 'movie', tags: ['rainy day', 'Films'] });
+    assert.strictEqual(it.kind, 'movie');
+    assert.deepStrictEqual(it.tags, ['rainy day', 'Films']);
+    const groups = require('../lib/groups');
+    // Both tags still make groups. Order is groups.js's business (biggest open
+    // first, then alphabetically), not this test's — so compare the set.
+    assert.deepStrictEqual(groups.groupsOf([it]).map(g => g.name).sort(),
+      ['Films', 'rainy day']);
+  });
+
+  /* ── what the filter row is allowed to show ──────────────────────────── */
+
+  const mixed = [
+    { kind: 'movie' }, { kind: 'movie' }, { kind: 'recipe' }, {}, { kind: 'place' },
+  ];
+
+  await t('counts cover every kind, including the ones with nothing in them', () => {
+    const n = kinds.counts(mixed);
+    assert.strictEqual(n.get('movie'), 2);
+    assert.strictEqual(n.get('recipe'), 1);
+    assert.strictEqual(n.get('thing'), 1, 'an item with no kind counts as a thing');
+    assert.strictEqual(n.get('show'), 0);
+  });
+
+  await t('only the kinds actually present get a filter chip', () => {
+    // A filter for a kind you own none of is a dead control.
+    assert.deepStrictEqual(kinds.present(mixed).map(k => k.id),
+      ['thing', 'movie', 'place', 'recipe']);
+    assert.deepStrictEqual(kinds.present(mixed).map(k => k.count), [1, 2, 1, 1]);
+    // Table order, not count order: the row must not reshuffle under your
+    // finger every time something is ticked off.
+    assert.deepStrictEqual(kinds.present([{ kind: 'recipe' }, { kind: 'movie' }])
+      .map(k => k.id), ['movie', 'recipe']);
+  });
+
+  await t('A LIST OF ONE KIND GETS NO FILTER ROW AT ALL', () => {
+    // One kind is not a choice, and a row of chips that all say the same thing
+    // is noise on a phone.
+    assert.strictEqual(kinds.worthFiltering([{}, {}, {}]), false);
+    assert.strictEqual(kinds.worthFiltering([{ kind: 'movie' }, { kind: 'movie' }]), false);
+    assert.strictEqual(kinds.worthFiltering([]), false);
+    assert.strictEqual(kinds.worthFiltering(mixed), true);
+  });
+
+  await t('filtering to a kind finds the plain things too', () => {
+    assert.strictEqual(kinds.inKind(mixed, 'movie').length, 2);
+    assert.strictEqual(kinds.inKind(mixed, 'thing').length, 1,
+      'an item written before kinds existed is a thing and must be findable');
+    assert.strictEqual(kinds.inKind(mixed, 'show').length, 0);
+  });
+
+  await t('nothing here throws on rubbish', () => {
+    assert.deepStrictEqual(kinds.present(null), []);
+    assert.strictEqual(kinds.worthFiltering(null), false);
+    assert.deepStrictEqual(kinds.inKind(null, 'movie'), []);
+    assert.strictEqual(kinds.counts([null, undefined]).get('thing'), 2);
+    assert.deepStrictEqual(kinds.modsFor('nonsense'), ['place', 'link'],
+      'falls back to the default, which offers everything');
+  });
+}
+
 async function moduleSeam() {
   console.log('\nmodules');
 
@@ -1100,6 +1272,7 @@ async function server() {
   await visibility();
   await gate();
   await groupRules();
+  await kindRules();
   await moduleSeam();
   await inviteRules();
   await squareBridge();
