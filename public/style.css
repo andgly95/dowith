@@ -571,10 +571,7 @@ input,textarea{font:inherit;color:var(--ink)}
   width:46px;height:28px;border-radius:14px;
   transition:background .16s ease,color .16s ease;
 }
-/* The badge is anchored to the GLYPH, not to the pill around it. Pinned to the
-   pill it floated eleven pixels off the icon's shoulder, which looked like a
-   number belonging to nothing. */
-.kindnav .gl{position:relative;display:block;line-height:0}
+.kindnav .gl{display:block;line-height:0}
 .kindnav button.on .ic{background:rgba(242,132,92,.16)}
 .kindnav button.on{color:var(--accent)}
 .kindnav button:active .ic{background:var(--card)}
@@ -585,17 +582,21 @@ input,textarea{font:inherit;color:var(--ink)}
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 
-/* The count rides the icon's shoulder, and it is a NUMERAL, not a badge.
-   Filled pills on all five tabs turned a calm bar into a notification centre —
-   a badge means "something needs clearing", and four films waiting is not an
-   alert, it is just how many there are. So: no fill, no ring, one weight down,
-   and it disappears entirely at zero. */
+/* The count sits ON THE LABEL LINE, not on the icon's shoulder.
+   Two goes at this. A filled pill on all five tabs turned a calm bar into a
+   notification centre — a badge means "something needs clearing", and four
+   films waiting is not an alert, it is just how many there are. Dropping the
+   fill fixed that but left a numeral hanging in the air beside each icon with
+   nothing to attach it to: on the active tab the pill anchored it, on the other
+   four it floated between tabs and read as belonging to neither.
+
+   Beside the word it counts, it needs no anchor. It is simply part of the
+   label, one step dimmer. */
 .kindnav .n{
-  position:absolute;top:-4px;right:-8px;
-  font:600 9.5px/1 var(--sans);font-style:normal;letter-spacing:.01em;
+  font:inherit;font-style:normal;font-weight:500;margin-left:4px;
   color:var(--faint);
 }
-.kindnav button.on .n{color:var(--accent);opacity:.9}
+.kindnav button.on .n{color:var(--accent);opacity:.75}
 
 @media (prefers-reduced-motion: reduce){
   .kindnav .ic{transition:none}

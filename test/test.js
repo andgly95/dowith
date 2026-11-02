@@ -1553,6 +1553,21 @@ async function server() {
     assert.strictEqual((await fetch(BASE + m + 'app.js')).status, 200);
   });
 
+  await t('the app measures itself against the VISUAL viewport on boot', () => {
+    // Honest about what this can and cannot check: headless Chromium's `100dvh`
+    // already equals visualViewport.height, so the layout assertion in
+    // client-check passes with the fix removed and cannot reproduce the iOS
+    // case at all. What IS checkable is that the wiring exists — on a 956pt
+    // iPhone the bottom nav sat sixty-odd points above the bottom of the
+    // screen, and the only thing that fixed it was measuring.
+    const util = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'util.js'), 'utf8');
+    assert.ok(/visualViewport/.test(util), 'the measurement has to be made');
+    assert.ok(/INPUT\|TEXTAREA/.test(util),
+      'and skipped while a field has focus, or the keyboard squashes the app');
+    const app = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'app.js'), 'utf8');
+    assert.ok(/watchViewport\(\)/.test(app), 'and it has to run on boot');
+  });
+
   await t('every client module parses and its imports resolve', async () => {
     const seen = new Set();
     const walk = async (p) => {

@@ -306,6 +306,30 @@ function connectCdp(wsUrl) {
       .every(s => s.getAttribute('stroke-width') === '1.6')`),
       'drawn to one spec — five icons from five conventions read as five mistakes');
 
+    // THE APP IS EXACTLY AS TALL AS WHAT YOU CAN SEE.
+    // `100dvh` is right everywhere worth measuring and comes up SHORT on iOS in
+    // standalone — on a 956pt phone it was sixty-odd points short, which left
+    // the bottom nav floating with a strip of dead page under it. Pin the
+    // property rather than the symptom.
+    const fit = await evalJs(`(() => {
+      const app = document.getElementById('app');
+      const nav = document.getElementById('kindNav');
+      return {
+        appH: Math.round(app.getBoundingClientRect().height),
+        vh: Math.round((window.visualViewport && window.visualViewport.height) || window.innerHeight),
+        under: nav ? Math.round(window.innerHeight - nav.getBoundingClientRect().bottom) : null,
+      }; })()`);
+    check(Math.abs(fit.appH - fit.vh) <= 2,
+      `#app (${fit.appH}px) should be the visible height (${fit.vh}px)`);
+    check(fit.under !== null && Math.abs(fit.under) <= 2,
+      `the nav should sit flush at the bottom, found ${fit.under}px under it`);
+
+    // The count is part of the LABEL, not a thing floating beside the icon.
+    // Unanchored it read as belonging to neither tab.
+    check(await evalJs(`[...document.querySelectorAll('#kindNav .n')]
+      .every(n => n.closest('b'))`),
+      'the count sits on the label line, beside the word it counts');
+
     // THE DONE COUNT IS THE COUNT OF WHAT IT WOULD SHOW YOU. It was the whole
     // list's while the list underneath was one kind's, so "Done together 15" on
     // the Recipes tab produced two.

@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 125 assertions + a headless-chromium check
+- **Tests:** `npm test` — 126 assertions + a headless-chromium check
 
 ## The model
 
@@ -193,6 +193,24 @@ group, and there is a test saying so.
 
 ## The one screen
 
+**`#app` is measured against the VISUAL viewport, not `100dvh`.** `height:100dvh` is
+right in every browser worth measuring and is what this falls back to — but on iOS in
+standalone it comes up SHORT, and on a 956pt phone that left the bottom nav floating
+sixty-odd points above the bottom of the screen with a strip of dead page under it.
+`visualViewport.height` is the one measurement true by definition, so when it disagrees
+it wins (`fitViewport` in `util.js`, run on boot and on every viewport resize).
+Deliberately skipped while a field has focus: the keyboard shrinks the visual viewport
+by several hundred points and squashing the whole app above it is far worse. The trips
+app learned this identically; it is the one piece of iOS arithmetic worth copying
+verbatim rather than rediscovering.
+
+**Be clear about what the test can prove.** Headless Chromium's `100dvh` already equals
+`visualViewport.height`, so the layout assertion in `client-check` passes with the fix
+removed — it cannot reproduce the iOS case at all. It is kept because it catches any
+*other* way `#app` could stop filling the screen, and a source assertion in `test.js`
+pins the wiring so it cannot be deleted quietly.
+
+
 **The app lands IN your first list, not on the shelf of lists.** Almost everybody has
 one and will for a long time, so the shelf was a screen you tapped through on the way
 to the only place you were ever going. The back arrow still reaches it — the common
@@ -267,11 +285,13 @@ things fixed it, and they are the three things a nav is made of:
 - **The active marker sits behind the ICON, not the tab.** A pill the width of the tab
   makes five of them look like five buttons; a pill the width of the icon makes one of
   them look chosen.
-- **The count is a numeral, not a badge.** Filled pills on all five tabs turned a calm
-  bar into a notification centre — a badge means "something needs clearing", and four
-  films waiting is not an alert, it is just how many there are. It is anchored to the
-  glyph rather than the pill around it; pinned to the pill it floated eleven pixels off
-  the icon's shoulder and looked like a number belonging to nothing.
+- **The count is part of the LABEL.** Three goes at this. A filled pill on all five
+  tabs turned a calm bar into a notification centre — a badge means "something needs
+  clearing", and four films waiting is not an alert, it is just how many there are.
+  Dropping the fill fixed that but left a numeral hanging beside each icon with nothing
+  to attach it to: on the active tab the pill anchored it, on the other four it floated
+  between tabs and read as belonging to neither. Beside the word it counts it needs no
+  anchor at all — `Films 4`, one step dimmer.
 
 **The `Done together` count is the count of what it would show you.** It was the whole
 list's while the list underneath was one kind's, so "Done together 15" on the Recipes
