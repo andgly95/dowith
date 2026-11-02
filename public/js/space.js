@@ -380,8 +380,8 @@ function renderNav() {
   nav.innerHTML = tabs.map(k => `<button data-kind="${esc(k.id)}"
       class="${k.id === kindTab ? 'on' : ''}" aria-current="${k.id === kindTab ? 'page' : 'false'}">
       <span class="ic"><span class="gl">${iconFor(k.id)}</span></span>
-      <b>${esc(k.plural)}${
-        k.count ? `<i class="n">${k.count > 99 ? '99+' : k.count}</i>` : ''}</b>
+      <b>${k.count ? `<i class="n">${k.count > 99 ? '99+' : k.count}</i>` : ''}${
+        esc(k.plural)}</b>
       </button>`).join('');
   nav.querySelectorAll('[data-kind]').forEach((b) => {
     b.addEventListener('click', () => {

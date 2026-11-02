@@ -222,22 +222,25 @@ Sources, since Apple documented none of it:
 [Safari 26 Liquid Glass on the web](https://1ar.io/updates/safari-26-liquid-glass-web/) ·
 [theme-color and fixed elements](https://benfrain.com/ios26-safari-theme-color-tab-tinting-with-fixed-position-elements/)
 
-**`#app` is measured against the VISUAL viewport, not `100dvh`.** `height:100dvh` is
-right in every browser worth measuring and is what this falls back to — but on iOS in
-standalone it comes up SHORT, and on a 956pt phone that left the bottom nav floating
-sixty-odd points above the bottom of the screen with a strip of dead page under it.
-`visualViewport.height` is the one measurement true by definition, so when it disagrees
-it wins (`fitViewport` in `util.js`, run on boot and on every viewport resize).
-Deliberately skipped while a field has focus: the keyboard shrinks the visual viewport
-by several hundred points and squashing the whole app above it is far worse. The trips
-app learned this identically; it is the one piece of iOS arithmetic worth copying
-verbatim rather than rediscovering.
+**`#app` is `position:fixed; inset:0` — NOT a viewport unit.** Measured on an iPhone 16
+Pro Max in standalone: the screen is 956pt and `100dvh` gave **857**, short by almost
+exactly the status bar (59) plus the home indicator (34). So `dvh` there is the *safe*
+viewport rather than the screen, and the missing hundred points showed as a dead band
+under the tab bar. `inset:0` pins the shell to the layout viewport, which under
+`viewport-fit=cover` in standalone is the whole screen; the `--safe-t`/`--safe-b`
+padding on the masthead and the nav is what keeps content clear of the notch and the
+indicator.
 
-**Be clear about what the test can prove.** Headless Chromium's `100dvh` already equals
-`visualViewport.height`, so the layout assertion in `client-check` passes with the fix
-removed — it cannot reproduce the iOS case at all. It is kept because it catches any
-*other* way `#app` could stop filling the screen, and a source assertion in `test.js`
-pins the wiring so it cannot be deleted quietly.
+**A `fitViewport()` that measured `visualViewport.height` was tried first and removed.**
+On that phone the visual viewport reports the safe area too and *agrees* with `100dvh`,
+so it reproduced the bug it was meant to fix — and it would now fight `inset:0` by
+shrinking the shell back. The trips app keeps its version because there the failure is
+the opposite: Safari-with-chrome, where `dvh` is short of what you can see. Same
+symptom, different cause, opposite fix. **Do not port it back without measuring first.**
+
+**There is a readout in the account sheet** — screen, window, visual viewport, `#app`,
+safe insets, standalone yes/no. Every layout bug in this app so far has been a number
+inferred from a photograph; six lines on screen turn the next one into a measurement.
 
 
 **The app lands IN your first list, not on the shelf of lists.** Almost everybody has

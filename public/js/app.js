@@ -1,6 +1,6 @@
 // Entry point: identity first, then straight into your first list.
 import { S } from './state.js';
-import { $, showScreen, toast, closeSheet, openSheet, initialOf, watchViewport } from './util.js';
+import { $, showScreen, toast, closeSheet, openSheet, initialOf } from './util.js';
 import { loadState, get, subscribePush, unsubscribePush } from './api.js';
 import { initAuth, checkAuth, showAuth, signOut } from './auth.js';
 import { initShelf, renderShelf } from './shelf.js';
@@ -28,7 +28,29 @@ async function openAccount() {
       : `${sq.people} people found · linking not built yet`;
   } catch (_) { $('squareState').textContent = 'unavailable'; }
   paintNudge();
+  paintMetrics();
   openSheet('meSheet');
+}
+
+// What this phone actually reports.
+//
+// Every layout bug in this app so far has been a number inferred from a
+// photograph. The screen, the viewport and the safe areas are six lines, and
+// having them on screen turns the next one of these into a measurement.
+function paintMetrics() {
+  const vv = window.visualViewport;
+  const cs = getComputedStyle(document.documentElement);
+  const ins = (side) => cs.getPropertyValue(`--safe-${side}`).trim() || '0px';
+  const app = $('app').getBoundingClientRect();
+  $('meMetrics').innerHTML = [
+    ['screen', `${window.screen.width}×${window.screen.height}`],
+    ['window', `${window.innerWidth}×${window.innerHeight}`],
+    ['visual', vv ? `${Math.round(vv.width)}×${Math.round(vv.height)}` : '—'],
+    ['#app', `${Math.round(app.width)}×${Math.round(app.height)}`],
+    ['safe t/b', `${ins('t')} / ${ins('b')}`],
+    ['standalone', window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone ? 'yes' : 'no'],
+  ].map(([k, v]) => `<span><i>${k}</i>${v}</span>`).join('');
 }
 
 function paintNudge() {
@@ -43,9 +65,6 @@ function paintNudge() {
 }
 
 async function start() {
-  // Before anything renders: on iOS `100dvh` can be short of what you can see,
-  // and every pane below is laid out against #app's height.
-  watchViewport();
   await loadState();
   initShelf((id) => openSpace(id), openAccount);
   initSpace(renderShelf, toShelf);

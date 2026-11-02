@@ -52,9 +52,17 @@ body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans);-webkit-fon
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 input,textarea{font:inherit;color:var(--ink)}
 
-/* dvh, not inset:0 — a phone's layout viewport can be taller than what you can
-   actually see, which leaves the composer floating above the fold. */
-#app{position:fixed;top:0;left:0;right:0;height:100vh;height:100dvh;overflow:hidden}
+/* inset:0, NOT a viewport unit.
+   Measured on an iPhone 16 Pro Max in standalone: the screen is 956pt and
+   `100dvh` gave 857 — short by almost exactly the status bar (59) plus the home
+   indicator (34). So `dvh` here is the SAFE viewport, not the screen, and the
+   missing hundred points showed as a dead band under the tab bar.
+   `visualViewport.height` agreed with it, which is why measuring against that
+   changed nothing at all. `inset:0` pins the shell to the layout viewport,
+   which under `viewport-fit=cover` in standalone is the whole screen — and the
+   safe-area padding on the topbar and the nav is what keeps content clear of
+   the notch and the indicator. */
+#app{position:fixed;inset:0;overflow:hidden}
 /* No background: `html` has it. A fixed layer carrying the page colour is what
    Safari samples for the status-bar tint, and it blurred the masthead. */
 .screen{position:absolute;inset:0;display:none;flex-direction:column}
@@ -614,9 +622,11 @@ input,textarea{font:inherit;color:var(--ink)}
    four it floated between tabs and read as belonging to neither.
 
    Beside the word it counts, it needs no anchor. It is simply part of the
-   label, one step dimmer. */
+   label, one step dimmer — and in FRONT of it, so the eye reads "4 Films"
+   rather than having to get to the end of the word before the number means
+   anything. */
 .kindnav .n{
-  font:inherit;font-style:normal;font-weight:500;margin-left:4px;
+  font:inherit;font-style:normal;font-weight:500;margin-right:4px;
   color:var(--faint);
 }
 .kindnav button.on .n{color:var(--accent);opacity:.75}
@@ -737,3 +747,12 @@ input,textarea{font:inherit;color:var(--ink)}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .matchrow .mb small{display:block;color:var(--dim);font-size:12px;margin-top:1px}
 .matchrow .ch{flex:none;color:var(--accent);font:600 12px/1 var(--sans);letter-spacing:.02em}
+
+
+/* A readout of what this phone reports. Every layout bug so far has been a
+   number inferred from a photograph; these turn the next one into a
+   measurement. */
+.metrics{display:flex;flex-direction:column;gap:3px;
+  font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+.metrics span{display:flex;gap:8px;color:var(--ink2)}
+.metrics i{font-style:normal;color:var(--faint);min-width:84px}

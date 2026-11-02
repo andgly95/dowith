@@ -1553,19 +1553,22 @@ async function server() {
     assert.strictEqual((await fetch(BASE + m + 'app.js')).status, 200);
   });
 
-  await t('the app measures itself against the VISUAL viewport on boot', () => {
-    // Honest about what this can and cannot check: headless Chromium's `100dvh`
-    // already equals visualViewport.height, so the layout assertion in
-    // client-check passes with the fix removed and cannot reproduce the iOS
-    // case at all. What IS checkable is that the wiring exists — on a 956pt
-    // iPhone the bottom nav sat sixty-odd points above the bottom of the
-    // screen, and the only thing that fixed it was measuring.
-    const util = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'util.js'), 'utf8');
-    assert.ok(/visualViewport/.test(util), 'the measurement has to be made');
-    assert.ok(/INPUT\|TEXTAREA/.test(util),
-      'and skipped while a field has focus, or the keyboard squashes the app');
-    const app = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'app.js'), 'utf8');
-    assert.ok(/watchViewport\(\)/.test(app), 'and it has to run on boot');
+  await t('THE SHELL IS PINNED TO THE SCREEN, not to a viewport unit', () => {
+    // Measured on an iPhone 16 Pro Max in standalone: the screen is 956pt and
+    // `100dvh` gave 857 — short by almost exactly the status bar plus the home
+    // indicator. `visualViewport.height` agreed with it, so measuring against
+    // that reproduced the bug rather than fixing it. `inset:0` pins the shell
+    // to the layout viewport, which under viewport-fit=cover in standalone is
+    // the whole screen.
+    const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'style.css'), 'utf8');
+    const app = css.match(/#app\{[^}]*\}/)[0];
+    assert.ok(/inset:0/.test(app), `#app must fill the layout viewport: ${app}`);
+    assert.ok(!/100dvh|100vh/.test(app), 'and must not trust a viewport unit for it');
+    // The safe-area padding is what keeps content clear of the notch and the
+    // indicator, so it has to still be there.
+    assert.ok(/--safe-t/.test(css) && /--safe-b/.test(css));
+    assert.ok(/padding:calc\(var\(--safe-t\)/.test(css), 'the masthead clears the notch');
+    assert.ok(/calc\(var\(--safe-b\) \+ 7px\)/.test(css), 'the nav clears the indicator');
   });
 
   await t('every client module parses and its imports resolve', async () => {

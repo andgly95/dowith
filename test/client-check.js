@@ -355,6 +355,12 @@ function connectCdp(wsUrl) {
     check(await evalJs(`[...document.querySelectorAll('#kindNav .n')]
       .every(n => n.closest('b'))`),
       'the count sits on the label line, beside the word it counts');
+    // And IN FRONT of it, so the eye reads "4 Films" rather than having to get
+    // to the end of the word before the number means anything.
+    check(await evalJs(`[...document.querySelectorAll('#kindNav button')]
+      .filter(b => b.querySelector('.n'))
+      .every(b => /^\\s*\\d/.test(b.querySelector('b').textContent))`),
+      'the number leads the label');
 
     // THE DONE COUNT IS THE COUNT OF WHAT IT WOULD SHOW YOU. It was the whole
     // list's while the list underneath was one kind's, so "Done together 15" on

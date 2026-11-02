@@ -43,45 +43,15 @@ export function closeSheet(id) {
 }
 export function openSheet(id) { $(id).hidden = false; }
 
-// Make #app exactly as tall as what you can actually see.
+// There was a fitViewport()/watchViewport() here that sized #app from
+// `visualViewport.height`. It is gone, and the reason is worth keeping: on the
+// phone this was built for, the visual viewport reports the SAFE area and
+// agrees with `100dvh` — so measuring against it reproduced the bug it was
+// meant to fix, and would now fight `inset:0` by shrinking the shell back.
 //
-// `height:100dvh` is right in every browser worth measuring, and is what this
-// falls back to. But on iOS in standalone it can come up SHORT of the visual
-// viewport — which leaves the bottom bar floating with a strip of dead page
-// under it, looking like the app thinks the screen is smaller than it is. On a
-// 956pt phone it was sixty-odd points short. `visualViewport.height` is the one
-// measurement that is true by definition, so when it disagrees, it wins.
-//
-// Deliberately NOT applied while a field has focus: the keyboard shrinks the
-// visual viewport by several hundred points, and squashing the whole app above
-// it is far worse than leaving it alone for a moment.
-//
-// The trips app learned this the same way and the fix is the same; it is the
-// one piece of iOS arithmetic worth copying verbatim rather than rediscovering.
-export function fitViewport() {
-  const vv = window.visualViewport;
-  const app = $('app');
-  if (!vv || !app) return;
-  const el = document.activeElement;
-  if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
-  const want = Math.round(vv.height);
-  // A point or two of disagreement is rounding, not a bug — don't fight it.
-  if (Math.abs(app.getBoundingClientRect().height - want) < 2) {
-    app.style.removeProperty('height');
-    return;
-  }
-  app.style.height = `${want}px`;
-}
-
-export function watchViewport() {
-  if (!window.visualViewport) return;
-  const run = () => requestAnimationFrame(fitViewport);
-  window.visualViewport.addEventListener('resize', run);
-  window.addEventListener('orientationchange', () => setTimeout(run, 250));
-  // Rotating or dismissing the keyboard settles a beat after the event.
-  window.addEventListener('focusout', () => setTimeout(run, 120));
-  run();
-}
+// The trips app keeps its version because there the failure is the opposite:
+// Safari-with-chrome, where dvh can be short of what you can see. Same symptom,
+// different cause, opposite fix. Do not port it back without measuring first.
 
 export function resetViewport() {
   window.scrollTo(0, 0);
