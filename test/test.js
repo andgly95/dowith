@@ -1553,26 +1553,20 @@ async function server() {
     assert.strictEqual((await fetch(BASE + m + 'app.js')).status, 200);
   });
 
-  await t('ON THE HOME SCREEN THE SHELL IS 100lvh, not the layout viewport', () => {
-    // MEASURED with the account-sheet readout on an iPhone 16 Pro Max, standalone:
-    //   screen 956 · window 894 · #app (inset:0) 0→894 · lvh 956 · insets 62/34
-    // iOS gives a standalone page a layout viewport 62pt short of the screen,
-    // and inset:0 pins to it. Two earlier theories (dvh under-reports; the
-    // bottom inset is ~97pt, clamp it) were inferred from photographs and wrong.
+  await t('THE SHELL ENDS WHERE iOS DRAWS, and drops dead padding when that is short', () => {
+    // MEASURED with the account-sheet readout, iPhone 16 Pro Max, standalone,
+    // iOS 26: screen 956 · window 894 · lvh 956 · insets 62/34. Sizing #app to
+    // 100lvh made it 0→956 and the nav was CLIPPED at 894 — the web view is
+    // only drawn that far. So: inset:0, and when the viewport is short of the
+    // screen the bottom inset is dead space (the edge is 62pt from the indicator).
     const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'style.css'), 'utf8');
     const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
-    assert.ok(/\.standalone #app\{bottom:auto;height:100lvh\}/.test(css),
-      'in standalone the shell is sized to the screen');
-    assert.ok(/\.standalone \.modal\{bottom:auto;height:100lvh\}/.test(css),
-      'and so is the sheet backdrop, or it stops short too');
-    // Standalone ONLY: in Safari proper the toolbars never retract, so lvh
-    // would put the nav under them. The base rule stays the viewport.
-    assert.ok(/#app\{position:fixed;inset:0;overflow:hidden\}/.test(css), 'outside standalone, the viewport');
-    // Set before first paint, or the bar jumps once the module runs.
+    assert.ok(/#app\{position:fixed;inset:0;overflow:hidden\}/.test(css), 'the shell is the drawn viewport');
+    assert.ok(!/height:100lvh/.test(css), 'and never the large viewport — that is drawn past and clipped');
+    assert.ok(/\.short-vp\{--safe-b:0px\}/.test(css), 'a short viewport drops the bottom inset');
     const head = html.slice(0, html.indexOf('</head>'));
-    assert.ok(/<script>[^<]*classList\.add\('standalone'\)/.test(head), 'class set by an inline script in <head>');
-    // The insets are honest; the clamp was a wrong fix and must not come back.
-    assert.ok(/--safe-b:env\(safe-area-inset-bottom,0px\)/.test(css), 'bottom inset unclamped');
+    assert.ok(/<script>[^<]*short-vp/.test(head), 'decided by an inline script in <head>, before paint');
+    assert.ok(/--safe-b:env\(safe-area-inset-bottom,0px\)/.test(css), 'otherwise the inset is honoured, unclamped');
     assert.ok(/--safe-t:env\(safe-area-inset-top,0px\)/.test(css), 'top inset unclamped');
     assert.ok(/padding:calc\(var\(--safe-t\)/.test(css), 'the masthead clears the notch');
     assert.ok(/calc\(var\(--safe-b\) \+ 7px\)/.test(css), 'the nav clears the indicator');

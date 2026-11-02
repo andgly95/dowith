@@ -54,20 +54,18 @@ body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans);-webkit-fon
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 input,textarea{font:inherit;color:var(--ink)}
 
-/* On the home screen, the shell is sized by 100lvh, NOT by inset:0.
-   MEASURED on an iPhone 16 Pro Max, standalone, via the account-sheet readout:
-     screen 956 · window 894 · html 894 · #app (inset:0) 0→894
-     vh 956 · lvh 956 · svh 894 · dvh 894 · insets 62 / 34
-   iOS gives a standalone page a layout viewport 62pt SHORT of the screen, and
-   inset:0 pins to that — the dead band under the tab bar was the 62pt outside
-   it. Only the large viewport unit measures the actual screen.
-   Standalone only: in Safari proper the toolbars never retract (the document
-   does not scroll), so lvh there would put the nav under the toolbar.
-   The `standalone` class is set by an inline script in <head>.
-   Two theories came before this — `100dvh` under-reports, and the bottom inset
-   is ~97pt so clamp it — and both were inferred from a photograph. */
+/* inset:0 — the shell ends where iOS stops DRAWING, which is not the screen.
+   MEASURED on an iPhone 16 Pro Max, standalone, iOS 26, via the readout:
+     screen 956 · window 894 · html 894 · vh/lvh 956 · svh/dvh 894 · insets 62/34
+   The web view is drawn 0→894; the bottom 62pt belong to the system. Sizing
+   #app to 100lvh made it 0→956 and the tab bar was CLIPPED at 894, sheet
+   backdrop included — so the short viewport is not a reporting bug, it is the
+   real paintable area, and nothing in CSS can draw below it.
+   What we can do: when the viewport stops short of the screen (`.short-vp`,
+   set by an inline script in <head>), our bottom edge is nowhere near the home
+   indicator, so the bottom safe-area padding is dead space and goes. */
 #app{position:fixed;inset:0;overflow:hidden}
-.standalone #app{bottom:auto;height:100lvh}
+.short-vp{--safe-b:0px}
 /* No background: `html` has it. A fixed layer carrying the page colour is what
    Safari samples for the status-bar tint, and it blurred the masthead. */
 .screen{position:absolute;inset:0;display:none;flex-direction:column}
@@ -448,7 +446,6 @@ input,textarea{font:inherit;color:var(--ink)}
 }
 /* an author `display` beats the UA rule for [hidden] — restore it explicitly */
 .modal[hidden]{display:none}
-.standalone .modal{bottom:auto;height:100lvh}
 .modal-in{
   width:min(400px,100%);max-height:88dvh;overflow-y:auto;
   background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;
@@ -536,9 +533,6 @@ input,textarea{font:inherit;color:var(--ink)}
   max-width:88vw;text-align:center;box-shadow:0 8px 26px rgba(0,0,0,.5);
 }
 .toast[hidden]{display:none}
-/* Fixed elements anchor to the SHORT standalone viewport (see #app), so take
-   back the difference: `100%` here is that viewport, `100lvh` the screen. */
-.standalone .toast{bottom:calc(var(--safe-b) + 96px + 100% - 100lvh)}
 
 
 /* ─── kinds ──────────────────────────────────────────────────────────────

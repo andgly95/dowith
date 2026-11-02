@@ -11,10 +11,12 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
-<!-- Synchronous, before first paint: the shell is sized differently on the home
-     screen (see #app in style.css), and a module script runs too late to stop
-     the bar jumping. -->
-<script>if(navigator.standalone||matchMedia('(display-mode: standalone)').matches)document.documentElement.classList.add('standalone')</script>
+<!-- Synchronous, before first paint, so the bar never jumps. On iOS 26 a
+     home-screen app is drawn SHORT of the screen (see .short-vp in style.css);
+     when it is, our bottom edge is nowhere near the home indicator and the
+     bottom safe-area padding is dead space. Orientation-aware, because iOS
+     never swaps screen.width/height. -->
+<script>(function(){var d=document.documentElement;function f(){var l=innerWidth>innerHeight,s=l?Math.min(screen.width,screen.height):Math.max(screen.width,screen.height);d.classList.toggle('short-vp',s-innerHeight>=20)}f();addEventListener('resize',f)})()</script>
 </head>
 <body>
 

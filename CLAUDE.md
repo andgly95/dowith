@@ -222,28 +222,30 @@ Sources, since Apple documented none of it:
 [Safari 26 Liquid Glass on the web](https://1ar.io/updates/safari-26-liquid-glass-web/) ·
 [theme-color and fixed elements](https://benfrain.com/ios26-safari-theme-color-tab-tinting-with-fixed-position-elements/)
 
-**On the home screen the shell is `100lvh` tall, not `inset:0`.** This is the fix
-for the dead band under the tab bar, and it was the *fourth* theory. The readout
-settled it, on an iPhone 16 Pro Max in standalone:
+**iOS 26 draws a home-screen app SHORT of the screen, and nothing can paint below
+that.** The readout settled it, on an iPhone 16 Pro Max in standalone:
 
 | screen | window | html | `#app` (inset:0) | vh | lvh | svh | dvh | insets t/b |
 |---|---|---|---|---|---|---|---|---|
 | 956 | 894 | 894 | 0→894 | 956 | 956 | 894 | 894 | 62 / 34 |
 
-iOS gives a standalone page a layout viewport **62pt short of the screen**, and
-everything that anchors to it (`inset:0`, `bottom:`, `100%`) stops there. Only the
-large viewport unit measures the actual screen. So `.standalone #app` and
-`.standalone .modal` are `bottom:auto; height:100lvh`, and the toast adds back
-`100% - 100lvh`. The `standalone` class is set by an inline `<script>` in `<head>`
-so the bar doesn't jump once the modules load. **Standalone only:** in Safari proper
-the toolbars never retract (the document does not scroll), so `lvh` there would put
-the nav under them.
+The web view is drawn 0→894 and the bottom 62pt belong to the system. Sizing `#app`
+to `100lvh` was tried: the readout said 0→956 and the tab bar came out **clipped
+through its icons at 894**, sheet backdrop included. So the short viewport is the
+real paintable area, not a number being misreported.
+
+What can be done: `#app` stays `inset:0`, and when the viewport stops short of the
+screen, the `short-vp` class on `<html>` sets `--safe-b:0px`. That edge is 62pt from
+the home indicator, so the 34pt of padding was just more dead space. An inline
+`<script>` in `<head>` sets the class before first paint, orientation-aware, because
+iOS never swaps `screen.width`/`height`. The band under the bar that remains is the
+system's.
 
 The wrong theories, kept so nobody re-tries them: *"`100dvh` under-reports"*;
 *"the root is transparent"* (true and worth fixing, but not this); *"`inset:0` fills
-the screen"*; and *"the bottom inset comes back at ~97pt, clamp it to 34"* — the inset
-was an honest 34 all along and the clamp changed nothing. All four were inferred from
-photographs. **Measure before changing the layout** — and the readout below exists
+the screen"*; *"the bottom inset comes back at ~97pt, clamp it to 34"* (it was an
+honest 34 and the clamp changed nothing); and *"size it to `100lvh`"* (it got clipped).
+The first four were inferred from photographs. **Measure before changing the layout** — and the readout below exists
 so you can.
 
 **There is a readout in the account sheet** — screen, window, visual viewport, `#app`,
