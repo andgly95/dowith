@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 120 assertions + a headless-chromium check
+- **Tests:** `npm test` — 123 assertions + a headless-chromium check
 
 ## The model
 
@@ -303,6 +303,17 @@ Island". No confident match means no poster, which the card already draws proper
   re-fetching everything the day the card changes size. The gate takes
   `/^\/[A-Za-z0-9._-]+$/` and nothing else — this ends up in an `<img src>` and the app
   shows other people's items to you.
+- **The search query is not the matching key.** The key can flatten everything; the
+  query cannot — "Dune: Part Two" needs its colon and "Se7en" its digit. So only
+  decoration comes off: a trailing year, and leading or trailing symbols. The live list
+  is full of titles like `🐴 Bojack Horseman`, and sending that verbatim returns
+  nothing — it was the one miss in the first seven.
+- **Providers are sorted by TMDB's `display_priority`, where ZERO is best.** Reading it
+  with `Number(x) || 999` treats a legitimate 0 as missing and buries the most relevant
+  service; it put Netflix fourth behind two live-TV resellers. Same falsy-zero trap as
+  everywhere else. A tier of something already listed is then dropped — "Netflix" plus
+  "Netflix Standard with Ads" is one service twice, and on a card with room for four
+  that costs a real one.
 - **Only `flatrate` providers.** Rent and buy are a different question, and a card that
   says "on Amazon" when it means "$3.99 on Amazon" is lying quietly — the kind of lie
   nobody catches until they are on the sofa. Capped at four; a card is not a directory.

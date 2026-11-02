@@ -422,10 +422,58 @@ async function watchLookups() {
     assert.deepStrictEqual(W.shapeProviders({}, 'US'), []);
   });
 
+  await t('THE QUERY KEEPS WHAT A TITLE NEEDS AND DROPS WHAT IT DOES NOT', () => {
+    // The matching key can afford to flatten everything; the query cannot.
+    // "Dune: Part Two" needs its colon and "Se7en" its digit — but the live
+    // list is full of titles like "🐴 Bojack Horseman", and sending that
+    // verbatim to TMDB returns nothing at all. It was the one miss in seven.
+    assert.strictEqual(W.searchQuery('🐴 Bojack Horseman'), 'Bojack Horseman');
+    assert.strictEqual(W.searchQuery('💃 Go swing dancing!'), 'Go swing dancing');
+    assert.strictEqual(W.searchQuery('Dune: Part Two'), 'Dune: Part Two');
+    assert.strictEqual(W.searchQuery('Se7en'), 'Se7en');
+    assert.strictEqual(W.searchQuery('Obsession (1976)'), 'Obsession');
+    assert.strictEqual(W.searchQuery('🎭'), '', 'nothing left to search for');
+    assert.strictEqual(W.searchQuery(null), '');
+  });
+
+  await t('ZERO IS THE BEST RANK, and `|| 999` buries it', () => {
+    // TMDB's display_priority is 0 for the most relevant service. Reading it
+    // with `Number(x) || 999` treats a legitimate 0 as missing — the same
+    // falsy-zero trap as everywhere else — and it put Netflix fourth, behind
+    // two live-TV resellers that happened to come back first.
+    const pay = { results: { US: { flatrate: [
+      { provider_name: 'fuboTV', display_priority: 30 },
+      { provider_name: 'Netflix', display_priority: 0 },
+      { provider_name: 'Hulu', display_priority: 5 },
+    ] } } };
+    assert.deepStrictEqual(W.shapeProviders(pay, 'US').map(p => p.name),
+      ['Netflix', 'Hulu', 'fuboTV']);
+    // No rank at all sorts last rather than first.
+    const none = { results: { US: { flatrate: [
+      { provider_name: 'Mystery' }, { provider_name: 'Max', display_priority: 1 },
+    ] } } };
+    assert.deepStrictEqual(W.shapeProviders(none, 'US').map(p => p.name), ['Max', 'Mystery']);
+  });
+
+  await t('a tier of something already listed is not another place to watch it', () => {
+    // "Netflix" then "Netflix Standard with Ads" is one service twice, and on a
+    // card with room for four that costs a real one.
+    const pay = { results: { US: { flatrate: [
+      { provider_name: 'Netflix', display_priority: 0 },
+      { provider_name: 'Netflix Standard with Ads', display_priority: 12 },
+      { provider_name: 'Paramount Plus', display_priority: 5 },
+      { provider_name: 'Paramount Plus Premium', display_priority: 20 },
+      { provider_name: 'Hulu', display_priority: 7 },
+    ] } } };
+    assert.deepStrictEqual(W.shapeProviders(pay, 'US').map(p => p.name),
+      ['Netflix', 'Paramount Plus', 'Hulu']);
+  });
+
   await t('duplicates fold and the list is capped — a card is not a directory', () => {
     const many = { results: { US: { flatrate: [
-      { provider_name: 'Max' }, { provider_name: 'max' }, { provider_name: 'Hulu' },
-      { provider_name: 'Peacock' }, { provider_name: 'Netflix' }, { provider_name: 'Paramount+' },
+      { provider_name: 'Max', display_priority: 1 }, { provider_name: 'max', display_priority: 2 },
+      { provider_name: 'Hulu', display_priority: 3 }, { provider_name: 'Peacock', display_priority: 4 },
+      { provider_name: 'Netflix', display_priority: 5 }, { provider_name: 'Paramount+', display_priority: 6 },
     ] } } };
     const got = W.shapeProviders(many, 'US');
     assert.strictEqual(got.length, 4);
