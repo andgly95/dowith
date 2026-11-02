@@ -279,17 +279,27 @@ function connectCdp(wsUrl) {
     check(!(await visible('#itemSheet .modal-in')), 'the sheet closes');
     check(await evalJs(`window.scrollY`) === 0, 'and the viewport goes back to the top');
 
-    // ── groups ──────────────────────────────────────────────────────────
-    // Tag two things and the to-do side becomes a set of groups you tap into.
-    // A group is derived from the tags, so there is nothing to file into and
-    // nothing that can outlive its members.
+    // ── the bottom nav ──────────────────────────────────────────────────
+    // One tab per kind, and the tabs ARE the groups: the rows they replaced
+    // were the same five sets, two taps and a breadcrumb away instead of one
+    // tap and always in the same place.
     await evalJs(`(() => { const b = document.getElementById('tabDone');
       if (b.getAttribute('aria-pressed') === 'true') b.click(); })()`);
     await sleep(300);
-    check(!(await visible('#groupList')), 'no tags, no groups — the list is just a list');
 
-    // A group is the set of items of one KIND, so classifying something is what
-    // puts it in one — the tag field it replaced is gone.
+    const nav = await evalJs(`[...document.querySelectorAll('#kindNav [data-kind]')]
+      .map(b => b.dataset.kind)`);
+    check(nav.length === 5, `one tab per kind, got ${nav.length}`);
+    check(nav[0] === 'activity', 'the default kind leads');
+    check(await visible('#kindNav'), 'and the bar is on screen');
+    // EMPTY TABS STAY. Furniture has to be where you left it, and an empty tab
+    // is how you make your first recipe.
+    check(nav.includes('recipe') && nav.includes('place'),
+      `kinds with nothing in them keep their tab: ${nav}`);
+    check(await evalJs(`document.querySelector('#kindNav [data-kind="activity"]')
+      .classList.contains('on')`), 'and you start on Activities');
+
+    // Classifying something moves it between tabs, which is the whole model.
     const classifyFirst = async (kind) => {
       await evalJs(`document.querySelector('#itemList .it [data-open]').click()`);
       await sleep(400);
@@ -301,40 +311,40 @@ function connectCdp(wsUrl) {
       await sleep(1100);
       return true;
     };
-    const tagged = await classifyFirst('movie');
-    if (tagged) {
-      check(await visible('#groupList'), 'one group and something outside it is worth showing');
-      const gs = await evalJs(`document.getElementById('groupList').innerText`);
-      check(/Films/.test(gs), `the group is named after the kind:\n${gs}`);
-      check(!/Everything else/.test(gs), 'plain things are not a group');
-      // They are listed right underneath instead — the ordinary case must not be
-      // behind an extra tap.
-      check(await visible('#itemList'), 'the loose items are on screen with the groups');
-      check(await evalJs(`document.querySelectorAll('#itemList .it').length`) >= 1,
-        'and there are some');
+    const before = await evalJs(`document.querySelectorAll('#itemList .it').length`);
+    const moved = await classifyFirst('movie');
+    if (moved) {
+      check(await evalJs(`document.querySelectorAll('#itemList .it').length`) === before - 1,
+        'it left Activities');
+      const filmCount = await evalJs(`(() => {
+        const b = document.querySelector('#kindNav [data-kind="movie"] i');
+        return b ? Number(b.innerText) : 0; })()`);
+      check(filmCount >= 1, 'and the Films tab counted it');
 
-      // Tap into it.
-      await evalJs(`document.querySelector('#groupList [data-g]').click()`);
-      await sleep(400);
-      check(!(await visible('#groupList')), 'tapping a group goes into it');
-      check(await visible('#crumb'), 'with a way back');
+      await evalJs(`document.querySelector('#kindNav [data-kind="movie"]').click()`);
+      await sleep(500);
+      check(await evalJs(`document.querySelector('#kindNav [data-kind="movie"]')
+        .classList.contains('on')`), 'tapping a tab selects it');
       check(await evalJs(`document.querySelectorAll('#itemList .it').length`) === 1,
-        'showing only what is in it');
-
-      // Something written inside a group joins it — the same promise as before,
-      // through the kind rather than through a tag.
+        'and shows only that kind');
+      // The composer asks for what you are looking at, and writes it.
+      check(/film/i.test(await evalJs(`document.getElementById('newItem').placeholder`)),
+        'the composer asks for a film');
       await evalJs(`(() => { const i = document.getElementById('newItem');
-        i.value = 'Another film'; })()`);
+        i.value = 'Another film'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
       await evalJs(`document.getElementById('btnAdd').click()`);
-      await sleep(1100);
+      await sleep(1200);
       check(await evalJs(`document.querySelectorAll('#itemList .it').length`) === 2,
-        'typing inside a group puts the thing in it');
-      check(/FILM/i.test(await evalJs(`document.getElementById('itemList').innerText`)),
-        'and it really is one, not merely filed as one');
-
-      await evalJs(`document.getElementById('crumb').click()`);
+        'writing in a tab puts the thing in it');
+      // Really that kind, not merely shown there — so it survives a reload.
+      await S('Page.reload');
+      await sleep(2400);
+      await evalJs(`document.querySelector('#kindNav [data-kind="movie"]').click()`);
+      await sleep(600);
+      check(/Another film/.test(await evalJs(`document.getElementById('itemList').innerText`)),
+        'and it is still there after a reload, so it really is a film');
+      await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
       await sleep(400);
-      check(await visible('#groupList'), 'and back out again');
     }
 
     // ── kinds ───────────────────────────────────────────────────────────
@@ -344,7 +354,8 @@ function connectCdp(wsUrl) {
     await evalJs(`(() => { const b = document.getElementById('tabDone');
       if (b.getAttribute('aria-pressed') === 'true') b.click(); })()`);
     await sleep(300);
-    if (await visible('#crumb')) { await evalJs(`document.getElementById('crumb').click()`); await sleep(400); }
+    await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
+    await sleep(400);
 
     // The UI stays as it was: no filter strip, no picker in the composer.
     check(await evalJs(`!document.getElementById('kindFilter')`),
@@ -355,10 +366,6 @@ function connectCdp(wsUrl) {
       'the free-text tag field is gone — the kind replaced it');
 
     // Classify something a recipe through the sheet, where the tags used to be.
-    if (await visible('#groupList')) {
-      await evalJs(`document.querySelector('#groupList [data-g]').click()`); await sleep(400);
-      await evalJs(`document.getElementById('crumb').click()`); await sleep(400);
-    }
     // Write one, outside any group, so it starts as a plain thing — and so it
     // belongs to this viewer, because somebody else's classification is theirs
     // and the picker is hidden on a read-only item.
@@ -403,13 +410,11 @@ function connectCdp(wsUrl) {
 
     // It is a recipe now, so it is in the Recipes group — the same rows as
     // before, named by the kind.
-    const groupNames = await evalJs(`document.getElementById('groupList').innerText`);
-    check(/Recipes/.test(groupNames), `classifying makes a group:\n${groupNames}`);
-    await evalJs(`[...document.querySelectorAll('#groupList [data-g]')]
-      .find(b => /Recipes/.test(b.innerText)).click()`);
+    // It is a recipe now, so it is under the Recipes tab.
+    await evalJs(`document.querySelector('#kindNav [data-kind="recipe"]').click()`);
     await sleep(500);
-    check(/recipes/i.test(await evalJs(`document.getElementById('crumbName').innerText`)),
-      'the crumb names it');
+    check(await evalJs(`document.querySelectorAll('#itemList .it').length`) >= 1,
+      'classifying moved it to the Recipes tab');
 
     const recipeLink = await evalJs(`(() => {
       const a = document.querySelector('#itemList .it a.go');
@@ -425,7 +430,7 @@ function connectCdp(wsUrl) {
     check(/our kitchen/i.test(await evalJs(`document.getElementById('itemList').innerText`)),
       'and nothing typed was quietly discarded');
 
-    await evalJs(`document.getElementById('crumb').click()`);
+    await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
     await sleep(400);
 
     // ── the map ─────────────────────────────────────────────────────────
@@ -435,10 +440,6 @@ function connectCdp(wsUrl) {
       if (b.getAttribute('aria-pressed') === 'true') b.click(); })()`);
     await sleep(300);
     // Groups may be on screen now; drill into one so there is an item to open.
-    if (await visible('#groupList')) {
-      await evalJs(`document.querySelector('#groupList [data-g]').click()`);
-      await sleep(400);
-    }
     await evalJs(`document.querySelector('#itemList .it [data-open]').click()`);
     await sleep(400);
     const editable = await evalJs(`!document.getElementById('isName').disabled`);
@@ -491,7 +492,7 @@ function connectCdp(wsUrl) {
     // gone. Same trap that hid nothing in the item sheet a day later. Assert it
     // where it lives, on the panes themselves, so it is still guarded when the
     // map comes back.
-    for (const sel of ['#itemList', '#groupList', '#mapWrap', '#visRow']) {
+    for (const sel of ['#itemList', '#mapWrap', '#visRow', '#kindNav']) {
       const got = await evalJs(`(() => {
         const e = document.querySelector('${sel}');
         if (!e) return 'missing';

@@ -217,48 +217,39 @@ a question about the thing being written, so it has no business being on screen 
 there is one — and the list gets two rows of height back for the whole time you are not
 typing. It appears on the first keystroke and goes again when the box is empty.
 
-## Groups within a list
+## The bottom nav — one tab per kind
 
-`lib/groups.js` is PURE. **A group is not a container — it is the set of items of one
-KIND, computed on the way out.** Everything good follows: nothing to keep in sync, a
-group cannot orphan itself or outlive its members, and adding stays one tap with no
-"where does this go?" at write time.
+**The tabs are the groups.** The group rows this replaced were the same five sets, two
+taps and a breadcrumb away instead of one tap and always in the same place. So the rows,
+the crumb and the drill-in state are gone, and `lib/kinds.js` is the navigation.
 
-**It used to group by `item.tags`, and the data is what changed it.** The tags actually
-in the live list were `Films` (5), `Shows` (2) and `Recipes` (2) — a fixed,
-non-overlapping vocabulary of what things ARE, typed by hand, three times, with nothing
-else in it. People were already using tags as kinds and paying for it in typos and
-re-typing. So the vocabulary moved into `lib/kinds.js` where it is a real enum with
-fields attached: a recipe has the link you cook from, a place has a location and belongs
-on the map. A tag could never carry that.
+- **Built from the table on the server** (`kinds.tabs`), so adding a kind is still one
+  line and still arrives everywhere at once — tab, badge, picker option, editor fields
+  and the old-tag mapping.
+- **EMPTY TABS STAY.** `present()` leaves empty kinds out, which is right for a filter —
+  a chip for a kind you own none of is a dead control. A nav is the opposite case: it is
+  furniture, it has to be where you left it, and an empty tab is how you make your first
+  recipe. `tabs()` is `present()`'s sibling that keeps them.
+- **Counts come from the already-filtered list**, so a private recipe raises the number
+  on the author's Recipes tab and nobody else's. Asserted end to end, the same property
+  the group list had.
+- **Two orthogonal axes:** which kind you are looking at (the nav) and whether you want
+  what is still to do or what you have already done (the toggle, top right).
+- **The composer follows the tab** — it asks for "a recipe" under Recipes, and writes
+  one. Typing into a tab and watching the thing vanish out of it would be baffling; the
+  same promise writing inside a group used to make.
+- **The kind badge on a row is gone.** It earned its place when one list held everything
+  mixed; now every row on screen is already the kind the tab says, so it had become a
+  label repeating the page title once per row. The link action still carries the
+  identity where it helps — `COOK ↗`, `WATCH ↗`.
+- `lib/groups.js` still computes the richer per-kind breakdown (open *and* done) and
+  still ships as `groups` — the nav will want "4 to do · 3 done" sooner or later.
+  `ungrouped` and `grouped` have gone: they answered "is a group list worth showing",
+  and there is no group list to show.
 
-The price is that a thing is one kind rather than several — the correct trade for a
-vocabulary this small and this factual, and **extending it is one line** in the table.
-
-- **`key` is the kind id, `name` its plural.** Those are what the rows already rendered,
-  so the list looks exactly as it did: `Films · 1 to do · ›`, loose things underneath.
-- **TABLE ORDER, not biggest-first.** This reverses what the tag version did,
-  deliberately: with a fixed vocabulary the order is a fact about the app rather than
-  about today's counts, and a row of groups that reshuffles under your finger every
-  time something is ticked off is worse than one that never moves.
-- **A plain `thing` is not a group**; it is the loose pile listed under them, exactly
-  where untagged items used to go.
-- **`inGroup` accepts the id or the name**, because the client hands back whatever the
-  row was named with and that should not be anybody's problem.
-- **THE VIEWER STILL MATTERS.** A kind living only on your private items makes a group
-  on your screen and none on theirs — unchanged by the move, and still asserted
-  end-to-end.
-- **Migrated on load, once** (`store.js`): a tag that was standing in for a kind becomes
-  the kind, and is then dropped so no row carries a label nothing renders. Idempotent,
-  skips anything already classified, and leaves a tag that was a real opinion
-  (`rainy day`) exactly where it is. `kinds.fromTag` matches against the labels rather
-  than a second hard-coded list, so a kind added later is covered for free. It
-  **flushes immediately** — the first deploy migrated in memory and left every tag on
-  disk, so the file disagreed with the running process until somebody ticked something
-  off, and re-migrated on every restart until then.
-- **`tags` still passes the gate.** The field is no longer surfaced and no longer makes
-  groups, but a patch that doesn't mention it leaves it alone — nothing stored was
-  destroyed to make this change.
+**`.kindnav{display:flex}` beat the UA `[hidden]` rule** the moment it was written — the
+assertion added one change earlier caught it immediately, which is the third time that
+trap has fired in this app.
 
 ## Finishing something
 

@@ -64,12 +64,7 @@
     <div class="seg" id="spaceTabs">
       <button id="tabDone" data-tab="done" aria-pressed="false">Done together</button>
     </div>
-    <button class="crumb" id="crumb" hidden>
-      <svg viewBox="0 0 24 24" width="15" height="15"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span id="crumbName">All</span>
-    </button>
     <div class="scroll" id="spaceScroll">
-      <div id="groupList" class="groups" hidden></div>
       <div id="itemList" class="items"></div>
       <div id="mapWrap" hidden>
         <div class="map-canvas" id="mapCanvas"></div>
@@ -88,6 +83,11 @@
         <button id="btnAdd" aria-label="Add">+</button>
       </div>
     </div>
+    <!-- One tab per kind, built from the table on the server, so adding a kind
+         is still one line and still arrives everywhere at once. Empty tabs stay:
+         this is furniture, it has to be in the same place every time you look,
+         and an empty one is how you make your first recipe. -->
+    <nav class="kindnav" id="kindNav"></nav>
   </section>
 
 </div>

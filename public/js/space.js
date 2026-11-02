@@ -14,9 +14,10 @@ let onBack = () => {};
 let editing = null;      // item id open in the sheet
 let editingVis = 'shared';
 let tab = 'open';        // 'open' | 'done' | 'map'
-// Which group you have tapped into. `undefined` = the group list itself,
-// `null` = the untagged bucket, a string = that tag.
-let group;
+// Which kind you are looking at. Always one of them: the bottom nav IS the
+// navigation now, so there is no "looking at the list of groups" state to be in
+// and no way to be nowhere. Defaults to the kind everything starts as.
+let kindTab = null;   // resolved on first render, once the wire has the table
 
 const VIS = [
   { id: 'private', label: 'Just me', hint: 'only you' },
@@ -28,7 +29,7 @@ export async function openSpace(id) {
   S.spaceId = id;
   S.compose = 'shared';
   tab = 'open';
-  group = undefined;
+  kindTab = null;
   showScreen('scr-space');
   $('itemList').innerHTML = '<div class="empty">Loading…</div>';
   await refresh();
@@ -41,13 +42,7 @@ export async function refresh() {
     S.space = b.space;
     S.items = b.items;
     S.groups = b.groups || [];
-    S.ungrouped = b.ungrouped || 0;
-    S.grouped = !!b.grouped;
-    // A group you were inside can stop existing while you are in it — somebody
-    // untagged the last item. Fall back to the group list rather than showing an
-    // empty screen with a crumb pointing at nothing.
-    if (group !== undefined && group !== null
-        && !S.groups.some(g => g.key === group)) group = undefined;
+    S.tabs = b.tabs || [];
     render();
   } catch (_) { toast('Could not load that list'); }
 }
@@ -71,12 +66,11 @@ function visRow(el, read, write) {
 
 function itemHtml(it) {
   const bits = [];
-  // What it is, first and quietly. A plain thing says nothing — the badge is
-  // for telling a film from a recipe at a glance, and when everything is a
-  // thing there is nothing to tell apart.
-  if (it.kind && it.kind !== defaultKind()) {
-    bits.push(`<span class="chip kind k-${esc(it.kind)}">${esc(kindOf(it.kind).label)}</span>`);
-  }
+  // No kind badge. It earned its place when one list held everything mixed
+  // together; the bottom nav means every row on screen is already the kind the
+  // tab says, so the badge had become a label repeating the page title once per
+  // row. The link action still carries the identity where it is useful — COOK
+  // on a recipe, WATCH on a film.
   if (it.visibility === 'private') bits.push('<span class="chip private">just you</span>');
   if (it.visibility === 'public') bits.push('<span class="chip public">anyone</span>');
   // A wish that drifted in from one of the author's other lists. Worth saying —
@@ -120,13 +114,10 @@ function itemHtml(it) {
 // the stored item untouched — the same shape as `editingVis` beside it.
 let editingKind = null;   // set from the item when the sheet opens
 
-// A group is the set of items of one kind. The server decides WHICH groups
-// exist and ships them (lib/groups.js); this only has to answer "is this item in
-// the one I tapped", and `group` holds the kind id, so that is one comparison.
-// `null` is the loose pile — the plain things, listed under the groups.
-const inGroup = (items, key) => (key === null
-  ? items.filter(i => kindOrDefault(i) === defaultKind())
-  : items.filter(i => kindOrDefault(i) === key));
+// Everything of one kind. `kindTab` holds the kind id, so this is one
+// comparison; a null tab has not been resolved yet and means the default.
+const inGroup = (items, key) =>
+  items.filter(i => kindOrDefault(i) === (key || defaultKind()));
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
@@ -190,45 +181,19 @@ function render() {
   // you have already done, and you do not type into a map.
   $('spaceScroll').nextElementSibling.hidden = tab !== 'open';
 
-  // Groups only exist on the to-do side, and only when they say something. The
-  // server decides that (lib/groups.js) so the rule lives in one place.
-  const gs = (S.groups || []);
-  const showGroups = tab === 'open' && S.grouped && group === undefined;
-  $('groupList').hidden = !showGroups;
-  $('crumb').hidden = !(tab === 'open' && group !== undefined);
-  if (group !== undefined) {
-    const g = gs.find(x => x.key === group);
-    $('crumbName').textContent = group === null ? 'Everything else' : (g ? g.name : group);
-  }
+  // The bottom nav. One tab per kind, straight from the table on the server, so
+  // adding a kind is still one line and still arrives everywhere at once.
+  renderNav();
 
-  if (tab === 'map') {
-    renderMap();
-  } else if (tab === 'done') {
-    list.innerHTML = recordHtml(done);
-  } else if (showGroups) {
-    // Groups you tap into, and then — right there underneath, not behind another
-    // tap — everything that isn't in one. Untagged things are the majority in
-    // most lists and they are not a category; putting them behind an "Everything
-    // else" row made you navigate to reach the ordinary case.
-    $('groupList').innerHTML = gs.map(g => `<button class="g-row" data-g="${esc(g.key)}">
-        <div class="g-bd"><b>${esc(g.name)}</b><small>${g.open} to do${
-          g.count > g.open ? ` · ${g.count - g.open} done` : ''}</small></div>
-        <div class="g-n">${g.open || '·'}</div><div class="chev">›</div>
-      </button>`).join('');
-    $('groupList').querySelectorAll('[data-g]').forEach((b) => {
-      b.addEventListener('click', () => {
-        group = b.dataset.g;
-        render();
-      });
-    });
-    const loose = inGroup(open, null);
-    list.innerHTML = loose.map(itemHtml).join('');
-    list.classList.add('after-groups');
+  // Two axes, and they are orthogonal: WHICH KIND you are looking at, and
+  // whether you want what is still to do or what you have already done.
+  if (tab === 'done') {
+    list.innerHTML = recordHtml(inGroup(done, kindTab));
   } else {
-    const shown = group === undefined ? open : inGroup(open, group);
+    const shown = inGroup(open, kindTab);
     list.innerHTML = shown.length
       ? shown.map(itemHtml).join('')
-      : `<div class="empty">Nothing here yet.<br>What do you keep meaning to do together?</div>`;
+      : `<div class="empty">${esc(emptyLine())}</div>`;
   }
 
   list.querySelectorAll('[data-it]').forEach((row) => {
@@ -247,6 +212,12 @@ function render() {
 // back two rows of height for the whole time you are not typing.
 function syncComposer() {
   $('visRow').hidden = !$('newItem').value.trim();
+  // Ask for what you are looking at. "Something to do together…" under the
+  // Recipes tab is the app forgetting which screen it is on.
+  const k = kindList().find(x => x.id === kindTab);
+  $('newItem').placeholder = (!k || k.id === defaultKind())
+    ? 'Something to do together…'
+    : `Add a ${k.label.toLowerCase()}…`;
 }
 
 /* ── kinds ──────────────────────────────────────────────────────────────── */
@@ -275,6 +246,37 @@ function kindPicker(el, read, write) {
   paint();
 }
 
+// One tab per kind, built from what the server shipped. Empty tabs stay: this
+// is furniture, it has to be in the same place every time you look, and an
+// empty one is how you make your first recipe.
+function renderNav() {
+  const tabs = (S.tabs && S.tabs.length) ? S.tabs
+    : kindList().map(k => ({ ...k, count: 0 }));
+  if (!kindTab) kindTab = defaultKind();
+  const nav = $('kindNav');
+  nav.innerHTML = tabs.map(k => `<button data-kind="${esc(k.id)}"
+      class="${k.id === kindTab ? 'on' : ''}" aria-current="${k.id === kindTab}">
+      <b>${esc(k.plural)}</b>${k.count ? `<i>${k.count}</i>` : ''}</button>`).join('');
+  nav.querySelectorAll('[data-kind]').forEach((b) => {
+    b.addEventListener('click', () => {
+      if (kindTab === b.dataset.kind) return;
+      kindTab = b.dataset.kind;
+      $('spaceScroll').scrollTop = 0;
+      render();
+    });
+  });
+}
+
+// What an empty tab says. Naming the kind is the difference between a dead end
+// and an invitation — "nothing here yet" over and over tells you nothing about
+// which screen you are on.
+function emptyLine() {
+  const k = kindList().find(x => x.id === kindTab);
+  if (tab === 'done') return `Nothing finished here yet.`;
+  if (!k || k.id === defaultKind()) return 'Nothing here yet. What do you keep meaning to do together?';
+  return `No ${k.plural.toLowerCase()} yet. Add one below.`;
+}
+
 /* ── writing ────────────────────────────────────────────────────────────── */
 
 async function add() {
@@ -287,10 +289,10 @@ async function add() {
     const b = await post(`/api/space/${S.spaceId}/item`, {
       title,
       visibility: S.compose,
-      // Written while inside a group, so it belongs to it. Typing into a group
-      // and having the thing land outside it would be baffling. The group IS
-      // the kind now, so this is the same promise through a different field.
-      kind: group || defaultKind(),
+      // Written while looking at Recipes, so it is a recipe. Typing into a tab
+      // and watching the thing vanish out of it would be baffling — the same
+      // promise writing inside a group used to make.
+      kind: kindTab || defaultKind(),
     });
     applyWire(b.state);
     await refresh();
@@ -499,19 +501,13 @@ export function initSpace(changeHandler, backHandler) {
   onChange = changeHandler || (() => {});
   onBack = backHandler || (() => {});
 
-  // Inside a group, back means back to the groups — not out of the list entirely.
   $('spaceBack').addEventListener('click', () => {
-    if (tab === 'open' && group !== undefined) { group = undefined; return render(); }
     onBack();
   });
-  $('crumb').addEventListener('click', () => { group = undefined; render(); });
   // A toggle, not a tab: it flips between what you still mean to do and what
   // you have already done together.
   $('tabDone').addEventListener('click', () => {
     tab = tab === 'done' ? 'open' : 'done';
-    // Coming back out of the record lands you on the whole list, not inside
-    // whichever group you happened to be in before you looked.
-    if (tab === 'done') group = undefined;
     render();
   });
   initMap((id) => openItem(id));

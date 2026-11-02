@@ -1134,6 +1134,14 @@ async function server() {
     assert.ok(!hers.groups.some(g => g.key === 'recipe'),
       'and nobody else learns it exists — not even that the kind is in use');
     assert.ok(hers.groups.some(g => g.key === 'movie'), 'the shared one is shared');
+    // And the same of the bottom nav's counts, which is what is actually drawn:
+    // a private recipe must not raise the number on anybody else's Recipes tab.
+    const count = (b, id) => b.tabs.find(t => t.id === id).count;
+    assert.strictEqual(count(mine, 'recipe'), 1, 'his own tab counts it');
+    assert.strictEqual(count(hers, 'recipe'), 0, 'and hers does not');
+    assert.strictEqual(count(hers, 'movie'), 1, 'the shared one counts for both');
+    // Every kind gets a tab, empty or not — furniture stays where you left it.
+    assert.strictEqual(hers.tabs.length, require('../lib/kinds').KINDS.length);
   });
 
   await t('a tag arrives as typed and is capped at the gate', async () => {

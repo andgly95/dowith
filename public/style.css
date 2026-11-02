@@ -376,7 +376,7 @@ input,textarea{font:inherit;color:var(--ink)}
 /* ─── composer ──────────────────────────────────────────────────────────── */
 .composer{
   border-top:1px solid var(--line);background:var(--bg);
-  padding:10px 18px calc(var(--safe-b) + 10px);
+  padding:10px 18px;
 }
 .composer>*{max-width:var(--page);margin:0 auto;width:100%}
 /* Hidden until there is something being written for it to describe. An author
@@ -536,3 +536,33 @@ input,textarea{font:inherit;color:var(--ink)}
   color:var(--accent);text-decoration:none;
   border:1px solid currentColor;border-radius:6px;padding:3px 7px;
 }
+
+
+/* ─── the bottom nav ─────────────────────────────────────────────────────
+   One tab per kind. This replaced the group rows rather than joining them:
+   the rows WERE the kinds, and a drill-in with a breadcrumb cost two taps to
+   reach what is now always one tap away and always in the same place.
+
+   Built from the table on the server, empty tabs included — furniture has to
+   be where you left it, and an empty tab is how you make your first recipe. */
+.kindnav[hidden]{display:none}
+.kindnav{
+  display:flex;border-top:1px solid var(--line);background:var(--bg);
+  padding:6px 8px calc(var(--safe-b) + 6px);
+  max-width:var(--page);margin:0 auto;width:100%;
+}
+.kindnav button{
+  flex:1 1 0;min-width:0;background:none;border:0;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:7px 2px 5px;border-radius:10px;color:var(--faint);
+}
+.kindnav button b{
+  font:600 11px/1.2 var(--sans);letter-spacing:.01em;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* The count, not a badge: a number you glance at, not a notification you have
+   to clear. Absent entirely at zero — an empty tab says so by being empty. */
+.kindnav button i{font-style:normal;font-size:10px;line-height:1;color:var(--faint);opacity:.75}
+.kindnav button.on{color:var(--accent)}
+.kindnav button.on i{color:var(--accent);opacity:.8}
+.kindnav button:active{background:var(--card)}
