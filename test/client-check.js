@@ -530,6 +530,36 @@ function connectCdp(wsUrl) {
       const r = a.getBoundingClientRect();
       return Math.abs((r.height / r.width) - 1.5) < 0.08; })()`),
       'poster-shaped, 2:3');
+    // ADDING A FILM ASKS WHICH ONE. Five things are called "Obsession" and the
+    // one you mean is fourth, so the app asks rather than deciding. There is no
+    // TMDB key here, so what has to be right is that it asks, says plainly that
+    // it cannot search, and lets you walk away with the item still added.
+    check(await visible('#pickSheet .modal-in'), 'adding a film asks which one');
+    check(/which film/i.test(await evalJs(`document.getElementById('pkTitle').innerText`)),
+      'and says what it is asking about');
+    check(/no tmdb key/i.test(await evalJs(`document.getElementById('pkResults').innerText`)),
+      'with no key it says so rather than spinning');
+    await evalJs(`document.getElementById('pkCancel').click()`);
+    await sleep(400);
+    check(!(await visible('#pickSheet .modal-in')), 'and you can walk away');
+    check(/Past Lives/.test(await evalJs(`document.getElementById('itemList').innerText`)),
+      'with the film still added — the chooser is about art, not about the item');
+
+    // The same chooser is how you CHANGE it later, from the item sheet.
+    await evalJs(`[...document.querySelectorAll('#itemList .card')]
+      .find(e => /Past Lives/.test(e.innerText)).querySelector('.cap').click()`);
+    await sleep(500);
+    check(await visible('#isWatchFld'), 'a film offers which one it is');
+    check(/not matched/i.test(await evalJs(`document.getElementById('isWatch').innerText`)),
+      'and says when it is not pinned to anything');
+    await evalJs(`document.getElementById('isWatch').click()`);
+    await sleep(500);
+    check(await visible('#pickSheet .modal-in'), 'which opens the same chooser');
+    check(/change which one/i.test(await evalJs(`document.getElementById('pkTitle').innerText`)),
+      'framed as changing rather than choosing');
+    await evalJs(`document.getElementById('pkCancel').click()`);
+    await sleep(400);
+
     // The tick sits INSIDE the poster, which is also a way to open the item.
     // Without stopping the click there, marking something seen would open it.
     await evalJs(`document.querySelector('#itemList .card [data-tick]').click()`);

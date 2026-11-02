@@ -525,12 +525,44 @@ async function watchLookups() {
     assert.deepStrictEqual(M.cleanMods({ watch: 'nope' }), {});
   });
 
+  await t('THE CHOOSER DECIDES NOTHING — it returns the shortlist', () => {
+    // pickMatch exists for when nobody is in the room: a bulk backfill, a share
+    // that arrived while you were asleep. When somebody IS in the room, asking
+    // is strictly better — one tap, never wrong, and a poster is the fastest
+    // way a person recognises a film. Searching "Obsession" really does return
+    // five of them with the one you mean fourth.
+    const src = fs.readFileSync(path.join(__dirname, '..', 'lib', 'watch.js'), 'utf8');
+    assert.ok(/async function search\(/.test(src));
+    assert.ok(!/pickMatch\(/.test(src.split('async function search(')[1].split('}')[0]),
+      'search must not pre-decide for you');
+    // And the route that pins one is a write, so it goes through the gate.
+    const routes = fs.readFileSync(path.join(__dirname, '..', 'lib', 'routes.js'), 'utf8');
+    assert.ok(/modules\.cleanMods\(\{ \.\.\.it\.mod, watch: got \}\)/.test(routes),
+      'a chosen id is still TMDB data and still passes the gate');
+    assert.ok(/body\.clear/.test(routes),
+      'and getting it wrong has to be undoable, or choosing is a trap');
+  });
+
+  await t('nothing guesses while somebody is standing there to be asked', () => {
+    // Adding a film opens the chooser. The silent lookup that used to run on
+    // every write is gone from the write paths — a guess made in front of you
+    // is the one you are most likely to notice and least likely to correct.
+    const routes = fs.readFileSync(path.join(__dirname, '..', 'lib', 'routes.js'), 'utf8');
+    assert.ok(!/fillWatchSoon/.test(routes), 'no silent fill on create or patch');
+    assert.ok(/fillWatch\(it, \{ fresh: true \}\)/.test(routes),
+      'only the backfill still matches without being asked');
+  });
+
   await t('with no key configured nothing is asked and nothing breaks', async () => {
     // The suite must never need the internet, and the app must work without a
     // TMDB account — the shelf just draws its typographic cards.
     assert.strictEqual(W.configured(), false, 'the test config has no key');
     assert.strictEqual(await W.lookup('movie', 'Obsession'), null);
     assert.strictEqual(await W.lookup('activity', 'Go swing dancing'), null);
+    assert.deepStrictEqual(await W.search('movie', 'Obsession'), []);
+    assert.strictEqual(await W.detail('movie', 11607), null);
+    // And nothing is asked for a kind that has no art, key or no key.
+    assert.deepStrictEqual(await W.search('recipe', 'ragu'), []);
   });
 
   await t('only films and shows are ever looked up', () => {

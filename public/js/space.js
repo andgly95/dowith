@@ -402,6 +402,77 @@ function emptyLine() {
   return `No ${k.plural.toLowerCase()} yet. Add one below.`;
 }
 
+/* ── which one is it ────────────────────────────────────────────────────── */
+
+// Five things are called "Obsession" and the one you mean is fourth. A poster
+// is the fastest way a person recognises a film, and recognising is a thing
+// people do instantly and matchers do badly — so the app asks instead of
+// deciding, and asking costs one tap.
+let picking = null;      // the item id being pinned
+
+async function runSearch() {
+  const q = $('pkQuery').value.trim();
+  const it = (S.items || []).find(x => x.id === picking);
+  if (!it) return;
+  const box = $('pkResults');
+  if (!q) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="cands-note">Looking…</div>';
+  try {
+    const b = await get(`/api/watch/search?kind=${encodeURIComponent(it.kind)}&q=${encodeURIComponent(q)}`);
+    if (!b.ok && b.why) {
+      box.innerHTML = `<div class="cands-note">${esc(b.why === 'no tmdb key'
+        ? 'No TMDB key set, so there is nothing to search.' : b.why)}</div>`;
+      return;
+    }
+    if (!b.results.length) {
+      box.innerHTML = '<div class="cands-note">Nothing found. Try a different wording.</div>';
+      return;
+    }
+    const cur = it.mod && it.mod.watch;
+    box.innerHTML = b.results.map(r => `<button class="cand ${
+      cur && cur.tmdbId === r.tmdbId ? 'on' : ''}" data-pick="${r.tmdbId}">
+      <span class="pa">${r.poster
+    ? `<img src="${esc(`${TMDB_IMG}/w154${r.poster}`)}" alt="" loading="lazy">`
+    : '<span class="pn"></span>'}</span>
+      <b>${esc(r.title)}</b>
+      <small>${r.year ? esc(String(r.year)) : '—'}</small>
+    </button>`).join('');
+    box.querySelectorAll('[data-pick]').forEach((b2) => {
+      b2.addEventListener('click', () => choose(Number(b2.dataset.pick)));
+    });
+  } catch (_) {
+    box.innerHTML = '<div class="cands-note">Could not reach the server.</div>';
+  }
+}
+
+async function choose(tmdbId) {
+  const id = picking;
+  if (!id) return;
+  $('pkResults').innerHTML = '<div class="cands-note">Getting it…</div>';
+  try {
+    const b = await post(`/api/item/${id}/watch`, { tmdbId });
+    applyWire(b.state);
+    closeSheet('pickSheet');
+    await refresh();
+    onChange();
+  } catch (_) { toast('Could not pin that one'); }
+}
+
+// `auto` is the add path: it opens straight onto results for what you typed.
+export function openPick(id, auto = false) {
+  const it = (S.items || []).find(x => x.id === id);
+  if (!it) return;
+  picking = id;
+  const k = kindList().find(x => x.id === kindOrDefault(it)) || {};
+  $('pkTitle').textContent = auto ? `Which ${(k.label || 'one').toLowerCase()}?` : 'Change which one';
+  $('pkSub').textContent = esc(it.title);
+  $('pkQuery').value = it.title;
+  $('pkClear').hidden = !(it.mod && it.mod.watch);
+  $('pkResults').innerHTML = '';
+  openSheet('pickSheet');
+  runSearch();
+}
+
 /* ── writing ────────────────────────────────────────────────────────────── */
 
 async function add() {
@@ -422,6 +493,9 @@ async function add() {
     applyWire(b.state);
     await refresh();
     onChange();
+    // A film or a show: ask which one straight away, while you still have it in
+    // mind. Nothing guesses with somebody standing there who could be asked.
+    if (b.item && (kindList().find(k => k.id === b.item.kind) || {}).art) openPick(b.item.id, true);
   } catch (_) { toast('Could not add that'); input.value = title; }
 }
 
@@ -504,6 +578,7 @@ function openItem(id) {
   editingKind = kindOrDefault(it);
   kindPicker($('isKind'), () => editingKind, (k) => { editingKind = k; kindFields(); });
   kindFields();
+  paintWatchRow(it);
   // Somebody else's wording is theirs. You can see it and tick it off; you cannot
   // rewrite it.
   const ro = !it.canEdit;
@@ -526,6 +601,8 @@ function openItem(id) {
 // — and then, on save, silently drop — an address you typed. Only genuinely
 // empty irrelevant fields fold away.
 function kindFields() {
+  const it = (S.items || []).find(x => x.id === editing);
+  if (it) paintWatchRow(it);
   const k = kindOf(editingKind);
   const mods = k.mods || [];
   const show = (id, wanted, keep) => { $(id).hidden = !(wanted || keep); };
@@ -535,6 +612,26 @@ function kindFields() {
   $('isLinkLabel').innerHTML = mods[0] === 'link'
     ? `${esc(k.label)} link <em>the point of it</em>`
     : 'Link <em>optional</em>';
+}
+
+// What this film is pinned to, and the way to change it. Only for the kinds
+// that have art, and it reflects the kind you have SELECTED rather than the one
+// stored — switching a thing to Film in the sheet should offer to find it.
+function paintWatchRow(it) {
+  const art = !!(kindList().find(k => k.id === editingKind) || {}).art;
+  $('isWatchFld').hidden = !art;
+  if (!art) return;
+  const w = it.mod && it.mod.watch;
+  $('isWatch').innerHTML = w
+    ? `<span class="pa">${w.poster
+      ? `<img src="${esc(`${TMDB_IMG}/w154${w.poster}`)}" alt="">`
+      : '<span class="pn"></span>'}</span>
+       <span class="mb"><b>${esc(w.title || it.title)}</b>
+       <small>${w.year ? esc(String(w.year)) : ''}</small></span>
+       <span class="ch">Change</span>`
+    : `<span class="pa"><span class="pn"></span></span>
+       <span class="mb"><b>Not matched yet</b><small>No poster, no year</small></span>
+       <span class="ch">Find it</span>`;
 }
 
 async function saveItem() {
@@ -640,6 +737,33 @@ export function initSpace(changeHandler, backHandler) {
   $('btnAdd').addEventListener('click', add);
   $('newItem').addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
   $('newItem').addEventListener('input', syncComposer);
+
+  // The chooser, from the sheet and from the add path.
+  $('isWatch').addEventListener('click', () => {
+    if (!editing) return;
+    closeSheet('itemSheet');
+    openPick(editing, false);
+  });
+  let typing = null;
+  $('pkQuery').addEventListener('input', () => {
+    clearTimeout(typing);
+    typing = setTimeout(runSearch, 320);   // a keystroke is not a search
+  });
+  $('pkQuery').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { clearTimeout(typing); runSearch(); }
+  });
+  $('pkClear').addEventListener('click', async () => {
+    try {
+      applyWire((await post(`/api/item/${picking}/watch`, { clear: true })).state);
+      closeSheet('pickSheet');
+      await refresh();
+      onChange();
+    } catch (_) { toast('Could not clear that'); }
+  });
+  $('pkCancel').addEventListener('click', () => closeSheet('pickSheet'));
+  $('pickSheet').addEventListener('click', (e) => {
+    if (e.target === $('pickSheet')) closeSheet('pickSheet');
+  });
 
   $('isSave').addEventListener('click', saveItem);
   $('isDelete').addEventListener('click', deleteItem);

@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 123 assertions + a headless-chromium check
+- **Tests:** `npm test` — 125 assertions + a headless-chromium check
 
 ## The model
 
@@ -291,7 +291,27 @@ cache so a title is looked up once, a single queue so requests are serialised, a
 **remembered miss** so a title TMDB has never heard of is not asked about on every
 render. A network failure is *not* remembered — a blip is not "no such film".
 
-**TMDB proposes; `pickMatch` disposes.** Searching "Obsession" returns a 1976 De Palma,
+### Choosing, not guessing
+
+**Adding a film or a show asks which one**, with a poster and a year for each
+candidate. Searching "Obsession" really does return a 2026, a 2015, a 2019 and the
+1976 De Palma you meant — *fourth*. A poster is the fastest way a person recognises a
+film, recognising is something people do instantly and matchers do badly, and asking
+costs one tap. The same chooser is how you change it later, from **Which one** in the
+item sheet, and `Remove the poster` lets go of it — getting it wrong has to be undoable
+or choosing is a trap.
+
+So **nothing guesses while somebody is standing there who could be asked**. The silent
+lookup on every write is gone; `pickMatch` now runs only where nobody is in the room —
+the bulk backfill. A guess made in front of you is the one you are most likely to
+notice and least likely to be able to correct.
+
+`GET /api/watch/search` returns the shortlist and decides nothing.
+`POST /api/item/:id/watch` pins one by id (or `{clear:true}`), fetching the detail and
+the providers server-side — a chosen id is still TMDB's data and still goes through the
+module gate.
+
+**TMDB proposes; `pickMatch` disposes** — where it still runs: Searching "Obsession" returns a 1976 De Palma,
 a 2019 thriller, a telenovela and forty other things, and taking the first result is how
 a shelf ends up with the wrong poster on it. **A wrong poster is worse than none**: it
 looks exactly like a right one and nobody checks. So, in pure tested code — an exact
@@ -325,6 +345,10 @@ Island". No confident match means no poster, which the card already draws proper
 - **Looked up after the response, never awaited** — on create, and again on a patch that
   changed the title or the kind, since what was looked up before is about something else
   now. `POST /api/space/:id/watch` backfills a whole list.
+- **Class names are global.** The chooser's rows came out stacked vertically because
+  `.pick` already existed for the share sheet's list picker, so mine silently inherited
+  half of somebody else's component — `flex-direction:column` — with nothing anywhere
+  saying so. They are `.cand` now.
 - **The store is required lazily** in `watch.js`. Everything above the cache is pure and
   the suite tests it with no store at all; binding `../store` at import loads whatever
   `DATA_FILE` said when the first `require` ran, which in a test is the real one. The

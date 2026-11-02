@@ -116,10 +116,26 @@
          used for. The tags in the live list were literally "Films", "Shows" and
          "Recipes" — a fixed vocabulary of what things ARE, typed by hand. -->
     <div class="fld"><span>What kind</span><div class="kind-row" id="isKind"></div></div>
+    <!-- Only for the kinds that have art. Shows what it is pinned to, and lets
+         you pin it to something else. -->
+    <div class="fld" id="isWatchFld" hidden><span>Which one</span>
+      <button class="matchrow" id="isWatch"></button></div>
     <div class="vis-row" id="isVis"></div>
     <button class="primary" id="isSave">Save</button>
     <button class="danger" id="isDelete">Delete</button>
     <button class="ghost" id="isCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- which film is it, actually -->
+<div id="pickSheet" class="modal" hidden>
+  <div class="modal-in">
+    <div class="modal-hd"><b id="pkTitle">Which one?</b><span id="pkSub"></span></div>
+    <label class="fld"><span>Search</span>
+      <input id="pkQuery" type="text" maxlength="200" placeholder="Title"></label>
+    <div id="pkResults" class="cands"></div>
+    <button class="ghost" id="pkClear" hidden>Remove the poster</button>
+    <button class="ghost" id="pkCancel">Not now</button>
   </div>
 </div>
 
