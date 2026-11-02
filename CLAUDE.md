@@ -193,6 +193,35 @@ group, and there is a test saying so.
 
 ## The one screen
 
+### Safari 26+ reads your CSS to decide what to paint at the edges
+
+Liquid Glass tints the status bar and the bottom chin by **sampling the page**, and
+`theme-color` is ignored for it. Two rules fall out, and this app broke both on a real
+phone before anybody knew they existed:
+
+- **The root must never be transparent.** `viewport-fit=cover` extends the page behind
+  the chin, and when `html` has no background Safari fills that strip with its own
+  fallback — black in dark mode. It read as ~100pt of dead space under the tab bar. The
+  colour was on `body` and on `.screen`; the one element Safari falls back to was the
+  one with nothing on it. `html` now carries it too, plus `color-scheme: dark`, which
+  is what tells the system which way to fall back before it has sampled anything.
+- **A fixed element near an edge gets sampled**, and its `background-color` or
+  `backdrop-filter` becomes the tint. `.screen` is absolute inside a fixed `#app`,
+  carried the page colour, and sat within 4px of the top — so the masthead came out
+  under a blurred band. The fixed layer now carries nothing; `.composer` and `.kindnav`
+  lost theirs too, which cost nothing because they are flex *siblings* of the scroller
+  and nothing ever passed under them.
+
+A first pass at the dead space blamed `100dvh` under-reporting and measured the visual
+viewport instead. **That was the wrong diagnosis** — both report the same height here,
+because the page really is that tall and Safari draws its own bar beneath it. The
+measurement was kept (it is correct, and it fixes a real iOS case in the trips app)
+but it is not what this was.
+
+Sources, since Apple documented none of it:
+[Safari 26 Liquid Glass on the web](https://1ar.io/updates/safari-26-liquid-glass-web/) ·
+[theme-color and fixed elements](https://benfrain.com/ios26-safari-theme-color-tab-tinting-with-fixed-position-elements/)
+
 **`#app` is measured against the VISUAL viewport, not `100dvh`.** `height:100dvh` is
 right in every browser worth measuring and is what this falls back to — but on iOS in
 standalone it comes up SHORT, and on a 956pt phone that left the bottom nav floating

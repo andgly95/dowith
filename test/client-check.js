@@ -324,6 +324,32 @@ function connectCdp(wsUrl) {
     check(fit.under !== null && Math.abs(fit.under) <= 2,
       `the nav should sit flush at the bottom, found ${fit.under}px under it`);
 
+    // THE ROOT IS NEVER TRANSPARENT, and nothing fixed near an edge carries a
+    // colour for Safari to sample.
+    //
+    // Safari 26+ tints the status bar and the bottom chin by reading the page:
+    // a transparent `html` makes it fall back to its own black, which showed as
+    // a hundred points of dead space under the tab bar; a fixed element near
+    // the top with a background becomes the tint, which blurred the masthead.
+    // Both are checkable here even though the tinting itself is not.
+    const edges = await evalJs(`(() => {
+      const bg = (el) => getComputedStyle(el).backgroundColor;
+      // No regex: a backslash inside the template literal that carries this to
+      // the page is eaten before the page sees it, so the escaped parens of
+      // /rgba\(0, 0, 0, 0\)/ become a capture group and match nothing.
+      const clear = (c) => c === 'transparent' || c === 'rgba(0, 0, 0, 0)';
+      return {
+        html: bg(document.documentElement),
+        body: bg(document.body),
+        screen: bg(document.getElementById('scr-space')),
+        htmlClear: clear(bg(document.documentElement)),
+        screenClear: clear(bg(document.getElementById('scr-space'))),
+      }; })()`);
+    check(!edges.htmlClear, `html must not be transparent, got ${edges.html}`);
+    check(edges.html === edges.body, 'and must match the body, or a seam shows at the chin');
+    check(edges.screenClear,
+      `the fixed layer must carry no colour to sample, got ${edges.screen}`);
+
     // The count is part of the LABEL, not a thing floating beside the icon.
     // Unanchored it read as belonging to neither tab.
     check(await evalJs(`[...document.querySelectorAll('#kindNav .n')]
