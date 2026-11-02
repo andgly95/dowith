@@ -29,10 +29,6 @@ export async function openSpace(id) {
   S.compose = 'shared';
   tab = 'open';
   group = undefined;
-  // A filter that survived switching lists would leave you staring at an empty
-  // screen wondering where everything went.
-  kindFilter = null;
-  composeKind = 'thing';
   showScreen('scr-space');
   $('itemList').innerHTML = '<div class="empty">Loading…</div>';
   await refresh();
@@ -51,7 +47,7 @@ export async function refresh() {
     // untagged the last item. Fall back to the group list rather than showing an
     // empty screen with a crumb pointing at nothing.
     if (group !== undefined && group !== null
-        && !S.groups.some(g => fold(g.name) === fold(group))) group = undefined;
+        && !S.groups.some(g => g.key === group)) group = undefined;
     render();
   } catch (_) { toast('Could not load that list'); }
 }
@@ -120,23 +116,17 @@ function itemHtml(it) {
 // The same fold as lib/groups.js. Duplicated deliberately and kept to one line:
 // the server decides WHICH groups exist and ships them; this only has to answer
 // "is this item in the one I tapped".
-// Which kind the list is filtered to, or null for all of them. Reset whenever
-// the space changes — a filter that survives switching lists leaves you staring
-// at an empty screen wondering where everything went.
-let kindFilter = null;
-
-// What the composer is making. Sticky within a session — adding three films in
-// a row should not mean tapping "Film" three times.
-let composeKind = 'thing';
-
 // The kind being edited in the item sheet, held separately so cancelling leaves
 // the stored item untouched — the same shape as `editingVis` beside it.
 let editingKind = 'thing';
 
-const fold = (t) => String(t == null ? '' : t).trim().toLowerCase().replace(/\s+/g, ' ');
-const inGroup = (items, name) => (name === null
-  ? items.filter(i => !(i.tags || []).some(t => fold(t)))
-  : items.filter(i => (i.tags || []).some(t => fold(t) === fold(name))));
+// A group is the set of items of one kind. The server decides WHICH groups
+// exist and ships them (lib/groups.js); this only has to answer "is this item in
+// the one I tapped", and `group` holds the kind id, so that is one comparison.
+// `null` is the loose pile — the plain things, listed under the groups.
+const inGroup = (items, key) => (key === null
+  ? items.filter(i => (i.kind || 'thing') === 'thing')
+  : items.filter(i => (i.kind || 'thing') === key));
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
@@ -174,33 +164,9 @@ function render() {
   if (!sp) return;
   $('spaceTitle').textContent = sp.title;
 
-  // The filter applies to both sides of the list, because "show me the films"
-  // means the ones we've seen as well as the ones we haven't.
-  const ofKind = (list) => (kindFilter ? list.filter(i => (i.kind || 'thing') === kindFilter) : list);
-  const open = ofKind(S.items.filter(i => !i.done));
-  const done = ofKind(S.items.filter(i => i.done))
+  const open = S.items.filter(i => !i.done);
+  const done = S.items.filter(i => i.done)
     .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
-
-  // Only worth a row once the list is genuinely mixed. One kind is not a
-  // choice, and a control offering none is noise on a phone.
-  const kinds = kindList();
-  const here = kinds
-    .map(k => ({ ...k, n: S.items.filter(i => (i.kind || 'thing') === k.id).length }))
-    .filter(k => k.n > 0);
-  const kf = $('kindFilter');
-  kf.hidden = here.length < 2 || tab === 'map';
-  if (!kf.hidden) {
-    kf.innerHTML = `<button data-kf="" class="${kindFilter ? '' : 'on'}">All</button>`
-      + here.map(k => `<button data-kf="${esc(k.id)}"
-          class="${kindFilter === k.id ? 'on' : ''}">${esc(k.plural)} <i>${k.n}</i></button>`).join('');
-    kf.querySelectorAll('[data-kf]').forEach((b) => {
-      b.addEventListener('click', () => { kindFilter = b.dataset.kf || null; render(); });
-    });
-  } else if (kindFilter && here.length < 2) {
-    // The last film was deleted while filtered to films. Drop the filter rather
-    // than showing an empty list with no visible reason for being empty.
-    kindFilter = null;
-  }
 
   // The counts sit on the tabs, because "12 open / 31 done together" is the one
   // number that says how the list is going.
@@ -234,7 +200,8 @@ function render() {
   $('groupList').hidden = !showGroups;
   $('crumb').hidden = !(tab === 'open' && group !== undefined);
   if (group !== undefined) {
-    $('crumbName').textContent = group === null ? 'Everything else' : group;
+    const g = gs.find(x => x.key === group);
+    $('crumbName').textContent = group === null ? 'Everything else' : (g ? g.name : group);
   }
 
   if (tab === 'map') {
@@ -253,7 +220,7 @@ function render() {
       </button>`).join('');
     $('groupList').querySelectorAll('[data-g]').forEach((b) => {
       b.addEventListener('click', () => {
-        group = gs.find(g => g.key === b.dataset.g).name;
+        group = b.dataset.g;
         render();
       });
     });
@@ -274,11 +241,6 @@ function render() {
   });
 
   visRow($('visRow'), () => S.compose, (v) => { S.compose = v; });
-  // Adding while filtered to Films makes a film. Typing into a filter and
-  // getting something that then vanishes from it would be baffling — the same
-  // reason adding inside a group tags it with that group.
-  if (kindFilter && composeKind === 'thing') composeKind = kindFilter;
-  kindPicker($('kindRow'), () => composeKind, (k) => { composeKind = k; });
 }
 
 /* ── kinds ──────────────────────────────────────────────────────────────── */
@@ -313,11 +275,11 @@ async function add() {
   try {
     const b = await post(`/api/space/${S.spaceId}/item`, {
       title,
-      kind: composeKind,
       visibility: S.compose,
-      // Written while inside a group, so it belongs to it. Typing into a group and
-      // having the thing land outside it would be baffling.
-      tags: group ? [group] : [],
+      // Written while inside a group, so it belongs to it. Typing into a group
+      // and having the thing land outside it would be baffling. The group IS
+      // the kind now, so this is the same promise through a different field.
+      kind: group || 'thing',
     });
     applyWire(b.state);
     await refresh();
@@ -404,24 +366,13 @@ function openItem(id) {
   editingKind = it.kind || 'thing';
   kindPicker($('isKind'), () => editingKind, (k) => { editingKind = k; kindFields(); });
   kindFields();
-  $('isTags').value = (it.tags || []).join(', ');
-  // The groups already in use, one tap each — typing a tag from memory is how you
-  // end up with "films" and "movies" meaning the same thing.
-  const used = (S.groups || []).map(g => g.name).filter(n => !(it.tags || []).some(t => fold(t) === fold(n)));
-  $('isTagHints').innerHTML = used.slice(0, 8).map(n => `<button data-t="${esc(n)}">+ ${esc(n)}</button>`).join('');
-  $('isTagHints').querySelectorAll('[data-t]').forEach((b) => {
-    b.addEventListener('click', () => {
-      const cur = $('isTags').value.trim();
-      $('isTags').value = cur ? `${cur}, ${b.dataset.t}` : b.dataset.t;
-      b.remove();
-    });
-  });
   // Somebody else's wording is theirs. You can see it and tick it off; you cannot
   // rewrite it.
   const ro = !it.canEdit;
-  for (const f of ['isName', 'isNotes', 'isPlace', 'isLink', 'isTags']) $(f).disabled = ro;
-  $('isKind').hidden = ro;
-  $('isTagHints').hidden = ro;
+  for (const f of ['isName', 'isNotes', 'isPlace', 'isLink']) $(f).disabled = ro;
+  // Somebody else's classification is theirs too — the picker goes with the
+  // fields rather than sitting there looking tappable and doing nothing.
+  $('isKind').closest('.fld').hidden = ro;
   $('isSave').hidden = ro;
   $('isDelete').hidden = ro;
   $('isVis').hidden = ro;
@@ -461,7 +412,6 @@ async function saveItem() {
       kind: editingKind,
       notes: $('isNotes').value.trim(),
       visibility: editingVis,
-      tags: $('isTags').value.split(',').map(t => t.trim()).filter(Boolean),
       // The module bag. The server drops anything it has no rules for.
       mod: {
         ...(place ? { place: { name: place } } : {}),

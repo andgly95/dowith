@@ -33,6 +33,32 @@ try {
   // a container created anywhere else would be missing from every store written
   // since the last restart, which is a bug the trips app shipped once.
   for (const [k, v] of Object.entries(defaultState())) if (state[k] === undefined) state[k] = v;
+  // A tag that was standing in for a kind becomes the kind.
+  //
+  // The tags in this list were literally `Films`, `Shows` and `Recipes` —
+  // people were already using tags as kinds, which is most of the argument for
+  // making kinds real. The tag is dropped once it has been honoured, because
+  // leaving it behind means a row carrying a label nothing renders.
+  //
+  // On LOAD only, and idempotent: it touches nothing that already has a kind,
+  // and a tag that maps to nothing (`rainy day`) is left exactly where it is.
+  {
+    const kinds = require('./lib/kinds');
+    let moved = 0;
+    for (const it of state.items || []) {
+      if (it.kind && it.kind !== kinds.DEFAULT) continue;
+      const tags = Array.isArray(it.tags) ? it.tags : [];
+      const hit = tags.map(t => kinds.fromTag(t)).find(Boolean);
+      if (!hit) continue;
+      it.kind = hit;
+      it.tags = tags.filter(t => !kinds.fromTag(t));
+      moved++;
+    }
+    // stderr, not stdout: `tools/link.js` prints a sign-in code on stdout and
+    // something reads it from there. A diagnostic that lands in the middle of
+    // real output is a bug waiting for whoever parses it next.
+    if (moved) console.error(`migrated ${moved} tagged item${moved === 1 ? '' : 's'} to kinds`);
+  }
 } catch (e) {
   if (e.code !== 'ENOENT') {
     const backup = `${FILE}.corrupt-${Date.now()}`;

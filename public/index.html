@@ -67,9 +67,6 @@
       <svg viewBox="0 0 24 24" width="15" height="15"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span id="crumbName">All</span>
     </button>
-    <!-- What you are looking at. Only appears once the list is genuinely mixed
-         — one kind is not a choice, and a control offering none is noise. -->
-    <div class="kind-filter" id="kindFilter" hidden></div>
     <div class="scroll" id="spaceScroll">
       <div id="groupList" class="groups" hidden></div>
       <div id="itemList" class="items"></div>
@@ -84,9 +81,6 @@
       <div class="pad-lg"></div>
     </div>
     <div class="composer">
-      <!-- Say what it is as you add it. One tap, defaults to a plain thing, so
-           nobody is made to classify anything they don't want to. -->
-      <div class="kind-row" id="kindRow"></div>
       <div class="vis-row" id="visRow"></div>
       <div class="comp-in">
         <input id="newItem" type="text" placeholder="Something to do together…" autocapitalize="sentences">
@@ -113,14 +107,14 @@
 <div id="itemSheet" class="modal" hidden>
   <div class="modal-in">
     <div class="modal-hd"><b id="isTitle">—</b><span id="isMeta"></span></div>
-    <div class="kind-row" id="isKind"></div>
     <label class="fld"><span>What</span><input id="isName" type="text" maxlength="200"></label>
     <label class="fld" id="isLinkFld"><span id="isLinkLabel">Link <em>optional</em></span><input id="isLink" type="url" maxlength="500" placeholder="https://"></label>
     <label class="fld" id="isPlaceFld"><span>Where <em>optional</em></span><input id="isPlace" type="text" maxlength="120" placeholder="that ramen bar in Adams Morgan"></label>
     <label class="fld"><span>Notes <em>optional</em></span><textarea id="isNotes" rows="3" maxlength="2000"></textarea></label>
-    <label class="fld"><span>Groups <em>comma separated</em></span>
-      <input id="isTags" type="text" maxlength="200" placeholder="films, cheap, rainy day"></label>
-    <div class="tag-hints" id="isTagHints"></div>
+    <!-- Where the free-text tag field used to be, doing the job it was being
+         used for. The tags in the live list were literally "Films", "Shows" and
+         "Recipes" — a fixed vocabulary of what things ARE, typed by hand. -->
+    <div class="fld"><span>What kind</span><div class="kind-row" id="isKind"></div></div>
     <div class="vis-row" id="isVis"></div>
     <button class="primary" id="isSave">Save</button>
     <button class="danger" id="isDelete">Delete</button>

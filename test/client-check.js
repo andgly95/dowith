@@ -243,23 +243,25 @@ function connectCdp(wsUrl) {
     await sleep(300);
     check(!(await visible('#groupList')), 'no tags, no groups — the list is just a list');
 
-    const tagFirst = async (tags) => {
+    // A group is the set of items of one KIND, so classifying something is what
+    // puts it in one — the tag field it replaced is gone.
+    const classifyFirst = async (kind) => {
       await evalJs(`document.querySelector('#itemList .it [data-open]').click()`);
       await sleep(400);
       if (await evalJs(`document.getElementById('isName').disabled`)) {
         await evalJs(`document.getElementById('isCancel').click()`); await sleep(300); return false;
       }
-      await evalJs(`document.getElementById('isTags').value = ${JSON.stringify(tags)}`);
+      await evalJs(`document.querySelector('#isKind [data-k="${kind}"]').click()`);
       await evalJs(`document.getElementById('isSave').click()`);
       await sleep(1100);
       return true;
     };
-    const tagged = await tagFirst('Films');
+    const tagged = await classifyFirst('movie');
     if (tagged) {
       check(await visible('#groupList'), 'one group and something outside it is worth showing');
       const gs = await evalJs(`document.getElementById('groupList').innerText`);
-      check(/Films/.test(gs), `the group is named after the tag:\n${gs}`);
-      check(!/Everything else/.test(gs), 'untagged things are not a group');
+      check(/Films/.test(gs), `the group is named after the kind:\n${gs}`);
+      check(!/Everything else/.test(gs), 'plain things are not a group');
       // They are listed right underneath instead — the ordinary case must not be
       // behind an extra tap.
       check(await visible('#itemList'), 'the loose items are on screen with the groups');
@@ -274,13 +276,16 @@ function connectCdp(wsUrl) {
       check(await evalJs(`document.querySelectorAll('#itemList .it').length`) === 1,
         'showing only what is in it');
 
-      // Something written inside a group joins it.
+      // Something written inside a group joins it — the same promise as before,
+      // through the kind rather than through a tag.
       await evalJs(`(() => { const i = document.getElementById('newItem');
         i.value = 'Another film'; })()`);
       await evalJs(`document.getElementById('btnAdd').click()`);
       await sleep(1100);
       check(await evalJs(`document.querySelectorAll('#itemList .it').length`) === 2,
         'typing inside a group puts the thing in it');
+      check(/FILM/i.test(await evalJs(`document.getElementById('itemList').innerText`)),
+        'and it really is one, not merely filed as one');
 
       await evalJs(`document.getElementById('crumb').click()`);
       await sleep(400);
@@ -289,105 +294,93 @@ function connectCdp(wsUrl) {
 
     // ── kinds ───────────────────────────────────────────────────────────
     // A film, a show, a place and a recipe are four different shapes of plan.
-    // The kind is a fact about the item; the tag beside it stays an opinion.
+    // The kind lives where the free-text tag field used to be, and the group
+    // rows it drives look exactly as they did.
     await evalJs(`document.querySelector('#spaceTabs [data-tab="open"]').click()`);
     await sleep(300);
     if (await visible('#crumb')) { await evalJs(`document.getElementById('crumb').click()`); await sleep(400); }
 
-    check(await evalJs(`document.querySelectorAll('#kindRow [data-k]').length`) === 5,
-      'the composer offers all five kinds');
-    check(await evalJs(`document.querySelector('#kindRow [data-k="thing"]').classList.contains('on')`),
-      'and starts on a plain thing, so nobody is made to classify anything');
+    // The UI stays as it was: no filter strip, no picker in the composer.
+    check(await evalJs(`!document.getElementById('kindFilter')`),
+      'the filter strip is gone');
+    check(await evalJs(`!document.getElementById('kindRow')`),
+      'and the composer is a box and a button, as it was');
+    check(await evalJs(`!document.getElementById('isTags')`),
+      'the free-text tag field is gone — the kind replaced it');
 
-    // Add a recipe through the composer, the way a person would.
-    await evalJs(`document.querySelector('#kindRow [data-k="recipe"]').click()`);
-    await sleep(150);
-    await evalJs(`document.getElementById('newItem').value = 'The NYT ragu'`);
+    // Classify something a recipe through the sheet, where the tags used to be.
+    if (await visible('#groupList')) {
+      await evalJs(`document.querySelector('#groupList [data-g]').click()`); await sleep(400);
+      await evalJs(`document.getElementById('crumb').click()`); await sleep(400);
+    }
+    // Write one, outside any group, so it starts as a plain thing — and so it
+    // belongs to this viewer, because somebody else's classification is theirs
+    // and the picker is hidden on a read-only item.
+    await evalJs(`document.getElementById('newItem').value = 'Make the ragu'`);
     await evalJs(`document.getElementById('btnAdd').click()`);
     await sleep(1200);
-    const recipeRow = await evalJs(`(() => {
+    const loose = await evalJs(`(() => {
       const r = [...document.querySelectorAll('#itemList .it')]
-        .find(e => /NYT ragu/.test(e.innerText));
-      return r ? r.innerText : null; })()`);
-    check(recipeRow && /recipe/i.test(recipeRow),
-      `a recipe should say it is one:\n${recipeRow}`);
-    // Sticky: adding three films in a row should not mean tapping Film thrice.
-    check(await evalJs(`document.querySelector('#kindRow [data-k="recipe"]').classList.contains('on')`),
-      'the composer stays on the kind you chose');
-
-    // THE LINK IS THE POINT OF A RECIPE. Open it and the link field leads,
-    // named rather than called "link".
-    await evalJs(`[...document.querySelectorAll('#itemList .it')]
-      .find(e => /NYT ragu/.test(e.innerText)).querySelector('[data-open]').click()`);
+        .find(e => /Make the ragu/.test(e.innerText));
+      if (!r) return false; r.querySelector('[data-open]').click(); return true; })()`);
+    check(loose, 'the new thing should be on the list to classify');
     await sleep(500);
-    check(await visible('#isKind'), 'the sheet offers the kind too');
-    check(await evalJs(`document.querySelector('#isKind [data-k="recipe"]').classList.contains('on')`),
-      'showing what it already is');
+    check(!(await evalJs(`document.getElementById('isName').disabled`)),
+      'and it is this viewer’s own to edit');
+    check(await visible('#isKind'), 'the sheet offers the kind');
+    check(await evalJs(`document.querySelectorAll('#isKind [data-k]').length`) === 5,
+      'all five of them');
+    check(await evalJs(`document.querySelector('#isKind [data-k="thing"]').classList.contains('on')`),
+      'starting on a plain thing');
+
+    await evalJs(`document.querySelector('#isKind [data-k="recipe"]').click()`);
+    await sleep(200);
+    // THE LINK IS THE POINT OF A RECIPE, so it leads and is named.
     check(await visible('#isLinkFld'), 'a recipe leads with its link');
     check(/recipe link/i.test(await evalJs(`document.getElementById('isLinkLabel').innerText`)),
       '"Recipe link" says what to paste; "Link" makes you guess');
-    // A recipe has no use for a map pin, so that field folds away — but only
-    // because it is empty. See below.
     check(!(await visible('#isPlaceFld')), 'and does not ask where it is');
-
     await evalJs(`document.getElementById('isLink').value = 'https://cooking.nytimes.com/recipes/1018069'`);
-    await evalJs(`document.getElementById('isSave').click()`);
-    await sleep(1200);
-    const recipeLink = await evalJs(`(() => {
-      const r = [...document.querySelectorAll('#itemList .it')]
-        .find(e => /NYT ragu/.test(e.innerText));
-      const a = r && r.querySelector('a.go');
-      return a ? { text: a.innerText.trim(), href: a.getAttribute('href'),
-                   target: a.getAttribute('target'), rel: a.getAttribute('rel') } : null; })()`);
-    check(recipeLink, 'the recipe row should carry its link as an action');
-    // Named for what the link is FOR, and never the same word as the badge
-    // beside it — a row that said "RECIPE" twice read as a bug.
-    check(/cook/i.test(recipeLink.text), `named, not "link": ${recipeLink.text}`);
-    check(recipeLink.href === 'https://cooking.nytimes.com/recipes/1018069', 'pointing at the recipe');
-    check(recipeLink.rel === 'noopener noreferrer', 'and opened safely');
 
     // A KIND SUGGESTS; IT NEVER CONFISCATES. A field holding something stays on
     // screen whatever the kind says — reclassifying must not hide, and then
     // silently drop on save, an address somebody typed.
-    await evalJs(`[...document.querySelectorAll('#itemList .it')]
-      .find(e => /NYT ragu/.test(e.innerText)).querySelector('[data-open]').click()`);
-    await sleep(500);
     await evalJs(`document.getElementById('isPlace').value = 'Our kitchen'`);
     await evalJs(`document.querySelector('#isKind [data-k="movie"]').click()`);
     await sleep(200);
     check(await visible('#isPlaceFld'),
       'a field with something in it must not fold away under a kind change');
-    check(await visible('#isLinkFld'), 'and a film leads with a link too');
     await evalJs(`document.querySelector('#isKind [data-k="recipe"]').click()`);
     await sleep(150);
-    await evalJs(`document.getElementById('isCancel').click()`);
-    await sleep(300);
+    await evalJs(`document.getElementById('isSave').click()`);
+    await sleep(1200);
 
-    // THE FILTER EARNS ITS ROW. One kind is not a choice.
-    const filterNow = await evalJs(`(() => {
-      const f = document.getElementById('kindFilter');
-      return { shown: !f.hidden, chips: [...f.querySelectorAll('[data-kf]')].map(b => b.innerText.trim()) };
-    })()`);
-    check(filterNow.shown, 'a list holding both things and a recipe is worth filtering');
-    check(filterNow.chips[0] === 'All', 'with a way back to everything');
-    check(filterNow.chips.some(c => /Recipes/i.test(c)), `and a chip per kind: ${filterNow.chips}`);
+    // It is a recipe now, so it is in the Recipes group — the same rows as
+    // before, named by the kind.
+    const groupNames = await evalJs(`document.getElementById('groupList').innerText`);
+    check(/Recipes/.test(groupNames), `classifying makes a group:\n${groupNames}`);
+    await evalJs(`[...document.querySelectorAll('#groupList [data-g]')]
+      .find(b => /Recipes/.test(b.innerText)).click()`);
+    await sleep(500);
+    check(/recipes/i.test(await evalJs(`document.getElementById('crumbName').innerText`)),
+      'the crumb names it');
 
-    const allCount = await evalJs(`document.querySelectorAll('#itemList .it').length`);
-    await evalJs(`[...document.querySelectorAll('#kindFilter [data-kf]')]
-      .find(b => /Recipes/i.test(b.innerText)).click()`);
+    const recipeLink = await evalJs(`(() => {
+      const a = document.querySelector('#itemList .it a.go');
+      return a ? { text: a.innerText.trim(), href: a.getAttribute('href'),
+                   rel: a.getAttribute('rel') } : null; })()`);
+    check(recipeLink, 'the recipe row carries its link as an action');
+    // Named for what the link is FOR, and never the same word as the badge
+    // beside it — a row that said "RECIPE" twice read as a bug.
+    check(/cook/i.test(recipeLink.text), `named, not "link": ${recipeLink.text}`);
+    check(recipeLink.href === 'https://cooking.nytimes.com/recipes/1018069', 'pointing at the recipe');
+    check(recipeLink.rel === 'noopener noreferrer', 'and opened safely');
+    // The place typed while it was briefly a film survived the save.
+    check(/our kitchen/i.test(await evalJs(`document.getElementById('itemList').innerText`)),
+      'and nothing typed was quietly discarded');
+
+    await evalJs(`document.getElementById('crumb').click()`);
     await sleep(400);
-    const only = await evalJs(`document.getElementById('itemList').innerText`);
-    check(/NYT ragu/.test(only), 'filtering to recipes keeps the recipe');
-    check(await evalJs(`document.querySelectorAll('#itemList .it').length`) < allCount,
-      'and drops the rest');
-    // Adding while filtered makes that kind — typing into a filter and watching
-    // the thing vanish from it would be baffling.
-    check(await evalJs(`document.querySelector('#kindRow [data-k="recipe"]').classList.contains('on')`),
-      'the composer follows the filter');
-    await evalJs(`document.querySelector('#kindFilter [data-kf=""]').click()`);
-    await sleep(400);
-    check(await evalJs(`document.querySelectorAll('#itemList .it').length`) === allCount,
-      'and All brings everything back');
 
     // ── the map ─────────────────────────────────────────────────────────
     // The tab appears only once something has a place, and a pin is drawn from

@@ -176,52 +176,56 @@ group, and there is a test saying so.
   version used the label for both and a show rendered `SHOW` twice in a row — correct
   twice over and reading as a bug. Now: `RECIPE · COOK ↗`, `SHOW · WATCH ↗`. A test
   asserts no kind can ever render its own name twice.
-- **The filter row appears only when the list is genuinely mixed.** One kind is not a
-  choice, and a row of chips that all say the same thing is noise on a phone. Adding
-  while filtered to Films makes a film — the same reason adding inside a group tags it.
+- **There is no filter strip and no picker in the composer.** Both were built and both
+  were removed on sight: the group rows already *are* the filter, so a second one above
+  them was a third way to narrow the same list. The composer is a box and a button, as
+  it always was — writing inside a group makes something of that kind, which is the
+  same promise tags used to make through a different field.
+- **The kind lives where the free-text tag field used to be**, in the item sheet, under
+  "What kind". That is the literal replacement, not an addition beside it.
 - **The kind rides on top of the module seam rather than beside it.** No new storage,
   no kind-specific columns: `recipe` is `['link']`, `place` is `['place']`, and a
   `javascript:` URL is refused on a recipe exactly as it is anywhere else.
 
 ## Groups within a list
 
-`lib/groups.js` is PURE. **A group is not a container — it is the set of items
-carrying a tag, computed on the way out.** Folders are the obvious build and they
-are the wrong one, and everything good here follows from not building them:
+`lib/groups.js` is PURE. **A group is not a container — it is the set of items of one
+KIND, computed on the way out.** Everything good follows: nothing to keep in sync, a
+group cannot orphan itself or outlive its members, and adding stays one tap with no
+"where does this go?" at write time.
 
-- Nothing is stored, so nothing can drift. A group cannot orphan itself, sit
-  empty, or outlive its members — untag the last item and it is simply gone.
-- An item can be in two groups honestly. "Dinner and a film" is both.
-- Deleting a group is untagging, so it can never eat the items inside it.
-- **Adding stays one tap.** There is no "where does this go?" at write time, which
-  is the tax folders charge and a large part of why lists go stale.
+**It used to group by `item.tags`, and the data is what changed it.** The tags actually
+in the live list were `Films` (5), `Shows` (2) and `Recipes` (2) — a fixed,
+non-overlapping vocabulary of what things ARE, typed by hand, three times, with nothing
+else in it. People were already using tags as kinds and paying for it in typos and
+re-typing. So the vocabulary moved into `lib/kinds.js` where it is a real enum with
+fields attached: a recipe has the link you cook from, a place has a location and belongs
+on the map. A tag could never carry that.
 
-The same conclusion the trips app reached about note groups, for the same reasons.
+The price is that a thing is one kind rather than several — the correct trade for a
+vocabulary this small and this factual, and **extending it is one line** in the table.
 
-- **Derived per VIEWER.** Groups come from the items a person can see, so a tag
-  living only on somebody's private items makes a group on their screen and no
-  group at all on anybody else's — not even the knowledge that the tag exists.
-  This falls out for free because the route derives from `SP.visibleIn`, and it
-  has a test.
-- **First spelling wins.** `cleanTags` dedupes by fold but stores as typed, so
-  `AFI` and `afi` are one tag and it displays as `AFI`. Matching and display are
-  different jobs; folding for display throws away what somebody deliberately typed.
-- **`worthGrouping` decides whether to show them at all**, on the server, so the
-  rule lives in one place. One group holding the entire list says nothing.
-- **Writing inside a group joins it.** Typing into Films and having the thing land
-  outside Films would be baffling.
-- A group you are inside can stop existing while you are in it — somebody untagged
-  the last item. The client falls back to the group list rather than showing an
-  empty screen under a crumb pointing at nothing.
-- **Untagged items are listed directly under the group cards**, separated by a
-  hairline, not put behind an "Everything else" row. They are the majority in most
-  lists and they are not a category — making you navigate to reach the ordinary
-  case was backwards.
-
-**This is the seam auto-tagging drops into.** Trips' discovery mode is a solved
-version of the hard part — groups that emerge from the content and then *stay put*
-instead of reshuffling on every write. Nothing here needs to change for it: an
-assign call writes `tags`, and the groups follow.
+- **`key` is the kind id, `name` its plural.** Those are what the rows already rendered,
+  so the list looks exactly as it did: `Films · 1 to do · ›`, loose things underneath.
+- **TABLE ORDER, not biggest-first.** This reverses what the tag version did,
+  deliberately: with a fixed vocabulary the order is a fact about the app rather than
+  about today's counts, and a row of groups that reshuffles under your finger every
+  time something is ticked off is worse than one that never moves.
+- **A plain `thing` is not a group**; it is the loose pile listed under them, exactly
+  where untagged items used to go.
+- **`inGroup` accepts the id or the name**, because the client hands back whatever the
+  row was named with and that should not be anybody's problem.
+- **THE VIEWER STILL MATTERS.** A kind living only on your private items makes a group
+  on your screen and none on theirs — unchanged by the move, and still asserted
+  end-to-end.
+- **Migrated on load, once** (`store.js`): a tag that was standing in for a kind becomes
+  the kind, and is then dropped so no row carries a label nothing renders. Idempotent,
+  skips anything already classified, and leaves a tag that was a real opinion
+  (`rainy day`) exactly where it is. `kinds.fromTag` matches against the labels rather
+  than a second hard-coded list, so a kind added later is covered for free.
+- **`tags` still passes the gate.** The field is no longer surfaced and no longer makes
+  groups, but a patch that doesn't mention it leaves it alone — nothing stored was
+  destroyed to make this change.
 
 ## Finishing something
 

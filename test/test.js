@@ -204,67 +204,107 @@ async function gate() {
 async function groupRules() {
   console.log('\ngroups');
   const G = require('../lib/groups');
-  const it = (title, tags, done = false) => ({ id: title, title, tags, done });
+  const K = require('../lib/kinds');
+  const it = (title, kind, done = false) => ({ id: title, title, kind, done });
 
-  await t('a group is just the items carrying a tag', () => {
-    const items = [it('a', ['films']), it('b', ['films']), it('c', ['museums'])];
+  await t('a group is just the items of one kind', () => {
+    const items = [it('a', 'movie'), it('b', 'movie'), it('c', 'place')];
     assert.deepStrictEqual(G.groupsOf(items).map(g => [g.name, g.count]),
-      [['films', 2], ['museums', 1]]);
+      [['Films', 2], ['Places', 1]]);
+    // The row is keyed by the kind id and named by its plural — which is what
+    // the rows already rendered, so the list looks exactly as it did.
+    assert.deepStrictEqual(G.groupsOf(items).map(g => g.key), ['movie', 'place']);
   });
 
-  await t('an item can be in two groups, because things genuinely are', () => {
-    const items = [it('dinner and a film', ['films', 'food'])];
-    assert.deepStrictEqual(G.groupsOf(items).map(g => g.name).sort(), ['films', 'food']);
-    assert.strictEqual(G.inGroup(items, 'films').length, 1);
-    assert.strictEqual(G.inGroup(items, 'food').length, 1);
+  await t('GROUPS ARE IN TABLE ORDER, not biggest-first', () => {
+    // With a fixed vocabulary the order is a fact about the app rather than
+    // about today's counts, and a list of groups that reshuffles under your
+    // finger every time something is ticked off is worse than one that never
+    // moves. This reverses what the tag version did, deliberately.
+    const items = [
+      it('a', 'recipe'), it('b', 'movie'), it('c', 'movie'), it('d', 'movie'),
+      it('e', 'place'), it('f', 'place'),
+    ];
+    assert.deepStrictEqual(G.groupsOf(items).map(g => g.name),
+      ['Films', 'Places', 'Recipes']);
+    // Ticking the three films off does not move the row.
+    for (const x of items) if (x.kind === 'movie') x.done = true;
+    assert.deepStrictEqual(G.groupsOf(items).map(g => g.name),
+      ['Films', 'Places', 'Recipes']);
+    assert.strictEqual(G.groupsOf(items)[0].open, 0, 'though it reports none to do');
   });
 
-  await t('one tag, however it is typed — but the first spelling is what shows', () => {
-    const items = [it('a', ['AFI']), it('b', ['afi']), it('c', ['  AFI  '])];
-    const gs = G.groupsOf(items);
-    assert.strictEqual(gs.length, 1, 'case and spacing do not make a second group');
-    assert.strictEqual(gs[0].name, 'AFI', 'and it is not mangled into Afi');
-    assert.strictEqual(gs[0].count, 3);
-    assert.strictEqual(G.inGroup(items, 'aFi').length, 3, 'lookup folds too');
-  });
-
-  await t('untagged things are their own bucket, not a leftover', () => {
-    const items = [it('a', ['films']), it('b', []), it('c', undefined), it('d', ['  '])];
-    assert.strictEqual(G.ungroupedCount(items), 3, 'a whitespace tag is not a tag');
+  await t('a thing is not a group — it is the loose pile under them', () => {
+    const items = [it('a', 'movie'), it('b', 'thing'), it('c', undefined), it('d', null)];
+    assert.strictEqual(G.ungroupedCount(items), 3,
+      'no kind, an explicit thing, and rubbish all land in the same pile');
     assert.deepStrictEqual(G.inGroup(items, null).map(x => x.title), ['b', 'c', 'd']);
+    assert.deepStrictEqual(G.groupsOf(items).map(g => g.key), ['movie']);
+  });
+
+  await t('a group is looked up by its id, or by the name the row carries', () => {
+    const items = [it('a', 'movie'), it('b', 'recipe')];
+    assert.strictEqual(G.inGroup(items, 'movie').length, 1);
+    assert.strictEqual(G.inGroup(items, 'Films').length, 1, 'the plural the row shows');
+    assert.strictEqual(G.inGroup(items, 'film').length, 1, 'and the singular, folded');
+    assert.strictEqual(G.inGroup(items, 'nonsense').length, 0, 'but not an invention');
   });
 
   await t('a group cannot outlive its members', () => {
-    // The property folders get wrong: untag the last item and the group is gone,
-    // with nothing to clean up and nothing left pointing at nothing.
-    const items = [it('a', ['films'])];
+    // The property folders get wrong: reclassify the last item and the group is
+    // gone, with nothing to clean up and nothing left pointing at nothing.
+    const items = [it('a', 'movie')];
     assert.strictEqual(G.groupsOf(items).length, 1);
-    items[0].tags = [];
+    items[0].kind = 'thing';
     assert.strictEqual(G.groupsOf(items).length, 0);
   });
 
-  await t('the busiest group comes first, and ties break predictably', () => {
-    const items = [
-      it('a', ['zoos']), it('b', ['films']), it('c', ['films']), it('d', ['films']),
-      it('e', ['bars']), it('f', ['bars']),
-    ];
-    assert.deepStrictEqual(G.groupsOf(items).map(g => g.name), ['films', 'bars', 'zoos']);
-  });
-
   await t('a group of everything is not worth showing', () => {
-    const all = [it('a', ['films']), it('b', ['films'])];
+    const all = [it('a', 'movie'), it('b', 'movie')];
     assert.strictEqual(G.worthGrouping(all), false,
       'one group holding the whole list tells you nothing');
-    assert.strictEqual(G.worthGrouping([...all, it('c', [])]), true, 'now it says something');
-    assert.strictEqual(G.worthGrouping([it('a', ['x']), it('b', ['y'])]), true);
-    assert.strictEqual(G.worthGrouping([it('a', []), it('b', [])]), false, 'no tags, no groups');
+    assert.strictEqual(G.worthGrouping([...all, it('c', 'thing')]), true,
+      'now it says something');
+    assert.strictEqual(G.worthGrouping([it('a', 'movie'), it('b', 'recipe')]), true);
+    assert.strictEqual(G.worthGrouping([it('a', 'thing'), it('b', undefined)]), false,
+      'a list of plain things has nothing to group');
     assert.strictEqual(G.worthGrouping([]), false);
   });
 
-  await t('a tag is capped and folded at the gate, so groups cannot be spammed', () => {
+  await t('THE OLD TAGS BECOME KINDS — that is what the live data was', () => {
+    // The tags actually in the live list were `Films` (5), `Shows` (2) and
+    // `Recipes` (2): a fixed, non-overlapping vocabulary of what things ARE,
+    // typed by hand. The migration honours exactly those and leaves anything
+    // that was a real opinion alone.
+    assert.strictEqual(K.fromTag('Films'), 'movie');
+    assert.strictEqual(K.fromTag('films'), 'movie', 'folded');
+    assert.strictEqual(K.fromTag('Shows'), 'show');
+    assert.strictEqual(K.fromTag('Recipes'), 'recipe');
+    assert.strictEqual(K.fromTag('Film'), 'movie', 'singular too');
+    assert.strictEqual(K.fromTag('rainy day'), null, 'an opinion is not a kind');
+    assert.strictEqual(K.fromTag('Thing'), null, 'and the default is not a tag');
+    assert.strictEqual(K.fromTag(''), null);
+    assert.strictEqual(K.fromTag(null), null);
+    // Matched against the labels, so a kind added to the table is covered
+    // without anybody remembering to update a second list.
+    for (const k of K.KINDS) {
+      if (k.id === K.DEFAULT) continue;
+      assert.strictEqual(K.fromTag(k.plural), k.id, `${k.plural} should map to ${k.id}`);
+    }
+  });
+
+  await t('tags still pass the gate, so nothing stored is destroyed', () => {
+    // The field is no longer surfaced and no longer makes groups, but a patch
+    // that does not mention it leaves it alone — a tag that meant something
+    // ("rainy day") is still there if it is ever wanted again.
+    const x = ITEMS.cleanItem({ title: 'x', tags: ['rainy day'] },
+      { id: 'i', authorId: 'a', spaceId: 's' });
+    assert.deepStrictEqual(x.tags, ['rainy day']);
+    ITEMS.applyPatch(x, { title: 'y' });
+    assert.deepStrictEqual(x.tags, ['rainy day'], 'an unrelated edit does not eat it');
     const many = ITEMS.cleanItem({ title: 'x', tags: Array.from({ length: 40 }, (_, i) => `t${i}`) },
       { id: 'i', authorId: 'a', spaceId: 's' });
-    assert.strictEqual(many.tags.length, ITEMS.MAX_TAGS);
+    assert.strictEqual(many.tags.length, ITEMS.MAX_TAGS, 'and it is still capped');
   });
 }
 
@@ -378,17 +418,16 @@ async function kindRules() {
     assert.strictEqual(it.kind, 'recipe');
   });
 
-  await t('a kind is NOT a tag — they are different axes and both survive', () => {
-    // groups.js is emphatic that a group is a tag. A film tagged "rainy day"
-    // is a film AND in that group; neither displaces the other.
-    const it = made({ title: 'Obsession', kind: 'movie', tags: ['rainy day', 'Films'] });
+  await t('THE KIND MAKES THE GROUP; a tag is only kept', () => {
+    // This replaced the tag vocabulary rather than sitting beside it, because
+    // the tags in the live list WERE the vocabulary: Films, Shows, Recipes. So
+    // a film still carrying "rainy day" is a film, and groups into Films — the
+    // tag is stored, costs nothing, and no longer invents a group of its own.
+    const it = made({ title: 'Obsession', kind: 'movie', tags: ['rainy day'] });
     assert.strictEqual(it.kind, 'movie');
-    assert.deepStrictEqual(it.tags, ['rainy day', 'Films']);
+    assert.deepStrictEqual(it.tags, ['rainy day'], 'nothing stored was destroyed');
     const groups = require('../lib/groups');
-    // Both tags still make groups. Order is groups.js's business (biggest open
-    // first, then alphabetically), not this test's — so compare the set.
-    assert.deepStrictEqual(groups.groupsOf([it]).map(g => g.name).sort(),
-      ['Films', 'rainy day']);
+    assert.deepStrictEqual(groups.groupsOf([it]).map(g => g.name), ['Films']);
   });
 
   /* ── what the filter row is allowed to show ──────────────────────────── */
@@ -1059,19 +1098,20 @@ async function server() {
   });
 
   await t('groups on the wire are derived from what YOU can see', async () => {
-    // The important one. A tag living only on somebody's private items must make
-    // a group on their screen and no group at all on anybody else's.
+    // The important one, and it survives the move from tags to kinds unchanged:
+    // a kind living only on somebody's private items must make a group on their
+    // screen and no group at all on anybody else's.
     await api('POST', '/api/space/sp1/item',
-      { title: 'a secret film', visibility: 'private', tags: ['Gifts'] }, A);
+      { title: 'a secret recipe', visibility: 'private', kind: 'recipe' }, A);
     await api('POST', '/api/space/sp1/item',
-      { title: 'a film for us', visibility: 'shared', tags: ['Films'] }, A);
+      { title: 'a film for us', visibility: 'shared', kind: 'movie' }, A);
 
     const mine = (await api('GET', '/api/space/sp1/items', null, A)).body;
     const hers = (await api('GET', '/api/space/sp1/items', null, L)).body;
-    assert.ok(mine.groups.some(g => g.name === 'Gifts'), 'the author sees their own group');
-    assert.ok(!hers.groups.some(g => g.name === 'Gifts'),
-      'and nobody else learns it exists — not even that the tag does');
-    assert.ok(hers.groups.some(g => g.name === 'Films'), 'the shared one is shared');
+    assert.ok(mine.groups.some(g => g.key === 'recipe'), 'the author sees their own group');
+    assert.ok(!hers.groups.some(g => g.key === 'recipe'),
+      'and nobody else learns it exists — not even that the kind is in use');
+    assert.ok(hers.groups.some(g => g.key === 'movie'), 'the shared one is shared');
   });
 
   await t('a tag arrives as typed and is capped at the gate', async () => {
