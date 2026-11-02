@@ -298,6 +298,27 @@ function connectCdp(wsUrl) {
       `kinds with nothing in them keep their tab: ${nav}`);
     check(await evalJs(`document.querySelector('#kindNav [data-kind="activity"]')
       .classList.contains('on')`), 'and you start on Activities');
+    // Every tab carries an icon, from one set drawn to one spec. A kind added
+    // without one falls back to a plain mark rather than to a hole.
+    check(await evalJs(`[...document.querySelectorAll('#kindNav [data-kind]')]
+      .every(b => b.querySelector('svg'))`), 'every tab has an icon');
+    check(await evalJs(`[...document.querySelectorAll('#kindNav svg')]
+      .every(s => s.getAttribute('stroke-width') === '1.6')`),
+      'drawn to one spec — five icons from five conventions read as five mistakes');
+
+    // THE DONE COUNT IS THE COUNT OF WHAT IT WOULD SHOW YOU. It was the whole
+    // list's while the list underneath was one kind's, so "Done together 15" on
+    // the Recipes tab produced two.
+    const doneSays = async () => Number(
+      (await evalJs(`(() => { const n = document.querySelector('#tabDone .n');
+        return n ? n.innerText : '0'; })()`)) || 0);
+    await evalJs(`document.getElementById('tabDone').click()`);
+    await sleep(500);
+    const shownDone = await evalJs(`document.querySelectorAll('#itemList .it').length`);
+    check(await doneSays() === shownDone,
+      `the toggle promised ${await doneSays()} and showed ${shownDone}`);
+    await evalJs(`document.getElementById('tabDone').click()`);
+    await sleep(400);
 
     // Classifying something moves it between tabs, which is the whole model.
     const classifyFirst = async (kind) => {

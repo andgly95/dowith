@@ -544,25 +544,59 @@ input,textarea{font:inherit;color:var(--ink)}
    reach what is now always one tap away and always in the same place.
 
    Built from the table on the server, empty tabs included — furniture has to
-   be where you left it, and an empty tab is how you make your first recipe. */
+   be where you left it, and an empty tab is how you make your first recipe.
+
+   The first version was stacked text and a loose numeral, which read as a
+   debug control. What it needed was the thing a nav is actually made of: one
+   icon set drawn to one spec, a label that sits under it rather than beside
+   it, and an active state you can find without reading. */
 .kindnav[hidden]{display:none}
 .kindnav{
   display:flex;border-top:1px solid var(--line);background:var(--bg);
-  padding:6px 8px calc(var(--safe-b) + 6px);
+  padding:7px 6px calc(var(--safe-b) + 7px);
   max-width:var(--page);margin:0 auto;width:100%;
 }
 .kindnav button{
   flex:1 1 0;min-width:0;background:none;border:0;cursor:pointer;
-  display:flex;flex-direction:column;align-items:center;gap:2px;
-  padding:7px 2px 5px;border-radius:10px;color:var(--faint);
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:4px 2px 2px;color:var(--faint);
+  -webkit-tap-highlight-color:transparent;
 }
-.kindnav button b{
-  font:600 11px/1.2 var(--sans);letter-spacing:.01em;
+
+/* The active marker sits behind the ICON, not behind the whole tab. A pill the
+   width of the tab makes five of them look like five buttons; a pill the width
+   of the icon makes one of them look chosen. */
+.kindnav .ic{
+  display:grid;place-items:center;
+  width:46px;height:28px;border-radius:14px;
+  transition:background .16s ease,color .16s ease;
+}
+/* The badge is anchored to the GLYPH, not to the pill around it. Pinned to the
+   pill it floated eleven pixels off the icon's shoulder, which looked like a
+   number belonging to nothing. */
+.kindnav .gl{position:relative;display:block;line-height:0}
+.kindnav button.on .ic{background:rgba(242,132,92,.16)}
+.kindnav button.on{color:var(--accent)}
+.kindnav button:active .ic{background:var(--card)}
+.kindnav button.on:active .ic{background:rgba(242,132,92,.24)}
+
+.kindnav b{
+  font:600 10.5px/1.1 var(--sans);letter-spacing:.015em;
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-/* The count, not a badge: a number you glance at, not a notification you have
-   to clear. Absent entirely at zero — an empty tab says so by being empty. */
-.kindnav button i{font-style:normal;font-size:10px;line-height:1;color:var(--faint);opacity:.75}
-.kindnav button.on{color:var(--accent)}
-.kindnav button.on i{color:var(--accent);opacity:.8}
-.kindnav button:active{background:var(--card)}
+
+/* The count rides the icon's shoulder, and it is a NUMERAL, not a badge.
+   Filled pills on all five tabs turned a calm bar into a notification centre —
+   a badge means "something needs clearing", and four films waiting is not an
+   alert, it is just how many there are. So: no fill, no ring, one weight down,
+   and it disappears entirely at zero. */
+.kindnav .n{
+  position:absolute;top:-4px;right:-8px;
+  font:600 9.5px/1 var(--sans);font-style:normal;letter-spacing:.01em;
+  color:var(--faint);
+}
+.kindnav button.on .n{color:var(--accent);opacity:.9}
+
+@media (prefers-reduced-motion: reduce){
+  .kindnav .ic{transition:none}
+}

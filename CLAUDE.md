@@ -251,6 +251,32 @@ the crumb and the drill-in state are gone, and `lib/kinds.js` is the navigation.
 assertion added one change earlier caught it immediately, which is the third time that
 trap has fired in this app.
 
+### How it is drawn
+
+The first cut was stacked text and a loose numeral and it read as a debug control. Three
+things fixed it, and they are the three things a nav is made of:
+
+- **One icon set, drawn to one spec** — 24-unit box, 1.6 stroke, round caps and joins,
+  no fills. That consistency *is* the job at 23px: five icons from five drawing
+  conventions read as five mistakes. The film strip's sprockets are the one deliberate
+  exception, **filled** rather than stroked, because a third and fourth hairline inside
+  an 18px box turns to mush — the stroked version read as a book with two pages. Icons
+  live in the client keyed by kind id: the server owns the vocabulary, the client owns
+  how it looks, and a kind added without one falls back to a plain mark rather than a
+  hole.
+- **The active marker sits behind the ICON, not the tab.** A pill the width of the tab
+  makes five of them look like five buttons; a pill the width of the icon makes one of
+  them look chosen.
+- **The count is a numeral, not a badge.** Filled pills on all five tabs turned a calm
+  bar into a notification centre — a badge means "something needs clearing", and four
+  films waiting is not an alert, it is just how many there are. It is anchored to the
+  glyph rather than the pill around it; pinned to the pill it floated eleven pixels off
+  the icon's shoulder and looked like a number belonging to nothing.
+
+**The `Done together` count is the count of what it would show you.** It was the whole
+list's while the list underneath was one kind's, so "Done together 15" on the Recipes
+tab produced two.
+
 ## Finishing something
 
 The one moment in the app worth marking, and it used to be a silent reflow — the

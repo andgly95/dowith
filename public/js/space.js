@@ -161,12 +161,20 @@ function render() {
 
   // The counts sit on the tabs, because "12 open / 31 done together" is the one
   // number that says how the list is going.
+  // Resolved before anything reads it: every count and every filter below is
+  // "of this kind", so the kind has to be settled first.
+  if (!kindTab) kindTab = defaultKind();
+
   // One toggle. "To do" was a tab for the state you were already in, and the
   // count that mattered was never on it — the list underneath is the count.
   const doneBtn = $('tabDone');
   doneBtn.classList.toggle('on', tab === 'done');
   doneBtn.setAttribute('aria-pressed', String(tab === 'done'));
-  doneBtn.innerHTML = `Done together${done.length ? `<span class="n">${done.length}</span>` : ''}`;
+  // The number has to be the number of things the button would show you. It was
+  // the whole list's done count while the list underneath was one kind's, so
+  // tapping "Done together 15" on the Recipes tab produced two.
+  const doneHere = inGroup(done, kindTab).length;
+  doneBtn.innerHTML = `Done together${doneHere ? `<span class="n">${doneHere}</span>` : ''}`;
 
   const list = $('itemList');
   // The map is parked until it has something worth showing. Its renderer and
@@ -246,6 +254,46 @@ function kindPicker(el, read, write) {
   paint();
 }
 
+// The icons.
+//
+// Presentation, so they live here rather than in the kinds table — the server
+// owns the vocabulary, the client owns how it looks. Keyed by id, and a kind
+// added without one falls back to a plain mark rather than to nothing, so the
+// nav can never ship a hole.
+//
+// One set, drawn to one spec: 24-unit box, 1.6 stroke, round caps and joins, no
+// fills. That consistency is the whole job at this size — five icons from five
+// different drawing conventions read as five mistakes.
+const ICON = {
+  // A spark. The app's own flourish when you finish something is sparks, so the
+  // kind that means "something to do together" borrows it.
+  activity: '<path d="M12 3.5l1.7 5.1a2 2 0 0 0 1.3 1.3l5.1 1.7-5.1 1.7a2 2 0 0 0-1.3 1.3L12 19.8l-1.7-5.2a2 2 0 0 0-1.3-1.3L3.9 11.6l5.1-1.7a2 2 0 0 0 1.3-1.3z"/>',
+  // A strip of film. The sprockets are FILLED squares rather than more stroked
+  // lines: at 23px a third and fourth hairline inside an 18px box turns to
+  // mush, and the first attempt read as a book with two pages.
+  movie: '<rect x="3.2" y="4.8" width="17.6" height="14.4" rx="2.4"/>'
+    + '<path d="M7.4 4.8v14.4M16.6 4.8v14.4"/>'
+    + '<g fill="currentColor" stroke="none">'
+    + '<rect x="4.6" y="7.4" width="1.6" height="1.6" rx=".4"/>'
+    + '<rect x="4.6" y="11.2" width="1.6" height="1.6" rx=".4"/>'
+    + '<rect x="4.6" y="15" width="1.6" height="1.6" rx=".4"/>'
+    + '<rect x="17.8" y="7.4" width="1.6" height="1.6" rx=".4"/>'
+    + '<rect x="17.8" y="11.2" width="1.6" height="1.6" rx=".4"/>'
+    + '<rect x="17.8" y="15" width="1.6" height="1.6" rx=".4"/>'
+    + '</g>',
+  // A set with its ears up.
+  show: '<rect x="3.2" y="7.6" width="17.6" height="11.6" rx="2.4"/><path d="M8.4 3.6L12 7.6l3.6-4"/>',
+  // A pin.
+  place: '<path d="M12 20.8s6.6-5.4 6.6-10.1a6.6 6.6 0 1 0-13.2 0C5.4 15.4 12 20.8 12 20.8z"/><circle cx="12" cy="10.5" r="2.4"/>',
+  // A pot, steaming.
+  recipe: '<path d="M4.4 10.2h15.2v4.6a4 4 0 0 1-4 4H8.4a4 4 0 0 1-4-4z"/><path d="M2.9 10.2h18.2"/><path d="M9 7.4c0-1.1 1-1.5 1-2.6M12.6 7.4c0-1.1 1-1.5 1-2.6"/>',
+};
+const FALLBACK = '<circle cx="12" cy="12" r="6.4"/>';
+
+const iconFor = (id) => `<svg viewBox="0 0 24 24" aria-hidden="true" width="23" height="23"
+  fill="none" stroke="currentColor" stroke-width="1.6"
+  stroke-linecap="round" stroke-linejoin="round">${ICON[id] || FALLBACK}</svg>`;
+
 // One tab per kind, built from what the server shipped. Empty tabs stay: this
 // is furniture, it has to be in the same place every time you look, and an
 // empty one is how you make your first recipe.
@@ -255,8 +303,10 @@ function renderNav() {
   if (!kindTab) kindTab = defaultKind();
   const nav = $('kindNav');
   nav.innerHTML = tabs.map(k => `<button data-kind="${esc(k.id)}"
-      class="${k.id === kindTab ? 'on' : ''}" aria-current="${k.id === kindTab}">
-      <b>${esc(k.plural)}</b>${k.count ? `<i>${k.count}</i>` : ''}</button>`).join('');
+      class="${k.id === kindTab ? 'on' : ''}" aria-current="${k.id === kindTab ? 'page' : 'false'}">
+      <span class="ic"><span class="gl">${iconFor(k.id)}${
+        k.count ? `<i class="n">${k.count > 99 ? '99+' : k.count}</i>` : ''}</span></span>
+      <b>${esc(k.plural)}</b></button>`).join('');
   nav.querySelectorAll('[data-kind]').forEach((b) => {
     b.addEventListener('click', () => {
       if (kindTab === b.dataset.kind) return;
