@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 126 assertions + a headless-chromium check
+- **Tests:** `npm test` — 127 assertions + a headless-chromium check
 
 ## The model
 
@@ -221,6 +221,26 @@ but it is not what this was.
 Sources, since Apple documented none of it:
 [Safari 26 Liquid Glass on the web](https://1ar.io/updates/safari-26-liquid-glass-web/) ·
 [theme-color and fixed elements](https://benfrain.com/ios26-safari-theme-color-tab-tinting-with-fixed-position-elements/)
+
+**The safe-area insets are CLAMPED.** `--safe-b` is
+`min(env(safe-area-inset-bottom,0px), 34px)`, and that one line is what actually fixed
+the dead band under the tab bar.
+
+Measured off a photograph of the phone rather than guessed: the nav's border sat at
+795.3pt and its last text at 850.3 — which matches this stylesheet *to the point*. So
+the layout was right all along, `#app` did fill the 956pt screen, and the hundred
+points of nothing under the bar were **our own padding**, with
+`env(safe-area-inset-bottom)` coming back at about **97pt**. A home indicator is 34.
+Anything bigger is the system reserving room for chrome it is not drawing, and
+honouring it leaves the bar floating in the middle of nowhere. The clamp is a ceiling,
+not a constant — at 0 it adds nothing, at 34 it is honoured in full.
+
+Two wrong diagnoses came before it, both from inferring a number instead of measuring
+one: *"`100dvh` under-reports"* (it does not here — the visual viewport agrees with it)
+and *"the root is transparent so Safari paints its own bar"* (true, and worth fixing,
+but the root background paints the whole **canvas** regardless of the element's box, so
+the band turning our colour proved nothing about the viewport's height). **Measure the
+pixels before changing the layout.**
 
 **`#app` is `position:fixed; inset:0` — NOT a viewport unit.** Measured on an iPhone 16
 Pro Max in standalone: the screen is 956pt and `100dvh` gave **857**, short by almost

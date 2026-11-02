@@ -1553,6 +1553,25 @@ async function server() {
     assert.strictEqual((await fetch(BASE + m + 'app.js')).status, 200);
   });
 
+  await t('THE SAFE-AREA INSETS ARE CLAMPED TO REAL ONES', () => {
+    // Measured off a photograph: the nav's border sat at 795.3pt and its last
+    // text at 850.3, which matches the stylesheet to the point — so the layout
+    // was right, #app did fill the 956pt screen, and the hundred points of dead
+    // band under the tab bar were our own padding, with
+    // env(safe-area-inset-bottom) coming back at about 97pt.
+    //
+    // A home indicator is 34pt. Anything bigger is a reservation for chrome
+    // that is not being drawn, and honouring it leaves the bar floating in the
+    // middle of nothing.
+    const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'style.css'), 'utf8');
+    assert.ok(/--safe-b:min\(env\(safe-area-inset-bottom,0px\), 34px\)/.test(css),
+      'the bottom inset must be clamped to the tallest real home indicator');
+    assert.ok(/--safe-t:min\(env\(safe-area-inset-top,0px\)/.test(css),
+      'and the top to the tallest real status bar');
+    // Still honoured where it is honest — clamping is a ceiling, not a constant.
+    assert.ok(/env\(safe-area-inset-bottom/.test(css), 'the inset is still read');
+  });
+
   await t('THE SHELL IS PINNED TO THE SCREEN, not to a viewport unit', () => {
     // Measured on an iPhone 16 Pro Max in standalone: the screen is 956pt and
     // `100dvh` gave 857 — short by almost exactly the status bar plus the home

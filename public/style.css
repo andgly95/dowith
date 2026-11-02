@@ -15,8 +15,19 @@
   --accent:#f2845c;      /* warm coral — the only saturated thing on the page */
   --accent2:#8fb9a8;     /* sage, for something already done */
   --warn:#e0714f;
-  --safe-t:env(safe-area-inset-top,0px);
-  --safe-b:env(safe-area-inset-bottom,0px);
+  /* CLAMPED, because iOS does not always report a safe area — sometimes it
+     reports a reservation.
+     Measured off a photograph of the real phone: the nav's border sat at
+     795.3pt and its last text at 850.3, which matches this stylesheet to the
+     point. So the layout was right and #app did fill the 956pt screen — the
+     hundred points of dead band under the tab bar were OUR OWN padding, with
+     `env(safe-area-inset-bottom)` coming back at about 97pt.
+     A home indicator is 34pt. Anything bigger is the system reserving space
+     for chrome that is not being drawn, and honouring it leaves the bar
+     floating in the middle of nothing. Clamp to the tallest real one; where
+     the inset is honest this changes nothing at all. */
+  --safe-t:min(env(safe-area-inset-top,0px), 62px);
+  --safe-b:min(env(safe-area-inset-bottom,0px), 34px);
   --serif:'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif;
   --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
   --page:620px;
