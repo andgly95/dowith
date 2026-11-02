@@ -208,6 +208,19 @@ function connectCdp(wsUrl) {
     check(await evalJs(`document.querySelectorAll('#spaceTabs button').length`) === 1,
       'the list has one toggle, not a tab bar');
     check(await visible('#tabDone'), 'and it is the record');
+    // Small, and over on the right. It inherited the size and weight of the
+    // three-up row it is no longer part of, which put a bold card-backed button
+    // where the primary action goes — and it is not the primary action, the
+    // list below it is.
+    const seg = await evalJs(`(() => {
+      const b = document.getElementById('tabDone');
+      const row = document.getElementById('spaceTabs');
+      const br = b.getBoundingClientRect(), rr = row.getBoundingClientRect();
+      return { w: Math.round(br.width), rowW: Math.round(rr.width),
+               rightGap: Math.round(rr.right - br.right),
+               leftGap: Math.round(br.left - rr.left) }; })()`);
+    check(seg.w < seg.rowW * 0.45, `the toggle is ${seg.w} of ${seg.rowW}px — too big`);
+    check(seg.rightGap < seg.leftGap, 'and it should sit at the right-hand end');
     check(!(await visible('#spaceTabs [data-tab="map"]')), 'the map is parked for now');
     check(await evalJs(`document.getElementById('tabDone').getAttribute('aria-pressed')`) === 'false',
       'starting on what there is still to do');

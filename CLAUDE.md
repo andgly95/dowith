@@ -198,7 +198,10 @@ one and will for a long time, so the shelf was a screen you tapped through on th
 to the only place you were ever going. The back arrow still reaches it — the common
 case is free and the rare one costs a tap, rather than the other way about.
 
-Above the list there is **one toggle, `Done together`**, not a tab bar:
+Above the list there is **one small toggle, `Done together`**, at the right-hand end
+— not a tab bar. It first shipped with the size and weight of the three-up row it had
+stopped being part of, which put a bold card-backed button where the primary action
+goes; it is not the primary action, the list under it is.
 
 - **"To do" was a tab for the state you were already in.** The count that mattered was
   never on it either; the list underneath is the count.
