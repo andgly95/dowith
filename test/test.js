@@ -467,6 +467,25 @@ async function watchLookups() {
     ] } } };
     assert.deepStrictEqual(W.shapeProviders(pay, 'US').map(p => p.name),
       ['Netflix', 'Paramount Plus', 'Hulu']);
+
+    // The other shape of the same problem, and the one the live data actually
+    // produced: NEITHER is a prefix of the other, but both are the same thing.
+    const tiers = { results: { US: { flatrate: [
+      { provider_name: 'Amazon Prime Video', display_priority: 0 },
+      { provider_name: 'Apple TV', display_priority: 1 },
+      { provider_name: 'Paramount Plus Premium', display_priority: 2 },
+      { provider_name: 'Paramount Plus Essential', display_priority: 3 },
+    ] } } };
+    assert.deepStrictEqual(W.shapeProviders(tiers, 'US').map(p => p.name),
+      ['Amazon Prime Video', 'Apple TV', 'Paramount Plus Premium'],
+      'two tiers of Paramount must not eat two of the four slots');
+
+    // But two words is where it stops: these really are different things.
+    const real = { results: { US: { flatrate: [
+      { provider_name: 'Amazon Prime Video', display_priority: 0 },
+      { provider_name: 'Amazon Video', display_priority: 1 },
+    ] } } };
+    assert.strictEqual(W.shapeProviders(real, 'US').length, 2);
   });
 
   await t('duplicates fold and the list is capped — a card is not a directory', () => {
