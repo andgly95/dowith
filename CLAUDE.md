@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 127 assertions + a headless-chromium check
+- **Tests:** `npm test` — 126 assertions + a headless-chromium check
 
 ## The model
 
@@ -222,41 +222,29 @@ Sources, since Apple documented none of it:
 [Safari 26 Liquid Glass on the web](https://1ar.io/updates/safari-26-liquid-glass-web/) ·
 [theme-color and fixed elements](https://benfrain.com/ios26-safari-theme-color-tab-tinting-with-fixed-position-elements/)
 
-**The safe-area insets are CLAMPED.** `--safe-b` is
-`min(env(safe-area-inset-bottom,0px), 34px)`, and that one line is what actually fixed
-the dead band under the tab bar.
+**On the home screen the shell is `100lvh` tall, not `inset:0`.** This is the fix
+for the dead band under the tab bar, and it was the *fourth* theory. The readout
+settled it, on an iPhone 16 Pro Max in standalone:
 
-Measured off a photograph of the phone rather than guessed: the nav's border sat at
-795.3pt and its last text at 850.3 — which matches this stylesheet *to the point*. So
-the layout was right all along, `#app` did fill the 956pt screen, and the hundred
-points of nothing under the bar were **our own padding**, with
-`env(safe-area-inset-bottom)` coming back at about **97pt**. A home indicator is 34.
-Anything bigger is the system reserving room for chrome it is not drawing, and
-honouring it leaves the bar floating in the middle of nowhere. The clamp is a ceiling,
-not a constant — at 0 it adds nothing, at 34 it is honoured in full.
+| screen | window | html | `#app` (inset:0) | vh | lvh | svh | dvh | insets t/b |
+|---|---|---|---|---|---|---|---|---|
+| 956 | 894 | 894 | 0→894 | 956 | 956 | 894 | 894 | 62 / 34 |
 
-Two wrong diagnoses came before it, both from inferring a number instead of measuring
-one: *"`100dvh` under-reports"* (it does not here — the visual viewport agrees with it)
-and *"the root is transparent so Safari paints its own bar"* (true, and worth fixing,
-but the root background paints the whole **canvas** regardless of the element's box, so
-the band turning our colour proved nothing about the viewport's height). **Measure the
-pixels before changing the layout.**
+iOS gives a standalone page a layout viewport **62pt short of the screen**, and
+everything that anchors to it (`inset:0`, `bottom:`, `100%`) stops there. Only the
+large viewport unit measures the actual screen. So `.standalone #app` and
+`.standalone .modal` are `bottom:auto; height:100lvh`, and the toast adds back
+`100% - 100lvh`. The `standalone` class is set by an inline `<script>` in `<head>`
+so the bar doesn't jump once the modules load. **Standalone only:** in Safari proper
+the toolbars never retract (the document does not scroll), so `lvh` there would put
+the nav under them.
 
-**`#app` is `position:fixed; inset:0` — NOT a viewport unit.** Measured on an iPhone 16
-Pro Max in standalone: the screen is 956pt and `100dvh` gave **857**, short by almost
-exactly the status bar (59) plus the home indicator (34). So `dvh` there is the *safe*
-viewport rather than the screen, and the missing hundred points showed as a dead band
-under the tab bar. `inset:0` pins the shell to the layout viewport, which under
-`viewport-fit=cover` in standalone is the whole screen; the `--safe-t`/`--safe-b`
-padding on the masthead and the nav is what keeps content clear of the notch and the
-indicator.
-
-**A `fitViewport()` that measured `visualViewport.height` was tried first and removed.**
-On that phone the visual viewport reports the safe area too and *agrees* with `100dvh`,
-so it reproduced the bug it was meant to fix — and it would now fight `inset:0` by
-shrinking the shell back. The trips app keeps its version because there the failure is
-the opposite: Safari-with-chrome, where `dvh` is short of what you can see. Same
-symptom, different cause, opposite fix. **Do not port it back without measuring first.**
+The wrong theories, kept so nobody re-tries them: *"`100dvh` under-reports"*;
+*"the root is transparent"* (true and worth fixing, but not this); *"`inset:0` fills
+the screen"*; and *"the bottom inset comes back at ~97pt, clamp it to 34"* — the inset
+was an honest 34 all along and the clamp changed nothing. All four were inferred from
+photographs. **Measure before changing the layout** — and the readout below exists
+so you can.
 
 **There is a readout in the account sheet** — screen, window, visual viewport, `#app`,
 safe insets, standalone yes/no. Every layout bug in this app so far has been a number

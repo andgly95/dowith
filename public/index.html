@@ -11,6 +11,10 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
+<!-- Synchronous, before first paint: the shell is sized differently on the home
+     screen (see #app in style.css), and a module script runs too late to stop
+     the bar jumping. -->
+<script>if(navigator.standalone||matchMedia('(display-mode: standalone)').matches)document.documentElement.classList.add('standalone')</script>
 </head>
 <body>
 

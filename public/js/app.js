@@ -39,15 +39,32 @@ async function openAccount() {
 // having them on screen turns the next one of these into a measurement.
 function paintMetrics() {
   const vv = window.visualViewport;
-  const cs = getComputedStyle(document.documentElement);
-  const ins = (side) => cs.getPropertyValue(`--safe-${side}`).trim() || '0px';
   const app = $('app').getBoundingClientRect();
+  // Custom properties come back from getComputedStyle as their unevaluated
+  // text (`min(env(…), 34px)`), so measure them through a real box instead.
+  // Likewise the viewport units: each one is a different question on iOS.
+  const probe = (css) => {
+    const d = document.createElement('div');
+    d.style.cssText = `position:fixed;top:0;left:0;width:0;visibility:hidden;pointer-events:none;${css}`;
+    document.body.appendChild(d);
+    const h = Math.round(d.getBoundingClientRect().height);
+    d.remove();
+    return h;
+  };
+  const env = (s) => probe(`height:env(safe-area-inset-${s},0px)`);
+  // Only measurable while a list is on screen; from the shelf it has no box.
+  const navEl = document.querySelector('.kindnav');
+  const navR = navEl && navEl.getBoundingClientRect().height ? navEl.getBoundingClientRect() : null;
   $('meMetrics').innerHTML = [
     ['screen', `${window.screen.width}×${window.screen.height}`],
     ['window', `${window.innerWidth}×${window.innerHeight}`],
     ['visual', vv ? `${Math.round(vv.width)}×${Math.round(vv.height)}` : '—'],
-    ['#app', `${Math.round(app.width)}×${Math.round(app.height)}`],
-    ['safe t/b', `${ins('t')} / ${ins('b')}`],
+    ['html', `${document.documentElement.clientHeight}`],
+    ['#app', `${Math.round(app.top)}→${Math.round(app.bottom)}`],
+    ['nav', navR ? `${Math.round(navR.top)}→${Math.round(navR.bottom)}` : '—'],
+    ['vh lvh svh dvh', ['100vh', '100lvh', '100svh', '100dvh'].map((u) => probe(`height:${u}`)).join(' ')],
+    ['env t/b', `${env('top')} / ${env('bottom')}`],
+    ['safe t/b', `${probe('height:var(--safe-t)')} / ${probe('height:var(--safe-b)')}`],
     ['standalone', window.matchMedia('(display-mode: standalone)').matches
       || window.navigator.standalone ? 'yes' : 'no'],
   ].map(([k, v]) => `<span><i>${k}</i>${v}</span>`).join('');

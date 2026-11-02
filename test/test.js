@@ -1553,39 +1553,27 @@ async function server() {
     assert.strictEqual((await fetch(BASE + m + 'app.js')).status, 200);
   });
 
-  await t('THE SAFE-AREA INSETS ARE CLAMPED TO REAL ONES', () => {
-    // Measured off a photograph: the nav's border sat at 795.3pt and its last
-    // text at 850.3, which matches the stylesheet to the point — so the layout
-    // was right, #app did fill the 956pt screen, and the hundred points of dead
-    // band under the tab bar were our own padding, with
-    // env(safe-area-inset-bottom) coming back at about 97pt.
-    //
-    // A home indicator is 34pt. Anything bigger is a reservation for chrome
-    // that is not being drawn, and honouring it leaves the bar floating in the
-    // middle of nothing.
+  await t('ON THE HOME SCREEN THE SHELL IS 100lvh, not the layout viewport', () => {
+    // MEASURED with the account-sheet readout on an iPhone 16 Pro Max, standalone:
+    //   screen 956 · window 894 · #app (inset:0) 0→894 · lvh 956 · insets 62/34
+    // iOS gives a standalone page a layout viewport 62pt short of the screen,
+    // and inset:0 pins to it. Two earlier theories (dvh under-reports; the
+    // bottom inset is ~97pt, clamp it) were inferred from photographs and wrong.
     const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'style.css'), 'utf8');
-    assert.ok(/--safe-b:min\(env\(safe-area-inset-bottom,0px\), 34px\)/.test(css),
-      'the bottom inset must be clamped to the tallest real home indicator');
-    assert.ok(/--safe-t:min\(env\(safe-area-inset-top,0px\)/.test(css),
-      'and the top to the tallest real status bar');
-    // Still honoured where it is honest — clamping is a ceiling, not a constant.
-    assert.ok(/env\(safe-area-inset-bottom/.test(css), 'the inset is still read');
-  });
-
-  await t('THE SHELL IS PINNED TO THE SCREEN, not to a viewport unit', () => {
-    // Measured on an iPhone 16 Pro Max in standalone: the screen is 956pt and
-    // `100dvh` gave 857 — short by almost exactly the status bar plus the home
-    // indicator. `visualViewport.height` agreed with it, so measuring against
-    // that reproduced the bug rather than fixing it. `inset:0` pins the shell
-    // to the layout viewport, which under viewport-fit=cover in standalone is
-    // the whole screen.
-    const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'style.css'), 'utf8');
-    const app = css.match(/#app\{[^}]*\}/)[0];
-    assert.ok(/inset:0/.test(app), `#app must fill the layout viewport: ${app}`);
-    assert.ok(!/100dvh|100vh/.test(app), 'and must not trust a viewport unit for it');
-    // The safe-area padding is what keeps content clear of the notch and the
-    // indicator, so it has to still be there.
-    assert.ok(/--safe-t/.test(css) && /--safe-b/.test(css));
+    const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+    assert.ok(/\.standalone #app\{bottom:auto;height:100lvh\}/.test(css),
+      'in standalone the shell is sized to the screen');
+    assert.ok(/\.standalone \.modal\{bottom:auto;height:100lvh\}/.test(css),
+      'and so is the sheet backdrop, or it stops short too');
+    // Standalone ONLY: in Safari proper the toolbars never retract, so lvh
+    // would put the nav under them. The base rule stays the viewport.
+    assert.ok(/#app\{position:fixed;inset:0;overflow:hidden\}/.test(css), 'outside standalone, the viewport');
+    // Set before first paint, or the bar jumps once the module runs.
+    const head = html.slice(0, html.indexOf('</head>'));
+    assert.ok(/<script>[^<]*classList\.add\('standalone'\)/.test(head), 'class set by an inline script in <head>');
+    // The insets are honest; the clamp was a wrong fix and must not come back.
+    assert.ok(/--safe-b:env\(safe-area-inset-bottom,0px\)/.test(css), 'bottom inset unclamped');
+    assert.ok(/--safe-t:env\(safe-area-inset-top,0px\)/.test(css), 'top inset unclamped');
     assert.ok(/padding:calc\(var\(--safe-t\)/.test(css), 'the masthead clears the notch');
     assert.ok(/calc\(var\(--safe-b\) \+ 7px\)/.test(css), 'the nav clears the indicator');
   });
