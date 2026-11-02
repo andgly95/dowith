@@ -600,3 +600,74 @@ input,textarea{font:inherit;color:var(--ink)}
 @media (prefers-reduced-motion: reduce){
   .kindnav .ic{transition:none}
 }
+
+
+/* ─── the shelf ──────────────────────────────────────────────────────────
+   Films and shows are a grid of posters, not a list of titles. A shelf of
+   covers is how anybody actually chooses what to watch, and the art carries
+   things no title does — whether you have seen it, what sort of thing it is,
+   whether you are in the mood for it tonight. */
+.items.shelf{display:block;padding:0}
+.shelf .grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));
+  gap:16px 11px;padding:6px 18px 0;
+}
+
+.card .art{
+  position:relative;aspect-ratio:2/3;border-radius:11px;overflow:hidden;
+  background:var(--card2);border:1px solid var(--line);cursor:pointer;
+}
+.card .art img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* No art is not a hole where a poster should be. It is the title set in the
+   display face on a tinted ground — a legitimate way for a card to look, which
+   it has to be: before TMDB answers, when TMDB has never heard of the thing,
+   and forever if there is no key at all. */
+.card .noart{
+  height:100%;display:grid;place-items:center;padding:12px 10px;text-align:center;
+  background:linear-gradient(160deg,var(--card2),var(--card));
+}
+.card .noart span{
+  font:600 13px/1.25 var(--serif);color:var(--ink2);letter-spacing:-.01em;
+  display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;
+}
+
+/* Seen: the poster steps back rather than disappearing. A finished film is
+   still part of the shelf — that is the point of "done together". */
+.card.done .art img,.card.done .noart{filter:grayscale(.75);opacity:.45}
+.card.done .cap b{color:var(--dim)}
+.card .seen{
+  position:absolute;top:7px;left:7px;padding:2px 7px;border-radius:7px;
+  font:600 9.5px/1.5 var(--sans);letter-spacing:.07em;text-transform:uppercase;
+  background:rgba(143,185,168,.18);color:var(--accent2);
+  backdrop-filter:blur(3px);
+}
+
+.card .tick{
+  position:absolute;right:6px;bottom:6px;width:28px;height:28px;border-radius:50%;
+  display:grid;place-items:center;cursor:pointer;
+  background:rgba(23,19,26,.62);border:1px solid rgba(244,238,233,.22);
+  backdrop-filter:blur(4px);color:var(--ink);
+}
+.card .tick svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.6;
+  stroke-linecap:round;stroke-linejoin:round;opacity:.5}
+.card.done .tick{background:var(--accent2);border-color:var(--accent2);color:#10251d}
+.card.done .tick svg{opacity:1}
+.card .tick:active{transform:scale(.92)}
+
+.card .cap{margin-top:7px;cursor:pointer}
+.card .cap b{
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  font:600 12.5px/1.3 var(--sans);letter-spacing:-.005em;color:var(--ink);
+}
+.card .cap small{display:block;color:var(--faint);font-size:11px;margin-top:1px}
+
+/* Where it is streaming. Logos if TMDB gave us one, the name if not — and only
+   subscription services, because a card that says "on Amazon" when it means
+   "$3.99 on Amazon" is lying quietly. */
+.card .prov{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.card .prov img{width:18px;height:18px;border-radius:5px;display:block}
+.card .prov span{
+  font:600 9px/1.6 var(--sans);letter-spacing:.04em;text-transform:uppercase;
+  color:var(--dim);background:var(--card2);border-radius:5px;padding:0 5px;
+}

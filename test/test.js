@@ -321,6 +321,160 @@ async function groupRules() {
 
 /* ── 3. the module seam ──────────────────────────────────────────────────── */
 
+/* ── posters, years and where it streams ────────────────────────────────── */
+
+async function watchLookups() {
+  console.log('\nTMDB — posters and streaming');
+  const W = require('../lib/watch');
+
+  const r = (title, pop, date, id = 1) => ({
+    id, title, popularity: pop, release_date: date, poster_path: '/p.jpg',
+  });
+
+  await t('the matching key ignores case, punctuation and a typed year', () => {
+    assert.strictEqual(W.fold('Obsession (1976)'), 'obsession');
+    assert.strictEqual(W.fold("Director's Cut"), 'directors cut');
+    assert.strictEqual(W.fold('  THE   BEAR '), 'the bear');
+    assert.strictEqual(W.yearHint('Obsession (1976)'), 1976);
+    assert.strictEqual(W.yearHint('Obsession'), null);
+    assert.strictEqual(W.yearHint('Blade Runner 2049'), null, 'a year IN the title is not a hint');
+  });
+
+  await t('AN EXACT TITLE BEATS A POPULAR ONE', () => {
+    // Searching "Obsession" returns forty things. Taking the first is how a
+    // shelf ends up with the wrong poster on it, and a wrong poster is worse
+    // than none because it looks exactly like a right one.
+    const got = W.pickMatch([
+      r('Obsessions', 99, '2019-01-01', 2),
+      r('Obsession', 12, '1976-08-01', 3),
+    ], 'Obsession');
+    assert.strictEqual(got.id, 3, 'the exact title wins on any popularity');
+  });
+
+  await t('a year you typed beats everything', () => {
+    const got = W.pickMatch([
+      r('Obsession', 90, '2019-01-01', 2),
+      r('Obsession', 5, '1976-08-01', 3),
+    ], 'Obsession (1976)', 1976);
+    assert.strictEqual(got.id, 3, 'it is the whole reason the year was typed');
+    // And without the hint, popularity decides between two exact matches.
+    const pop = W.pickMatch([
+      r('Obsession', 90, '2019-01-01', 2),
+      r('Obsession', 5, '1976-08-01', 3),
+    ], 'Obsession');
+    assert.strictEqual(pop.id, 2);
+  });
+
+  await t('SOMETHING MERELY SIMILAR IS REFUSED, not guessed at', () => {
+    // "The Bear" must not resolve to "Bear Island" because it was top of the
+    // pile. No confident match means no poster, which the card draws properly.
+    assert.strictEqual(W.pickMatch([r('Bear Island', 80, '1979-01-01', 9)], 'The Bear'), null);
+    assert.strictEqual(W.pickMatch([r('Succession', 99, '2018-01-01', 9)], 'Severance'), null);
+    assert.strictEqual(W.pickMatch([], 'Anything'), null);
+    assert.strictEqual(W.pickMatch(null, 'Anything'), null);
+    assert.strictEqual(W.pickMatch([r('Obsession', 9, '1976-01-01')], ''), null);
+    // A genuine prefix is close enough — people drop subtitles constantly.
+    const sub = W.pickMatch([r('Dune: Part Two', 99, '2024-03-01', 7)], 'Dune');
+    assert.strictEqual(sub.id, 7);
+  });
+
+  await t('a tv result is matched on `name`, not `title`', () => {
+    const got = W.pickMatch([{ id: 4, name: 'The Rehearsal', popularity: 30, first_air_date: '2022-07-15' }],
+      'The Rehearsal');
+    assert.strictEqual(got.id, 4);
+    assert.strictEqual(W.shape(got, 'tv').year, 2022);
+    assert.strictEqual(W.shape(got, 'tv').title, 'The Rehearsal');
+  });
+
+  await t('what is stored is a PATH, never a URL', () => {
+    // Sizes are a rendering decision. Baking one in means re-fetching
+    // everything the day the card changes size.
+    const got = W.shape(r('Obsession', 9, '1976-08-01', 3), 'movie');
+    assert.strictEqual(got.poster, '/p.jpg');
+    assert.strictEqual(got.tmdbId, 3);
+    assert.strictEqual(got.mediaType, 'movie');
+    assert.strictEqual(W.posterUrl('/p.jpg'), 'https://image.tmdb.org/t/p/w342/p.jpg');
+    assert.strictEqual(W.posterUrl(null), null);
+    assert.strictEqual(W.shape(null, 'movie'), null);
+    assert.strictEqual(W.shape({}, 'movie'), null);
+  });
+
+  await t('ONLY WHAT A SUBSCRIPTION COVERS — rent and buy are a different question', () => {
+    // A card that says "on Amazon" when it means "$3.99 on Amazon" is lying
+    // quietly, and that is the kind of lie nobody catches until they are on
+    // the sofa.
+    const payload = { results: { US: {
+      flatrate: [{ provider_name: 'Max', logo_path: '/m.png' }, { provider_name: 'Criterion Channel' }],
+      rent: [{ provider_name: 'Amazon Video' }],
+      buy: [{ provider_name: 'Apple TV' }],
+    } } };
+    const got = W.shapeProviders(payload, 'US');
+    assert.deepStrictEqual(got.map(p => p.name), ['Max', 'Criterion Channel']);
+    assert.strictEqual(got[0].logo, '/m.png');
+    assert.strictEqual(got[1].logo, null);
+  });
+
+  await t('another region, or none at all, is simply empty', () => {
+    const payload = { results: { GB: { flatrate: [{ provider_name: 'Now' }] } } };
+    assert.deepStrictEqual(W.shapeProviders(payload, 'US'), []);
+    assert.deepStrictEqual(W.shapeProviders(payload, 'GB').map(p => p.name), ['Now']);
+    assert.deepStrictEqual(W.shapeProviders(null, 'US'), []);
+    assert.deepStrictEqual(W.shapeProviders({}, 'US'), []);
+  });
+
+  await t('duplicates fold and the list is capped — a card is not a directory', () => {
+    const many = { results: { US: { flatrate: [
+      { provider_name: 'Max' }, { provider_name: 'max' }, { provider_name: 'Hulu' },
+      { provider_name: 'Peacock' }, { provider_name: 'Netflix' }, { provider_name: 'Paramount+' },
+    ] } } };
+    const got = W.shapeProviders(many, 'US');
+    assert.strictEqual(got.length, 4);
+    assert.deepStrictEqual(got.map(p => p.name), ['Max', 'Hulu', 'Peacock', 'Netflix']);
+  });
+
+  await t('A POSTER PATH IS THE ONLY THING THE GATE WILL TAKE', () => {
+    // This ends up in an <img src>, and the app shows other people's items to
+    // you. Anything that is not a plain TMDB path is dropped.
+    const M = require('../lib/modules');
+    const good = M.cleanMods({ watch: { tmdbId: 7, mediaType: 'movie', poster: '/abc_1-2.jpg' } });
+    assert.strictEqual(good.watch.poster, '/abc_1-2.jpg');
+    for (const bad of ['https://evil.example/x.jpg', '//evil/x.jpg', '/a/../b.jpg',
+      'javascript:alert(1)', '/x.jpg" onerror="x', '']) {
+      const out = M.cleanMods({ watch: { tmdbId: 7, mediaType: 'movie', poster: bad } });
+      assert.strictEqual(out.watch.poster, null, `${JSON.stringify(bad)} must not survive`);
+    }
+    // Same rule for a provider logo.
+    const prov = M.cleanMods({ watch: { tmdbId: 7, mediaType: 'movie',
+      providers: [{ name: 'Max', logo: 'https://evil/x.png' }] } });
+    assert.strictEqual(prov.watch.providers[0].logo, null);
+    assert.strictEqual(prov.watch.providers[0].name, 'Max');
+  });
+
+  await t('the slice needs an id and a media type, or it is not a slice', () => {
+    const M = require('../lib/modules');
+    assert.deepStrictEqual(M.cleanMods({ watch: { mediaType: 'movie' } }), {});
+    assert.deepStrictEqual(M.cleanMods({ watch: { tmdbId: 7 } }), {});
+    assert.deepStrictEqual(M.cleanMods({ watch: { tmdbId: 7, mediaType: 'book' } }), {});
+    assert.deepStrictEqual(M.cleanMods({ watch: 'nope' }), {});
+  });
+
+  await t('with no key configured nothing is asked and nothing breaks', async () => {
+    // The suite must never need the internet, and the app must work without a
+    // TMDB account — the shelf just draws its typographic cards.
+    assert.strictEqual(W.configured(), false, 'the test config has no key');
+    assert.strictEqual(await W.lookup('movie', 'Obsession'), null);
+    assert.strictEqual(await W.lookup('activity', 'Go swing dancing'), null);
+  });
+
+  await t('only films and shows are ever looked up', () => {
+    const K = require('../lib/kinds');
+    assert.deepStrictEqual(K.MEDIA_KINDS, ['movie', 'show']);
+    assert.strictEqual(W.MEDIA.movie, 'movie');
+    assert.strictEqual(W.MEDIA.show, 'tv', "TMDB's word for it is tv");
+    assert.strictEqual(W.MEDIA.recipe, undefined);
+  });
+}
+
 /* ── kinds: what a thing IS ─────────────────────────────────────────────── */
 
 async function kindRules() {
@@ -1343,6 +1497,7 @@ async function server() {
   await gate();
   await groupRules();
   await kindRules();
+  await watchLookups();
   await moduleSeam();
   await inviteRules();
   await squareBridge();

@@ -195,19 +195,55 @@ function render() {
 
   // Two axes, and they are orthogonal: WHICH KIND you are looking at, and
   // whether you want what is still to do or what you have already done.
+  //
+  // A third thing follows from the first: a kind with art is a shelf, not a
+  // list. The server says which (`art` on the manifest) so there is no second
+  // list of film-ish kinds here to fall out of step with it.
+  const art = !!(kindList().find(k => k.id === kindTab) || {}).art;
+  list.classList.toggle('shelf', art && tab !== 'done');
   if (tab === 'done') {
-    list.innerHTML = recordHtml(inGroup(done, kindTab));
+    const seen = inGroup(done, kindTab);
+    list.innerHTML = art && seen.length
+      ? `<div class="grid">${seen.map(cardHtml).join('')}</div>`
+      : recordHtml(seen);
   } else {
     const shown = inGroup(open, kindTab);
     list.innerHTML = shown.length
-      ? shown.map(itemHtml).join('')
+      ? (art ? `<div class="grid">${shown.map(cardHtml).join('')}</div>`
+        : shown.map(itemHtml).join(''))
       : `<div class="empty">${esc(emptyLine())}</div>`;
   }
 
   list.querySelectorAll('[data-it]').forEach((row) => {
     const id = row.dataset.it;
-    row.querySelector('[data-tick]').addEventListener('click', () => toggle(id));
-    row.querySelector('[data-open]').addEventListener('click', () => openItem(id));
+    // All of them: a card has two ways in — the poster and the caption — and
+    // its tick sits INSIDE the poster, so without stopping the click there,
+    // marking something seen would also open it.
+    row.querySelectorAll('[data-tick]').forEach(b => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggle(id);
+    }));
+    row.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => openItem(id)));
+  });
+
+  // A poster that 404s must fall back to the typographic card, not sit there as
+  // a broken-image glyph. TMDB paths go stale, art gets pulled, and the network
+  // is the network — the card already has a way to look without a poster, so
+  // use it rather than inventing a second failure state.
+  list.querySelectorAll('.card .art img').forEach((img) => {
+    img.addEventListener('error', () => {
+      const art = img.closest('.art');
+      const title = (art.closest('.card').querySelector('.cap b') || {}).textContent || '';
+      img.remove();
+      art.insertAdjacentHTML('afterbegin', `<div class="noart"><span>${esc(title)}</span></div>`);
+    }, { once: true });
+  });
+  // Same for a provider's logo: the name is already in the alt, so show that.
+  list.querySelectorAll('.card .prov img').forEach((img) => {
+    img.addEventListener('error', () => {
+      img.replaceWith(Object.assign(document.createElement('span'),
+        { textContent: img.getAttribute('alt') || '' }));
+    }, { once: true });
   });
 
   visRow($('visRow'), () => S.compose, (v) => { S.compose = v; });
@@ -293,6 +329,45 @@ const FALLBACK = '<circle cx="12" cy="12" r="6.4"/>';
 const iconFor = (id) => `<svg viewBox="0 0 24 24" aria-hidden="true" width="23" height="23"
   fill="none" stroke="currentColor" stroke-width="1.6"
   stroke-linecap="round" stroke-linejoin="round">${ICON[id] || FALLBACK}</svg>`;
+
+/* ── the shelf ──────────────────────────────────────────────────────────── */
+
+// Films and shows are drawn as a grid of posters rather than a list of titles.
+// A shelf of covers is how anybody actually chooses what to watch, and the
+// poster carries information no title does: whether you have seen it, what sort
+// of thing it is, whether you are in the mood for it.
+const TMDB_IMG = 'https://image.tmdb.org/t/p';
+const posterSrc = (w) => (w && w.poster ? `${TMDB_IMG}/w342${w.poster}` : null);
+const logoSrc = (p) => (p && p.logo ? `${TMDB_IMG}/w92${p.logo}` : null);
+
+// A card with no art is NOT a hole where a poster should be. It is the title
+// set in the display face on a tinted ground — a legitimate way for a card to
+// look, so the grid reads properly before TMDB has answered, when TMDB has
+// never heard of the thing, and forever if there is no key at all.
+function cardHtml(it) {
+  const w = (it.mod && it.mod.watch) || null;
+  const src = posterSrc(w);
+  const year = w && w.year ? String(w.year) : '';
+  const prov = (w && w.providers) || [];
+  return `<div class="card ${it.done ? 'done' : ''}" data-it="${esc(it.id)}">
+    <div class="art" data-open>
+      ${src
+    ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async">`
+    : `<div class="noart"><span>${esc(it.title)}</span></div>`}
+      ${it.done ? '<div class="seen">Seen</div>' : ''}
+      <button class="tick" data-tick aria-label="${it.done ? 'Not done after all' : 'Done'}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"/></svg>
+      </button>
+    </div>
+    <div class="cap" data-open>
+      <b>${esc(it.title)}</b>
+      ${year ? `<small>${esc(year)}</small>` : ''}
+    </div>
+    ${prov.length ? `<div class="prov">${prov.map(p => (logoSrc(p)
+    ? `<img src="${esc(logoSrc(p))}" alt="${esc(p.name)}" title="${esc(p.name)}" loading="lazy">`
+    : `<span>${esc(p.name)}</span>`)).join('')}</div>` : ''}
+  </div>`;
+}
 
 // One tab per kind, built from what the server shipped. Empty tabs stay: this
 // is furniture, it has to be in the same place every time you look, and an

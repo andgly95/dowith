@@ -505,6 +505,40 @@ function connectCdp(wsUrl) {
     const after = await evalJs(`document.getElementById('itemList').innerText`);
     check(/Khruangbin at the Anthem/.test(after), `the shared thing landed:\n${after}`);
 
+    // ── the shelf ───────────────────────────────────────────────────────
+    // Films and shows are a grid of posters, and a card without art is not a
+    // hole where a poster should be — it is the title set in the display face.
+    await evalJs(`document.querySelector('#kindNav [data-kind="movie"]').click()`);
+    await sleep(600);
+    check(await evalJs(`document.querySelector('#itemList').classList.contains('shelf')`),
+      'films are a shelf, not a list');
+    // Write one here rather than depending on what earlier sections left
+    // behind — the composer makes the kind of the tab you are in.
+    await evalJs(`(() => { const i = document.getElementById('newItem');
+      i.value = 'Past Lives'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await evalJs(`document.getElementById('btnAdd').click()`);
+    await sleep(1300);
+    const cards = await evalJs(`document.querySelectorAll('#itemList .card').length`);
+    check(cards >= 1, 'with cards in it');
+    // There is no TMDB key here and the suite must never need the internet, so
+    // every card is the typographic kind — which is exactly the state that has
+    // to look right, both before TMDB answers and forever without a key.
+    check(await evalJs(`document.querySelectorAll('#itemList .card .noart').length`) === cards,
+      'and with no key every one of them draws its title instead');
+    check(await evalJs(`(() => {
+      const a = document.querySelector('#itemList .card .art');
+      const r = a.getBoundingClientRect();
+      return Math.abs((r.height / r.width) - 1.5) < 0.08; })()`),
+      'poster-shaped, 2:3');
+    // The tick sits INSIDE the poster, which is also a way to open the item.
+    // Without stopping the click there, marking something seen would open it.
+    await evalJs(`document.querySelector('#itemList .card [data-tick]').click()`);
+    await sleep(1400);
+    check(!(await visible('#itemSheet .modal-in')),
+      'ticking a card must not also open it');
+    await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
+    await sleep(400);
+
     // ── [hidden] still means hidden, by LAYOUT ─────────────────────────
     // The map is parked, so its flow cannot be driven from the UI — but the
     // property that block existed to guard is not about the map. `.items{

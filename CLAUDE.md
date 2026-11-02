@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 107 assertions + a headless-chromium check
+- **Tests:** `npm test` — 120 assertions + a headless-chromium check
 
 ## The model
 
@@ -276,6 +276,51 @@ things fixed it, and they are the three things a nav is made of:
 **The `Done together` count is the count of what it would show you.** It was the whole
 list's while the list underneath was one kind's, so "Done together 15" on the Recipes
 tab produced two.
+
+## The shelf — posters, years and where it streams (`lib/watch.js`)
+
+Films and shows are drawn as a **grid of posters**, not a list of titles. A shelf of
+covers is how anybody actually picks what to watch, and the art carries things a title
+cannot: whether you have seen it, what sort of thing it is, whether you are in the mood
+for it tonight. `art: true` on the kind says which kinds are shelves, so the client
+keeps no second list of film-ish kinds.
+
+**TMDB**, with a key in `config.local.json` (`tmdbKey`, and `tmdbRegion` for streaming,
+default `US`). Shaped exactly like `geo.js` and for the same reasons: a store-backed
+cache so a title is looked up once, a single queue so requests are serialised, and a
+**remembered miss** so a title TMDB has never heard of is not asked about on every
+render. A network failure is *not* remembered — a blip is not "no such film".
+
+**TMDB proposes; `pickMatch` disposes.** Searching "Obsession" returns a 1976 De Palma,
+a 2019 thriller, a telenovela and forty other things, and taking the first result is how
+a shelf ends up with the wrong poster on it. **A wrong poster is worse than none**: it
+looks exactly like a right one and nobody checks. So, in pure tested code — an exact
+title beats a popular one, a year you typed (`Obsession (1976)`) beats everything, and
+something merely *similar* is refused outright. "The Bear" must not resolve to "Bear
+Island". No confident match means no poster, which the card already draws properly.
+
+- **A path is stored, never a URL.** Sizes are a rendering decision; baking one in means
+  re-fetching everything the day the card changes size. The gate takes
+  `/^\/[A-Za-z0-9._-]+$/` and nothing else — this ends up in an `<img src>` and the app
+  shows other people's items to you.
+- **Only `flatrate` providers.** Rent and buy are a different question, and a card that
+  says "on Amazon" when it means "$3.99 on Amazon" is lying quietly — the kind of lie
+  nobody catches until they are on the sofa. Capped at four; a card is not a directory.
+- **A card without art is not a hole.** It is the title set in the display face on a
+  tinted ground — a legitimate way for a card to look, which it has to be: before TMDB
+  answers, when TMDB has never heard of the thing, and forever if there is no key.
+  **A poster that 404s falls back to it too**, rather than sitting there as a broken-image
+  glyph.
+- **Looked up after the response, never awaited** — on create, and again on a patch that
+  changed the title or the kind, since what was looked up before is about something else
+  now. `POST /api/space/:id/watch` backfills a whole list.
+- **The store is required lazily** in `watch.js`. Everything above the cache is pure and
+  the suite tests it with no store at all; binding `../store` at import loads whatever
+  `DATA_FILE` said when the first `require` ran, which in a test is the real one. The
+  guard in `test.js` caught exactly that.
+- Titles are sent to TMDB, which is a third-party call carrying user content — the same
+  trade the app already makes with Nominatim for place names. Worth knowing; private
+  items are no exception, because the lookup is about the title, not the audience.
 
 ## Finishing something
 
