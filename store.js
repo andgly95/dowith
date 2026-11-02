@@ -27,6 +27,12 @@ function defaultState() {
 }
 
 let state;
+// Set by the load-time migration below, written out once the atomic flush is
+// defined. Migrating in memory and waiting for the next ordinary mutation to
+// persist it means the file on disk disagrees with the running process until
+// somebody happens to tick something off — and re-migrates on every restart in
+// the meantime.
+let migrated = 0;
 try {
   state = JSON.parse(fs.readFileSync(FILE, 'utf8'));
   // Backfill any container added since this store was written. On LOAD only —
@@ -58,6 +64,7 @@ try {
     // something reads it from there. A diagnostic that lands in the middle of
     // real output is a bug waiting for whoever parses it next.
     if (moved) console.error(`migrated ${moved} tagged item${moved === 1 ? '' : 's'} to kinds`);
+    migrated = moved;
   }
 } catch (e) {
   if (e.code !== 'ENOENT') {
@@ -96,6 +103,9 @@ function flushSync() {
     console.error('store flush failed:', err.message);
   }
 }
+// Persist the migration now rather than on the next ordinary write.
+if (migrated) flushSync();
+
 process.on('SIGTERM', () => { flushSync(); process.exit(0); });
 process.on('SIGINT', () => { flushSync(); process.exit(0); });
 

@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 105 assertions + a headless-chromium check
+- **Tests:** `npm test` — 106 assertions + a headless-chromium check
 
 ## The model
 
@@ -222,7 +222,10 @@ vocabulary this small and this factual, and **extending it is one line** in the 
   the kind, and is then dropped so no row carries a label nothing renders. Idempotent,
   skips anything already classified, and leaves a tag that was a real opinion
   (`rainy day`) exactly where it is. `kinds.fromTag` matches against the labels rather
-  than a second hard-coded list, so a kind added later is covered for free.
+  than a second hard-coded list, so a kind added later is covered for free. It
+  **flushes immediately** — the first deploy migrated in memory and left every tag on
+  disk, so the file disagreed with the running process until somebody ticked something
+  off, and re-migrated on every restart until then.
 - **`tags` still passes the gate.** The field is no longer surfaced and no longer makes
   groups, but a patch that doesn't mention it leaves it alone — nothing stored was
   destroyed to make this change.

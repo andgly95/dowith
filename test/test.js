@@ -293,6 +293,17 @@ async function groupRules() {
     }
   });
 
+  await t('THE MIGRATION IS WRITTEN OUT, not left in memory', () => {
+    // Migrating on load and waiting for the next ordinary mutation to persist
+    // it means the file on disk disagrees with the running process until
+    // somebody happens to tick something off — and re-migrates on every restart
+    // in the meantime. Caught on the live deploy, where the log said "migrated
+    // 9" and the file still had every tag.
+    const src = fs.readFileSync(path.join(__dirname, '..', 'store.js'), 'utf8');
+    assert.ok(/if \(migrated\) flushSync\(\);/.test(src),
+      'the migration must flush once, as soon as the atomic write exists');
+  });
+
   await t('tags still pass the gate, so nothing stored is destroyed', () => {
     // The field is no longer surfaced and no longer makes groups, but a patch
     // that does not mention it leaves it alone — a tag that meant something
