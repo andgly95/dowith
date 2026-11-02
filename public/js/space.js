@@ -74,7 +74,7 @@ function itemHtml(it) {
   // What it is, first and quietly. A plain thing says nothing — the badge is
   // for telling a film from a recipe at a glance, and when everything is a
   // thing there is nothing to tell apart.
-  if (it.kind && it.kind !== 'thing') {
+  if (it.kind && it.kind !== defaultKind()) {
     bits.push(`<span class="chip kind k-${esc(it.kind)}">${esc(kindOf(it.kind).label)}</span>`);
   }
   if (it.visibility === 'private') bits.push('<span class="chip private">just you</span>');
@@ -118,15 +118,15 @@ function itemHtml(it) {
 // "is this item in the one I tapped".
 // The kind being edited in the item sheet, held separately so cancelling leaves
 // the stored item untouched — the same shape as `editingVis` beside it.
-let editingKind = 'thing';
+let editingKind = null;   // set from the item when the sheet opens
 
 // A group is the set of items of one kind. The server decides WHICH groups
 // exist and ships them (lib/groups.js); this only has to answer "is this item in
 // the one I tapped", and `group` holds the kind id, so that is one comparison.
 // `null` is the loose pile — the plain things, listed under the groups.
 const inGroup = (items, key) => (key === null
-  ? items.filter(i => (i.kind || 'thing') === 'thing')
-  : items.filter(i => (i.kind || 'thing') === key));
+  ? items.filter(i => kindOrDefault(i) === defaultKind())
+  : items.filter(i => kindOrDefault(i) === key));
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
@@ -170,22 +170,19 @@ function render() {
 
   // The counts sit on the tabs, because "12 open / 31 done together" is the one
   // number that says how the list is going.
-  const placed = S.items.filter(i => i.mod && i.mod.place).length;
-  const LABEL = { open: 'To do', done: 'Done together', map: 'Map' };
-  const COUNT = { open: open.length, done: done.length, map: placed };
-  $('spaceTabs').querySelectorAll('[data-tab]').forEach((b) => {
-    const k = b.dataset.tab;
-    b.classList.toggle('on', tab === k);
-    // The map tab used to hide until something had a place, on the theory that an
-    // empty tab is clutter. In practice that hid the feature from the only person
-    // who needed to discover it — and the empty state behind it already explains
-    // exactly what to do, which makes the tab an affordance rather than clutter.
-    b.hidden = false;
-    b.innerHTML = `${LABEL[k]}${COUNT[k] ? `<span class="n">${COUNT[k]}</span>` : ''}`;
-  });
+  // One toggle. "To do" was a tab for the state you were already in, and the
+  // count that mattered was never on it — the list underneath is the count.
+  const doneBtn = $('tabDone');
+  doneBtn.classList.toggle('on', tab === 'done');
+  doneBtn.setAttribute('aria-pressed', String(tab === 'done'));
+  doneBtn.innerHTML = `Done together${done.length ? `<span class="n">${done.length}</span>` : ''}`;
 
   const list = $('itemList');
-  list.hidden = tab === 'map';
+  // The map is parked until it has something worth showing. Its renderer and
+  // every path into it are untouched — only the way in is gone — so turning it
+  // back on is deleting this line and putting the control back.
+  if (tab === 'map') tab = 'open';
+  list.hidden = false;
   list.classList.remove('after-groups');
   $('mapWrap').hidden = tab !== 'map';
   list.classList.toggle('record', tab === 'done');
@@ -241,6 +238,15 @@ function render() {
   });
 
   visRow($('visRow'), () => S.compose, (v) => { S.compose = v; });
+  syncComposer();
+}
+
+// Who a new thing is for is a question about the thing you are writing, so it
+// should not be sitting there before there is one. It appears on the first
+// keystroke and goes again when the box is empty — which also gives the list
+// back two rows of height for the whole time you are not typing.
+function syncComposer() {
+  $('visRow').hidden = !$('newItem').value.trim();
 }
 
 /* ── kinds ──────────────────────────────────────────────────────────────── */
@@ -249,7 +255,11 @@ function render() {
 // there is no second list here to fall out of step with it.
 const kindList = () => ((S.wire && S.wire.kinds) && S.wire.kinds.length
   ? S.wire.kinds
-  : [{ id: 'thing', label: 'Thing', plural: 'Things', mods: [] }]);
+  : [{ id: 'activity', label: 'Activity', plural: 'Activities', mods: [] }]);
+// The first kind in the table IS the default — the one everything starts as.
+// Read rather than written down, so renaming it on the server renames it here.
+const defaultKind = () => kindList()[0].id;
+const kindOrDefault = (it) => (it && it.kind) || defaultKind();
 const kindOf = (id) => kindList().find(k => k.id === id) || kindList()[0];
 
 // A row of kinds, used by both the composer and the item sheet — the same
@@ -272,6 +282,7 @@ async function add() {
   const title = input.value.trim();
   if (!title) return;
   input.value = '';
+  syncComposer();
   try {
     const b = await post(`/api/space/${S.spaceId}/item`, {
       title,
@@ -279,7 +290,7 @@ async function add() {
       // Written while inside a group, so it belongs to it. Typing into a group
       // and having the thing land outside it would be baffling. The group IS
       // the kind now, so this is the same promise through a different field.
-      kind: group || 'thing',
+      kind: group || defaultKind(),
     });
     applyWire(b.state);
     await refresh();
@@ -363,7 +374,7 @@ function openItem(id) {
   $('isNotes').value = it.notes || '';
   $('isPlace').value = (it.mod && it.mod.place && it.mod.place.name) || '';
   $('isLink').value = (it.mod && it.mod.link && it.mod.link.url) || '';
-  editingKind = it.kind || 'thing';
+  editingKind = kindOrDefault(it);
   kindPicker($('isKind'), () => editingKind, (k) => { editingKind = k; kindFields(); });
   kindFields();
   // Somebody else's wording is theirs. You can see it and tick it off; you cannot
@@ -494,19 +505,20 @@ export function initSpace(changeHandler, backHandler) {
     onBack();
   });
   $('crumb').addEventListener('click', () => { group = undefined; render(); });
-  $('spaceTabs').querySelectorAll('[data-tab]').forEach((b) => {
-    b.addEventListener('click', async () => {
-      tab = b.dataset.tab;
-      render();
-      // Resolving a place name costs a request each and Nominatim is one a
-      // second, so it happens when the map is opened rather than on every render.
-      if (tab === 'map' && await resolvePlaces()) { await refresh(); }
-    });
+  // A toggle, not a tab: it flips between what you still mean to do and what
+  // you have already done together.
+  $('tabDone').addEventListener('click', () => {
+    tab = tab === 'done' ? 'open' : 'done';
+    // Coming back out of the record lands you on the whole list, not inside
+    // whichever group you happened to be in before you looked.
+    if (tab === 'done') group = undefined;
+    render();
   });
   initMap((id) => openItem(id));
   $('spaceMenu').addEventListener('click', openSettings);
   $('btnAdd').addEventListener('click', add);
   $('newItem').addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+  $('newItem').addEventListener('input', syncComposer);
 
   $('isSave').addEventListener('click', saveItem);
   $('isDelete').addEventListener('click', deleteItem);

@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 106 assertions + a headless-chromium check
+- **Tests:** `npm test` — 107 assertions + a headless-chromium check
 
 ## The model
 
@@ -146,8 +146,12 @@ exists so the shape is decided while the reasons are fresh.
 A list of things to do with someone is not homogeneous. *Watch Obsession*, *go to
 that ramen bar*, *make the ragù from the NYT* and *go swing dancing* are four
 different shapes of plan, and a recipe without its link is a reminder that you once
-saw a recipe. Five kinds: **thing** (default) · **movie** · **show** · **place** ·
-**recipe**.
+saw a recipe. Five kinds: **activity** (default) · **movie** · **show** · **place** · **recipe**.
+It was `thing` first: "go swing dancing" is an activity, and calling it a thing made
+the kind everything starts as sound like the *absence* of a kind. Renamed in the table,
+normalised by `clean()` on the way out and moved on disk by the load-time migration —
+and the client never had a literal to miss, because **the default is whichever kind is
+first** and `defaultKind()` reads it off the wire.
 
 **Why a kind and not another tag.** `groups.js` is right that a group is a tag and
 nothing more — "rainy day" and "cheap" are opinions, they overlap, and they belong to
@@ -186,6 +190,29 @@ group, and there is a test saying so.
 - **The kind rides on top of the module seam rather than beside it.** No new storage,
   no kind-specific columns: `recipe` is `['link']`, `place` is `['place']`, and a
   `javascript:` URL is refused on a recipe exactly as it is anywhere else.
+
+## The one screen
+
+**The app lands IN your first list, not on the shelf of lists.** Almost everybody has
+one and will for a long time, so the shelf was a screen you tapped through on the way
+to the only place you were ever going. The back arrow still reaches it — the common
+case is free and the rare one costs a tap, rather than the other way about.
+
+Above the list there is **one toggle, `Done together`**, not a tab bar:
+
+- **"To do" was a tab for the state you were already in.** The count that mattered was
+  never on it either; the list underneath is the count.
+- **The map is parked** until it has something worth showing. Its renderer, its
+  geocoding and every path into it are untouched — only the way in is gone, which is
+  one line in `render()` and one control in the markup. The `[hidden]`-by-layout
+  assertion that guarded it was kept and pointed at the panes directly, because that
+  trap (`display:flex` beating the UA `[hidden]` rule) is not about the map and has now
+  bitten this app twice.
+
+**The composer shows who a new thing is for only once you start typing.** Visibility is
+a question about the thing being written, so it has no business being on screen before
+there is one — and the list gets two rows of height back for the whole time you are not
+typing. It appears on the first keystroke and goes again when the box is empty.
 
 ## Groups within a list
 

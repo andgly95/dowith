@@ -234,10 +234,10 @@ async function groupRules() {
     assert.strictEqual(G.groupsOf(items)[0].open, 0, 'though it reports none to do');
   });
 
-  await t('a thing is not a group — it is the loose pile under them', () => {
-    const items = [it('a', 'movie'), it('b', 'thing'), it('c', undefined), it('d', null)];
+  await t('an activity is not a group — it is the loose pile under them', () => {
+    const items = [it('a', 'movie'), it('b', 'activity'), it('c', undefined), it('d', null)];
     assert.strictEqual(G.ungroupedCount(items), 3,
-      'no kind, an explicit thing, and rubbish all land in the same pile');
+      'no kind, an explicit activity, and rubbish all land in the same pile');
     assert.deepStrictEqual(G.inGroup(items, null).map(x => x.title), ['b', 'c', 'd']);
     assert.deepStrictEqual(G.groupsOf(items).map(g => g.key), ['movie']);
   });
@@ -255,7 +255,7 @@ async function groupRules() {
     // gone, with nothing to clean up and nothing left pointing at nothing.
     const items = [it('a', 'movie')];
     assert.strictEqual(G.groupsOf(items).length, 1);
-    items[0].kind = 'thing';
+    items[0].kind = 'activity';
     assert.strictEqual(G.groupsOf(items).length, 0);
   });
 
@@ -263,11 +263,11 @@ async function groupRules() {
     const all = [it('a', 'movie'), it('b', 'movie')];
     assert.strictEqual(G.worthGrouping(all), false,
       'one group holding the whole list tells you nothing');
-    assert.strictEqual(G.worthGrouping([...all, it('c', 'thing')]), true,
+    assert.strictEqual(G.worthGrouping([...all, it('c', 'activity')]), true,
       'now it says something');
     assert.strictEqual(G.worthGrouping([it('a', 'movie'), it('b', 'recipe')]), true);
-    assert.strictEqual(G.worthGrouping([it('a', 'thing'), it('b', undefined)]), false,
-      'a list of plain things has nothing to group');
+    assert.strictEqual(G.worthGrouping([it('a', 'activity'), it('b', undefined)]), false,
+      'a list of plain activities has nothing to group');
     assert.strictEqual(G.worthGrouping([]), false);
   });
 
@@ -330,22 +330,33 @@ async function kindRules() {
 
   const made = (raw) => items.cleanItem(raw, { id: 'i1', authorId: 'u1', spaceId: 's1' });
 
-  await t('the kinds are the four that were asked for, plus a plain thing', () => {
+  await t('the kinds are the four that were asked for, plus a plain activity', () => {
     assert.deepStrictEqual(kinds.manifest().map(k => k.id),
-      ['thing', 'movie', 'show', 'place', 'recipe']);
-    // `thing` is first and is the default, so a list that existed before kinds
-    // did keeps working and nobody is made to classify anything.
-    assert.strictEqual(kinds.DEFAULT, 'thing');
+      ['activity', 'movie', 'show', 'place', 'recipe']);
+    // The default is FIRST, and the client reads it from that position rather
+    // than writing the id down — which is what let it be renamed from `thing`
+    // without a literal anywhere in the client to miss.
+    assert.strictEqual(kinds.DEFAULT, kinds.manifest()[0].id);
+    assert.strictEqual(kinds.DEFAULT, 'activity');
   });
 
-  await t('an unrecognised kind becomes a thing rather than losing the item', () => {
+  await t('every `thing` written before the rename reads as an activity', () => {
+    // Normalised by `clean` on the way out and by the load-time migration on
+    // disk, so nothing has to translate it twice.
+    assert.strictEqual(kinds.clean('thing'), 'activity');
+    assert.strictEqual(made({ title: 'x', kind: 'thing' }).kind, 'activity');
+    const src = fs.readFileSync(path.join(__dirname, '..', 'store.js'), 'utf8');
+    assert.ok(/it\.kind === 'thing'/.test(src), 'and the file on disk is moved too');
+  });
+
+  await t('an unrecognised kind becomes the default rather than losing the item', () => {
     // A kind is a convenience. Refusing the write because a client sent a word
     // this server has not heard of would be the tail wagging the dog.
-    assert.strictEqual(made({ title: 'x', kind: 'spaceship' }).kind, 'thing');
-    assert.strictEqual(made({ title: 'x', kind: '' }).kind, 'thing');
-    assert.strictEqual(made({ title: 'x', kind: null }).kind, 'thing');
-    assert.strictEqual(made({ title: 'x' }).kind, 'thing');
-    assert.strictEqual(made({ title: 'x', kind: { id: 'movie' } }).kind, 'thing');
+    assert.strictEqual(made({ title: 'x', kind: 'spaceship' }).kind, 'activity');
+    assert.strictEqual(made({ title: 'x', kind: '' }).kind, 'activity');
+    assert.strictEqual(made({ title: 'x', kind: null }).kind, 'activity');
+    assert.strictEqual(made({ title: 'x' }).kind, 'activity');
+    assert.strictEqual(made({ title: 'x', kind: { id: 'movie' } }).kind, 'activity');
   });
 
   await t('A RECIPE KEEPS ITS LINK — the whole point of a recipe', () => {
@@ -391,8 +402,8 @@ async function kindRules() {
     // being the default: before kinds existed every item could carry a place
     // and a link, and a default that took both away would make classifying
     // compulsory just to get back what you already had.
-    assert.deepStrictEqual(kinds.modsFor('thing'), ['place', 'link']);
-    assert.strictEqual(kinds.leadsWithLink('thing'), false);
+    assert.deepStrictEqual(kinds.modsFor('activity'), ['place', 'link']);
+    assert.strictEqual(kinds.leadsWithLink('activity'), false);
   });
 
   await t('A KIND SUGGESTS AND NEVER CONFISCATES', () => {
@@ -417,12 +428,12 @@ async function kindRules() {
     assert.strictEqual(it.mod.place.name, 'AFI Silver');
   });
 
-  await t('a patch can change the kind, and garbage still lands on thing', () => {
+  await t('a patch can change the kind, and garbage still lands on the default', () => {
     const it = made({ title: 'x' });
     items.applyPatch(it, { kind: 'show' });
     assert.strictEqual(it.kind, 'show');
     items.applyPatch(it, { kind: 'nonsense' });
-    assert.strictEqual(it.kind, 'thing');
+    assert.strictEqual(it.kind, 'activity');
     // A patch that mentions no kind leaves it alone — the usual PATCH rule.
     items.applyPatch(it, { kind: 'recipe' });
     items.applyPatch(it, { title: 'y' });
@@ -451,14 +462,14 @@ async function kindRules() {
     const n = kinds.counts(mixed);
     assert.strictEqual(n.get('movie'), 2);
     assert.strictEqual(n.get('recipe'), 1);
-    assert.strictEqual(n.get('thing'), 1, 'an item with no kind counts as a thing');
+    assert.strictEqual(n.get('activity'), 1, 'an item with no kind counts as an activity');
     assert.strictEqual(n.get('show'), 0);
   });
 
   await t('only the kinds actually present get a filter chip', () => {
     // A filter for a kind you own none of is a dead control.
     assert.deepStrictEqual(kinds.present(mixed).map(k => k.id),
-      ['thing', 'movie', 'place', 'recipe']);
+      ['activity', 'movie', 'place', 'recipe']);
     assert.deepStrictEqual(kinds.present(mixed).map(k => k.count), [1, 2, 1, 1]);
     // Table order, not count order: the row must not reshuffle under your
     // finger every time something is ticked off.
@@ -477,8 +488,8 @@ async function kindRules() {
 
   await t('filtering to a kind finds the plain things too', () => {
     assert.strictEqual(kinds.inKind(mixed, 'movie').length, 2);
-    assert.strictEqual(kinds.inKind(mixed, 'thing').length, 1,
-      'an item written before kinds existed is a thing and must be findable');
+    assert.strictEqual(kinds.inKind(mixed, 'activity').length, 1,
+      'an item written before kinds existed is an activity and must be findable');
     assert.strictEqual(kinds.inKind(mixed, 'show').length, 0);
   });
 
@@ -486,7 +497,7 @@ async function kindRules() {
     assert.deepStrictEqual(kinds.present(null), []);
     assert.strictEqual(kinds.worthFiltering(null), false);
     assert.deepStrictEqual(kinds.inKind(null, 'movie'), []);
-    assert.strictEqual(kinds.counts([null, undefined]).get('thing'), 2);
+    assert.strictEqual(kinds.counts([null, undefined]).get('activity'), 2);
     assert.deepStrictEqual(kinds.modsFor('nonsense'), ['place', 'link'],
       'falls back to the default, which offers everything');
   });

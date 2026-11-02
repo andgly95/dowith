@@ -52,6 +52,10 @@ try {
     const kinds = require('./lib/kinds');
     let moved = 0;
     for (const it of state.items || []) {
+      // `thing` was the default before it was renamed to `activity`. Normalised
+      // here as well as in `kinds.clean`, so the file on disk says what the app
+      // says rather than relying on every reader to translate.
+      if (it.kind === 'thing') { it.kind = kinds.DEFAULT; moved++; }
       if (it.kind && it.kind !== kinds.DEFAULT) continue;
       const tags = Array.isArray(it.tags) ? it.tags : [];
       const hit = tags.map(t => kinds.fromTag(t)).find(Boolean);

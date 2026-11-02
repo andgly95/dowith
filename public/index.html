@@ -58,10 +58,11 @@
         <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
       </button>
     </header>
+    <!-- One control, not three. "To do" was the state you were already in, and
+         the map is parked until it has something to show — its renderer is
+         untouched, just unreachable. -->
     <div class="seg" id="spaceTabs">
-      <button data-tab="open" class="on">To do</button>
-      <button data-tab="done">Done together</button>
-      <button data-tab="map" id="tabMap" aria-label="Map">Map</button>
+      <button id="tabDone" data-tab="done" aria-pressed="false">Done together</button>
     </div>
     <button class="crumb" id="crumb" hidden>
       <svg viewBox="0 0 24 24" width="15" height="15"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>

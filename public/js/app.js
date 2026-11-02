@@ -1,4 +1,4 @@
-// Entry point: identity first, then the shelf.
+// Entry point: identity first, then straight into your first list.
 import { S } from './state.js';
 import { $, showScreen, toast, closeSheet, openSheet, initialOf } from './util.js';
 import { loadState, get, subscribePush, unsubscribePush } from './api.js';
@@ -57,7 +57,15 @@ async function start() {
   $('meSignOut').addEventListener('click', signOut);
   $('meCancel').addEventListener('click', () => closeSheet('meSheet'));
   $('meSheet').addEventListener('click', (e) => { if (e.target === $('meSheet')) closeSheet('meSheet'); });
-  toShelf();
+  // Land in the list, not on the shelf of lists.
+  //
+  // Almost everybody has one list and will have one list for a long time, so
+  // the shelf was a screen you tapped through on the way to the only place you
+  // were ever going. The back arrow in the header still gets you to it, which
+  // is the right way round: the common case is free and the rare one costs a
+  // tap, rather than the other way about.
+  const first = (S.wire && S.wire.spaces) || [];
+  if (first.length) await openSpace(first[0].id); else toShelf();
 
   // A share survives the sign-in round trip because it lives in the URL, so this
   // runs after auth rather than before it.

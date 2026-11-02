@@ -142,22 +142,35 @@ function connectCdp(wsUrl) {
     // ── Andrew ──────────────────────────────────────────────────────────
     await asUser(A);
     check(!(await visible('#scr-auth')), 'a session should get past the gate');
-    check(await visible('#scr-shelf'), 'and land on the shelf');
+    // LAND IN THE LIST, not on the shelf of lists. Almost everybody has one and
+    // will for a long time, so the shelf was a screen you tapped through on the
+    // way to the only place you were ever going.
+    check(await visible('#scr-space'), 'and land straight in the first list');
+    check(!(await visible('#scr-shelf')), 'without stopping at the shelf');
+    check(await evalJs(`document.getElementById('spaceTitle').innerText`) === 'Linnea',
+      'titled from his side');
+
+    // The shelf is still a tap away, which is the right way round — the common
+    // case is free and the rare one costs a tap.
+    await evalJs(`document.getElementById('spaceBack').click()`);
+    await sleep(600);
+    check(await visible('#scr-shelf'), 'the back arrow still reaches the shelf');
     check(/Linnea/.test(await evalJs(`document.getElementById('shelfList').innerText`)),
       'his one list is named after her');
-
     await evalJs(`document.querySelector('#shelfList [data-sp]').click()`);
-    await sleep(1200);
-    check(await visible('#scr-space'), 'tapping a list opens it');
-    check(await evalJs(`document.getElementById('spaceTitle').innerText`) === 'Linnea',
-      'and is titled from his side');
+    await sleep(1000);
+    check(await visible('#scr-space'), 'and tapping it goes back in');
 
     // Write one of each visibility through the real composer.
+    // Type FIRST, then say who it is for: the visibility row is a question about
+    // the thing being written, so it is not on screen until there is one.
     const write = async (title, vis) => {
-      await evalJs(`document.querySelector('#visRow [data-v="${vis}"]').click()`);
-      await sleep(150);
       await evalJs(`(() => { const i = document.getElementById('newItem');
-        i.value = ${JSON.stringify(title)}; })()`);
+        i.value = ${JSON.stringify(title)};
+        i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      await sleep(150);
+      await evalJs(`document.querySelector('#visRow [data-v="${vis}"]').click()`);
+      await sleep(120);
       await evalJs(`document.getElementById('btnAdd').click()`);
       await sleep(900);
     };
@@ -173,11 +186,11 @@ function connectCdp(wsUrl) {
     // ── Linnea, same list ───────────────────────────────────────────────
     // The assertion the whole app rests on.
     await asUser(L);
-    check(/Andrew/.test(await evalJs(`document.getElementById('shelfList').innerText`)),
+    // She lands in the same list, titled from her side — which is the mirroring
+    // property and the whole conceit of the app, now visible without a tap.
+    check(await visible('#scr-space'), 'she lands in it too');
+    check(await evalJs(`document.getElementById('spaceTitle').innerText`) === 'Andrew',
       'the same list, mirrored to her side');
-    await evalJs(`document.querySelector('#shelfList [data-sp]').click()`);
-    await sleep(1200);
-    check(await evalJs(`document.getElementById('spaceTitle').innerText`) === 'Andrew', 'titled Andrew');
     const hers = await evalJs(`document.getElementById('itemList').innerText`);
     check(/record shopping/.test(hers), 'she sees the shared one');
     check(/Khruangbin/.test(hers), 'and the standing wish');
@@ -189,10 +202,15 @@ function connectCdp(wsUrl) {
     // She ticks his shared one off. It leaves the to-do list and turns up in the
     // record with her name on it — a list you finish is empty, and this is what
     // makes finishing worth something.
-    check(await evalJs(`document.querySelectorAll('#spaceTabs [data-tab]').length`) === 3,
-      'the space has a to-do side, a record, and a map');
-    check(await visible('#spaceTabs [data-tab="map"]'),
-      'the map tab is always there — hiding it hid the feature from the person who had to find it');
+    // ONE CONTROL, not three. "To do" was a tab for the state you were already
+    // in, and the map is parked until it has something worth showing — its
+    // renderer is untouched, only the way in is gone.
+    check(await evalJs(`document.querySelectorAll('#spaceTabs button').length`) === 1,
+      'the list has one toggle, not a tab bar');
+    check(await visible('#tabDone'), 'and it is the record');
+    check(!(await visible('#spaceTabs [data-tab="map"]')), 'the map is parked for now');
+    check(await evalJs(`document.getElementById('tabDone').getAttribute('aria-pressed')`) === 'false',
+      'starting on what there is still to do');
     const beforeOpen = await evalJs(`document.querySelectorAll('#itemList .it').length`);
     await evalJs(`document.querySelector('#itemList .it [data-tick]').click()`);
     // Finishing something plays a ~700ms moment before the row leaves. Catch it
@@ -207,8 +225,10 @@ function connectCdp(wsUrl) {
     check(await evalJs(`document.querySelectorAll('#itemList .it').length`) === beforeOpen - 1,
       'it leaves the to-do list rather than sitting there struck through');
 
-    await evalJs(`document.querySelector('#spaceTabs [data-tab="done"]').click()`);
+    await evalJs(`document.getElementById('tabDone').click()`);
     await sleep(400);
+    check(await evalJs(`document.getElementById('tabDone').getAttribute('aria-pressed')`) === 'true',
+      'the toggle says which side you are on');
     const record = await evalJs(`document.getElementById('itemList').innerText`);
     check(/ticked it off/.test(record), `whoever does the thing gets to say so:\n${record}`);
     check(/Linnea/.test(record), 'and it is her name on it');
@@ -218,10 +238,21 @@ function connectCdp(wsUrl) {
     check(await evalJs(`document.querySelector('.composer').hidden`) === true,
       'the composer has no job in the record');
 
-    await evalJs(`document.querySelector('#spaceTabs [data-tab="open"]').click()`);
+    await evalJs(`document.getElementById('tabDone').click()`);
     await sleep(400);
     check(await evalJs(`document.querySelector('.composer').hidden`) === false,
       'and comes back on the to-do side');
+    // The visibility row is a question about the thing being written, so it is
+    // not on screen until there is one.
+    check(!(await visible('#visRow')), 'who it is for waits until you are writing');
+    await evalJs(`(() => { const i = document.getElementById('newItem');
+      i.value = 'x'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await sleep(150);
+    check(await visible('#visRow'), 'and appears on the first keystroke');
+    await evalJs(`(() => { const i = document.getElementById('newItem');
+      i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await sleep(150);
+    check(!(await visible('#visRow')), 'and goes again when the box is empty');
 
     // ...but she cannot rewrite his sentence.
     await evalJs(`document.querySelector('#itemList .it [data-open]').click()`);
@@ -239,7 +270,8 @@ function connectCdp(wsUrl) {
     // Tag two things and the to-do side becomes a set of groups you tap into.
     // A group is derived from the tags, so there is nothing to file into and
     // nothing that can outlive its members.
-    await evalJs(`document.querySelector('#spaceTabs [data-tab="open"]').click()`);
+    await evalJs(`(() => { const b = document.getElementById('tabDone');
+      if (b.getAttribute('aria-pressed') === 'true') b.click(); })()`);
     await sleep(300);
     check(!(await visible('#groupList')), 'no tags, no groups — the list is just a list');
 
@@ -296,7 +328,8 @@ function connectCdp(wsUrl) {
     // A film, a show, a place and a recipe are four different shapes of plan.
     // The kind lives where the free-text tag field used to be, and the group
     // rows it drives look exactly as they did.
-    await evalJs(`document.querySelector('#spaceTabs [data-tab="open"]').click()`);
+    await evalJs(`(() => { const b = document.getElementById('tabDone');
+      if (b.getAttribute('aria-pressed') === 'true') b.click(); })()`);
     await sleep(300);
     if (await visible('#crumb')) { await evalJs(`document.getElementById('crumb').click()`); await sleep(400); }
 
@@ -330,8 +363,8 @@ function connectCdp(wsUrl) {
     check(await visible('#isKind'), 'the sheet offers the kind');
     check(await evalJs(`document.querySelectorAll('#isKind [data-k]').length`) === 5,
       'all five of them');
-    check(await evalJs(`document.querySelector('#isKind [data-k="thing"]').classList.contains('on')`),
-      'starting on a plain thing');
+    check(await evalJs(`document.querySelector('#isKind [data-k="activity"]').classList.contains('on')`),
+      'starting on a plain activity');
 
     await evalJs(`document.querySelector('#isKind [data-k="recipe"]').click()`);
     await sleep(200);
@@ -385,7 +418,8 @@ function connectCdp(wsUrl) {
     // ── the map ─────────────────────────────────────────────────────────
     // The tab appears only once something has a place, and a pin is drawn from
     // coordinates the server resolved — never guessed.
-    await evalJs(`document.querySelector('#spaceTabs [data-tab="open"]').click()`);
+    await evalJs(`(() => { const b = document.getElementById('tabDone');
+      if (b.getAttribute('aria-pressed') === 'true') b.click(); })()`);
     await sleep(300);
     // Groups may be on screen now; drill into one so there is an item to open.
     if (await visible('#groupList')) {
@@ -436,25 +470,24 @@ function connectCdp(wsUrl) {
     const after = await evalJs(`document.getElementById('itemList').innerText`);
     check(/Khruangbin at the Anthem/.test(after), `the shared thing landed:\n${after}`);
 
-    // ── the map hides the list, by LAYOUT ───────────────────────────────
-    // `.items{display:flex}` beats the UA [hidden] rule, so this regressed once
-    // already and the property would have said it was fine.
-    {
-      await evalJs(`document.querySelector('#spaceTabs [data-tab="map"]').click()`);
-      await sleep(1600);
-      check(await visible('#mapCanvas'), 'the map should be on screen');
-      check(!(await visible('#itemList')), 'and the list should not be above it');
-      // Either pins, or a plain sentence saying why there aren't any. Not asserted
-      // as "there is a pin", because that would make this test depend on
-      // Nominatim being reachable, and a suite must not need the internet.
-      const pins = await evalJs(`document.querySelectorAll('#mapCanvas .pin').length`);
-      check(pins >= 1 || await visible('#mapCanvas .map-empty'),
-        'the map shows pins, or says plainly why it cannot');
-      check(await evalJs(`document.querySelector('.composer').hidden`) === true,
-        'and nothing to type into');
-      await evalJs(`document.querySelector('#spaceTabs [data-tab="open"]').click()`);
-      await sleep(400);
-      check(await visible('#itemList'), 'and the list comes back');
+    // ── [hidden] still means hidden, by LAYOUT ─────────────────────────
+    // The map is parked, so its flow cannot be driven from the UI — but the
+    // property that block existed to guard is not about the map. `.items{
+    // display:flex}` beats the UA `[hidden]` rule, which is how the list once
+    // stayed on screen above the map while every `.hidden` check said it was
+    // gone. Same trap that hid nothing in the item sheet a day later. Assert it
+    // where it lives, on the panes themselves, so it is still guarded when the
+    // map comes back.
+    for (const sel of ['#itemList', '#groupList', '#mapWrap', '#visRow']) {
+      const got = await evalJs(`(() => {
+        const e = document.querySelector('${sel}');
+        if (!e) return 'missing';
+        const was = e.hidden;
+        e.hidden = true;
+        const h = e.getBoundingClientRect().height + e.getClientRects().length;
+        e.hidden = was;
+        return h; })()`);
+      check(got === 0, `${sel} ignores [hidden] — an author display rule is beating it (${got})`);
     }
 
     if (errors.length) throw new Error(`page errors:\n${errors.join('\n')}`);
