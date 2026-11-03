@@ -102,6 +102,39 @@ function paintMetrics() {
   ].map(([k, v]) => `<span><i>${k}</i>${v}</span>`).join('');
 }
 
+// Show taps: a ring where the BROWSER thinks each touch landed, and the numbers
+// that would explain a gap between that and your finger. A tap offset is a
+// number like any other layout bug here, and this turns it into a measurement.
+// Until reload; nothing is stored.
+let tapsOn = false;
+function showTaps() {
+  if (tapsOn) return;
+  tapsOn = true;
+  const bar = document.createElement('div');
+  bar.className = 'tapbar';
+  document.body.appendChild(bar);
+  document.addEventListener('pointerdown', (e) => {
+    const ring = document.createElement('div');
+    ring.className = 'tapring';
+    ring.style.left = `${e.clientX}px`;
+    ring.style.top = `${e.clientY}px`;
+    document.body.appendChild(ring);
+    setTimeout(() => ring.remove(), 2500);
+    const vv = window.visualViewport;
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    const what = hit && (hit.closest('[data-day]') || {}).dataset;
+    const r = hit ? hit.getBoundingClientRect() : null;
+    bar.textContent = [
+      `tap ${Math.round(e.clientX)},${Math.round(e.clientY)}`,
+      `scrollY ${Math.round(window.scrollY)}`,
+      vv ? `vv top ${Math.round(vv.offsetTop)} pageTop ${Math.round(vv.pageTop)} h ${Math.round(vv.height)}` : 'no vv',
+      `#app top ${Math.round(document.getElementById('app').getBoundingClientRect().top)}`,
+      `hit ${what && what.day ? `day ${what.day}` : hit ? hit.tagName.toLowerCase() + (hit.className && typeof hit.className === 'string' ? '.' + hit.className.split(' ')[0] : '') : '—'}`
+        + (r ? ` [${Math.round(r.top)}–${Math.round(r.bottom)}]` : ''),
+    ].join(' · ');
+  }, true);
+}
+
 function paintNudge() {
   const supported = 'PushManager' in window && 'Notification' in window;
   $('nudgeRow').hidden = !supported;
@@ -126,6 +159,7 @@ async function start() {
     paintNudge();
   });
   $('meSignOut').addEventListener('click', signOut);
+  $('meTaps').addEventListener('click', () => { showTaps(); closeSheet('meSheet'); });
   $('meCancel').addEventListener('click', () => closeSheet('meSheet'));
   $('meSheet').addEventListener('click', (e) => { if (e.target === $('meSheet')) closeSheet('meSheet'); });
   // Land in the list, not on the shelf of lists.

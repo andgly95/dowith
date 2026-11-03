@@ -872,3 +872,17 @@ input,textarea{font:inherit;color:var(--ink)}
 .when-row .ghost[hidden]{display:none}
 .when-by{display:block;color:var(--dim);font-size:12px;margin-top:6px}
 .when-by:empty{display:none}
+
+/* Show taps (account sheet → readout). Diagnostic only. */
+.tapring{
+  position:fixed;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;
+  border:2px solid #4cf;box-shadow:0 0 0 1px #000;pointer-events:none;z-index:200;
+}
+.tapring::after{content:'';position:absolute;left:50%;top:50%;width:4px;height:4px;
+  margin:-2px 0 0 -2px;border-radius:50%;background:#4cf}
+.tapbar{
+  position:fixed;left:8px;right:8px;top:calc(var(--safe-t) + 4px);z-index:200;pointer-events:none;
+  font:11px/1.35 ui-monospace,Menlo,monospace;color:#cff;background:rgba(0,0,0,.78);
+  padding:6px 8px;border-radius:8px;
+}
+.tapbar:empty{display:none}
