@@ -5,7 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#17131a">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- `default`, not `black-translucent` — an EXPERIMENT (see CLAUDE.md, "iOS 26
+     draws a home-screen app SHORT"). Translucent drew the app 0→894 on a 956pt
+     screen and left 62pt of system band under the tab bar; `default` should
+     draw it 62→956 instead, under the status bar rather than over it.
+     Only read when the app is added to the home screen: re-add to test. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Do With">
 <title>Do With</title>
 <link rel="manifest" href="/manifest.json">
@@ -13,11 +18,13 @@
 <link rel="stylesheet" href="style.css">
 <!-- Synchronous, before first paint, so the bar never jumps. On iOS 26 a
      home-screen app is drawn SHORT of the screen (see .short-vp in style.css);
+     with black-translucent the missing strip is at the BOTTOM — with any other
+     style it is the status bar at the top, and the bottom inset is real;
      when it is, our bottom edge is nowhere near the home indicator and the
      bottom safe-area padding is dead space. Orientation-aware, because iOS
      never swaps screen.width/height. -->
 <script>try{var t=localStorage.getItem('dw-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
-<script>(function(){var d=document.documentElement;function f(){var l=innerWidth>innerHeight,s=l?Math.min(screen.width,screen.height):Math.max(screen.width,screen.height);d.classList.toggle('short-vp',s-innerHeight>=20)}f();addEventListener('resize',f)})()</script>
+<script>(function(){var d=document.documentElement;function f(){var l=innerWidth>innerHeight,s=l?Math.min(screen.width,screen.height):Math.max(screen.width,screen.height);var m=document.querySelector('meta[name=apple-mobile-web-app-status-bar-style]');d.classList.toggle('short-vp',s-innerHeight>=20&&!!m&&m.content==='black-translucent')}f();addEventListener('resize',f)})()</script>
 </head>
 <body>
 
