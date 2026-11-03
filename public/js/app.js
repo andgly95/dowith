@@ -13,6 +13,37 @@ function toShelf() {
   showScreen('scr-shelf');
 }
 
+// Themes. The palettes live in style.css, scoped by [data-theme]; this is only
+// the list of names. Per device, in localStorage, because it is a preference
+// about this screen — and an inline script in <head> applies it before first
+// paint so the app never flashes the wrong colours on launch.
+const THEMES = [
+  { id: 'dusk', label: 'Dusk' },
+  { id: 'olive', label: 'Olive' },
+];
+const currentTheme = () => document.documentElement.dataset.theme || THEMES[0].id;
+
+function applyTheme(id) {
+  document.documentElement.dataset.theme = id;
+  try { localStorage.setItem('dw-theme', id); } catch (_) {}
+  // The status bar on Android/desktop reads theme-color; Safari 26 samples the
+  // page instead, which follows on its own because html carries --bg.
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta && bg) meta.content = bg;
+}
+
+function paintThemes() {
+  const cur = currentTheme();
+  const el = $('themePick');
+  el.innerHTML = THEMES.map(t => `<button type="button" data-theme="${t.id}"
+    class="${t.id === cur ? 'on' : ''}" aria-pressed="${t.id === cur}"><i></i>${t.label}</button>`).join('');
+  el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    applyTheme(b.dataset.theme);
+    paintThemes();
+  }));
+}
+
 async function openAccount() {
   const me = S.wire && S.wire.me;
   if (!me) return;
@@ -28,6 +59,7 @@ async function openAccount() {
       : `${sq.people} people found · linking not built yet`;
   } catch (_) { $('squareState').textContent = 'unavailable'; }
   paintNudge();
+  paintThemes();
   paintMetrics();
   openSheet('meSheet');
 }
@@ -119,6 +151,7 @@ async function start() {
 }
 
 async function boot() {
+  applyTheme(currentTheme());   // sync theme-color with whatever <head> chose
   initAuth(() => start());
   const status = await checkAuth();
   if (status !== 'in') return showAuth();

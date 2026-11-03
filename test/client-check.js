@@ -500,6 +500,23 @@ function connectCdp(wsUrl) {
     check(await evalJs(`getComputedStyle(document.getElementById('newItem'), '::placeholder').color`)
       !== await evalJs(`getComputedStyle(document.getElementById('newItem')).color`),
       'a placeholder is not drawn in the colour of typed text');
+    // THEMES ARE TOKENS. Switching one must repaint what is actually drawn —
+    // including the tints, which used to be copied rgba() values and would
+    // have stayed coral under any theme.
+    await evalJs(`document.documentElement.dataset.theme = 'olive'`);
+    await sleep(600);
+    const olive = await evalJs(`({
+      bg: getComputedStyle(document.body).backgroundColor,
+      pill: getComputedStyle(document.querySelector('#kindNav .pill')).backgroundColor,
+    })`);
+    check(olive.bg === 'rgb(27, 30, 18)', `olive paints the page: ${olive.bg}`);
+    check(!/242, 132, 92/.test(olive.pill) && !/0\.949/.test(olive.pill),
+      `and the tab marker is not left coral: ${olive.pill}`);
+    if (process.env.SHOT) {
+      const { data } = await S('Page.captureScreenshot', { format: 'png' });
+      require('fs').writeFileSync(process.env.SHOT, Buffer.from(data, 'base64'));
+    }
+    await evalJs(`document.documentElement.dataset.theme = 'dusk'`);
     check(await evalJs(`document.querySelectorAll('#itemList .it').length`) >= 1,
       'classifying moved it to the Recipes tab');
 

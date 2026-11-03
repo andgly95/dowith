@@ -3,7 +3,7 @@
    than to a productivity app. Deep plum ground, one warm accent, generous type,
    and no checkbox grid. */
 
-:root{
+:root,[data-theme="dusk"]{
   --bg:#17131a;          /* deep warm plum-black */
   --card:#211c26;
   --card2:#2b2430;
@@ -15,6 +15,9 @@
   --accent:#f2845c;      /* warm coral — the only saturated thing on the page */
   --accent2:#8fb9a8;     /* sage, for something already done */
   --warn:#e0714f;
+  --on-accent:#2a1206;   /* text on a filled accent button */
+  --on-accent2:#10251d;
+  --scrim:rgba(10,7,12,.86);
   /* The real insets. These were clamped once, on a wrong theory that iOS was
      reporting ~97pt at the bottom; the readout says 62 / 34, which is honest. */
   --safe-t:env(safe-area-inset-top,0px);
@@ -22,6 +25,30 @@
   --serif:'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif;
   --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
   --page:620px;
+}
+
+/* ── Themes ───────────────────────────────────────────────────────────────
+   A theme is the palette tokens and nothing else; every colour in this file
+   reads them (tints go through color-mix rather than a copied rgba), so a new
+   theme is one block here and one entry in THEMES in app.js.
+   Scoped by ATTRIBUTE, not just on :root, so a swatch in the picker can carry
+   data-theme itself and paint from the very same values — no second copy of
+   the palette in JavaScript to drift out of step. */
+[data-theme="olive"]{
+  --bg:#1b1e12;          /* deep olive */
+  --card:#252916;
+  --card2:#2e331d;
+  --line:#3b4126;
+  --ink:#eef0e3;
+  --ink2:#c5c9b3;
+  --dim:#90957c;
+  --faint:#686d57;
+  --accent:#c8b45a;      /* brass — the warm thing against the green */
+  --accent2:#9dbb84;     /* leaf, for something already done */
+  --warn:#d9824e;
+  --on-accent:#221c05;
+  --on-accent2:#13200d;
+  --scrim:rgba(10,11,5,.86);
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -355,8 +382,8 @@ input,textarea{font:inherit;color:var(--ink)}
   padding:3px 7px;border-radius:6px;background:var(--card2);color:var(--dim);
   font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
 }
-.chip.private{color:var(--accent);background:rgba(242,132,92,.13)}
-.chip.public{color:var(--accent2);background:rgba(143,185,168,.13)}
+.chip.private{color:var(--accent);background:color-mix(in srgb, var(--accent) 13%, transparent)}
+.chip.public{color:var(--accent2);background:color-mix(in srgb, var(--accent2) 13%, transparent)}
 .chip.elsewhere{font-style:italic;text-transform:none;letter-spacing:0;font-size:11px}
 .chip.place::before{content:'⌖ ';opacity:.8}
 
@@ -392,12 +419,12 @@ input,textarea{font:inherit;color:var(--ink)}
 }
 .pin span{
   order:1;font:11px/1.25 var(--sans);color:var(--ink);
-  background:rgba(23,19,26,.86);padding:3px 6px;border-radius:5px;
+  background:color-mix(in srgb, var(--bg) 86%, transparent);padding:3px 6px;border-radius:5px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;
 }
 .pin.done i{background:var(--accent2)}
 .pin.done span{color:var(--dim)}
-.pin.private i{background:var(--accent);box-shadow:0 0 0 3px rgba(242,132,92,.22)}
+.pin.private i{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent)}
 .zoomers{position:absolute;right:26px;top:8px;display:flex;flex-direction:column;gap:5px;z-index:3}
 .zoomers button{
   width:32px;height:32px;border-radius:50%;background:var(--card);color:var(--ink2);
@@ -407,7 +434,7 @@ input,textarea{font:inherit;color:var(--ink)}
 .zoomers button:active{background:var(--card2);color:var(--ink)}
 .map-canvas .attrib{
   position:absolute;right:6px;bottom:5px;font:9.5px/1 var(--sans);
-  color:var(--ink2);background:rgba(23,19,26,.7);padding:2px 5px;border-radius:3px;
+  color:var(--ink2);background:color-mix(in srgb, var(--bg) 70%, transparent);padding:2px 5px;border-radius:3px;
 }
 
 /* ─── composer ──────────────────────────────────────────────────────────── */
@@ -427,8 +454,8 @@ input,textarea{font:inherit;color:var(--ink)}
   font:11px/1.35 var(--sans);letter-spacing:.04em;
 }
 .vis-row button b{display:block;font-size:12.5px;font-weight:600;letter-spacing:0}
-.vis-row button.on{background:var(--accent);border-color:var(--accent);color:#2a1206}
-.vis-row button.on b{color:#2a1206}
+.vis-row button.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.vis-row button.on b{color:var(--on-accent)}
 .comp-in{display:flex;gap:10px;align-items:center}
 .comp-in input{
   flex:1;min-width:0;background:var(--card);border:1px solid var(--line);
@@ -437,14 +464,14 @@ input,textarea{font:inherit;color:var(--ink)}
 .comp-in input:focus{border-color:var(--accent)}
 .comp-in button{
   width:46px;height:46px;flex:none;border-radius:13px;
-  background:var(--accent);color:#2a1206;font-size:24px;font-weight:600;
+  background:var(--accent);color:var(--on-accent);font-size:24px;font-weight:600;
   display:grid;place-items:center;
 }
 .comp-in button:active{opacity:.8}
 
 /* ─── sheets ────────────────────────────────────────────────────────────── */
 .modal{
-  position:fixed;inset:0;background:rgba(10,7,12,.86);backdrop-filter:blur(7px);
+  position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(7px);
   display:grid;place-items:center;z-index:70;padding:20px;
 }
 /* an author `display` beats the UA rule for [hidden] — restore it explicitly */
@@ -473,7 +500,7 @@ input,textarea{font:inherit;color:var(--ink)}
 }
 .fld input:focus,.fld textarea:focus{border-color:var(--accent)}
 .primary{
-  width:100%;padding:14px;border-radius:13px;background:var(--accent);color:#2a1206;
+  width:100%;padding:14px;border-radius:13px;background:var(--accent);color:var(--on-accent);
   font-size:15.5px;font-weight:600;margin-top:4px;
 }
 .primary:active{opacity:.85}
@@ -517,7 +544,7 @@ input,textarea{font:inherit;color:var(--ink)}
   border-radius:50%;background:var(--ink2);transition:transform .18s,background .18s;
 }
 .switch:checked{background:var(--accent)}
-.switch:checked::after{transform:translateX(18px);background:#2a1206}
+.switch:checked::after{transform:translateX(18px);background:var(--on-accent)}
 .switch:disabled{opacity:.45}
 
 .invite-box{background:var(--card2);border-radius:13px;padding:14px;margin:16px 0}
@@ -548,13 +575,25 @@ input,textarea{font:inherit;color:var(--ink)}
    shape as .vis-row directly above it — two controls doing the same job on the
    same screen should look like it. */
 .kind-row{display:flex;gap:6px;flex-wrap:wrap}
+/* The theme picker: each button IS the theme (data-theme on it), so its own
+   background and dot are drawn from the palette it would switch to. */
+.theme-row{display:flex;gap:8px;margin-top:9px}
+.theme-row button{
+  display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:10px;
+  background:var(--bg);color:var(--ink2);border:1px solid var(--line);
+  font:13px/1 var(--sans);
+}
+.theme-row button i{width:11px;height:11px;border-radius:50%;background:var(--accent);
+  box-shadow:5px 0 0 -1px var(--accent2)}
+.theme-row button i{margin-right:5px}
+.theme-row button.on{border-color:var(--accent);color:var(--ink)}
 .kind-row[hidden]{display:none}
 .kind-row button{
   padding:7px 11px;border-radius:9px;background:var(--card);
   border:1px solid var(--line);color:var(--dim);
   font:12px/1 var(--sans);letter-spacing:.03em;
 }
-.kind-row button.on{background:var(--accent);border-color:var(--accent);color:#2a1206}
+.kind-row button.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 
 /* The badge on a row. A plain thing gets none: the badge exists to tell a film
    from a recipe at a glance, and when everything is a thing there is nothing
@@ -614,7 +653,7 @@ input,textarea{font:inherit;color:var(--ink)}
 .kindnav{position:relative}
 .kindnav .pill{
   position:absolute;left:0;top:0;border-radius:14px;pointer-events:none;
-  background:rgba(242,132,92,.16);transform-origin:center;z-index:0;
+  background:color-mix(in srgb, var(--accent) 16%, transparent);transform-origin:center;z-index:0;
 }
 .kindnav button{position:relative;z-index:1;transition:color .22s ease}
 .kindnav button.on{color:var(--accent)}
@@ -685,19 +724,19 @@ input,textarea{font:inherit;color:var(--ink)}
 .card .seen{
   position:absolute;top:7px;left:7px;padding:2px 7px;border-radius:7px;
   font:600 9.5px/1.5 var(--sans);letter-spacing:.07em;text-transform:uppercase;
-  background:rgba(143,185,168,.18);color:var(--accent2);
+  background:color-mix(in srgb, var(--accent2) 18%, transparent);color:var(--accent2);
   backdrop-filter:blur(3px);
 }
 
 .card .tick{
   position:absolute;right:6px;bottom:6px;width:28px;height:28px;border-radius:50%;
   display:grid;place-items:center;cursor:pointer;
-  background:rgba(23,19,26,.62);border:1px solid rgba(244,238,233,.22);
+  background:color-mix(in srgb, var(--bg) 62%, transparent);border:1px solid color-mix(in srgb, var(--ink) 22%, transparent);
   backdrop-filter:blur(4px);color:var(--ink);
 }
 .card .tick svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.6;
   stroke-linecap:round;stroke-linejoin:round;opacity:.5}
-.card.done .tick{background:var(--accent2);border-color:var(--accent2);color:#10251d}
+.card.done .tick{background:var(--accent2);border-color:var(--accent2);color:var(--on-accent2)}
 .card.done .tick svg{opacity:1}
 .card .tick:active{transform:scale(.92)}
 
@@ -735,7 +774,7 @@ input,textarea{font:inherit;color:var(--ink)}
   display:flex;align-items:center;gap:11px;width:100%;text-align:left;cursor:pointer;
   background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 11px 8px 8px;
 }
-.cand.on{border-color:var(--accent);background:rgba(242,132,92,.1)}
+.cand.on{border-color:var(--accent);background:color-mix(in srgb, var(--accent) 10%, transparent)}
 .cand:active{background:var(--card2)}
 .cand b{flex:1;min-width:0;font:600 14px/1.3 var(--sans);color:var(--ink);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}

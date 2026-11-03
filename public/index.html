@@ -16,6 +16,7 @@
      when it is, our bottom edge is nowhere near the home indicator and the
      bottom safe-area padding is dead space. Orientation-aware, because iOS
      never swaps screen.width/height. -->
+<script>try{var t=localStorage.getItem('dw-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <script>(function(){var d=document.documentElement;function f(){var l=innerWidth>innerHeight,s=l?Math.min(screen.width,screen.height):Math.max(screen.width,screen.height);d.classList.toggle('short-vp',s-innerHeight>=20)}f();addEventListener('resize',f)})()</script>
 </head>
 <body>
@@ -174,6 +175,10 @@
       <span><b>Nudges</b><small id="nudgeSub">when someone adds something</small></span>
       <input type="checkbox" id="optNudge" class="switch">
     </label>
+    <div class="opt-row" id="themeRow">
+      <span><b>Theme</b><small>on this device</small>
+        <span class="theme-row" id="themePick"></span></span>
+    </div>
     <div class="fld"><span>This screen</span>
       <div class="metrics" id="meMetrics">—</div></div>
     <button class="ghost" id="meSignOut">Sign out</button>

@@ -591,6 +591,12 @@ entitled to. There is no route that takes a user id.
 
 - **`lib/spaces.js` is pure and is the source of truth for who sees what.** Don't
   mirror `canSee` into the client; the client renders what the server sent.
+- **Every colour is a token.** Themes (`dusk`, `olive`) are one `[data-theme]` block
+  of tokens each in `style.css`, plus a name in `THEMES` in `app.js`. Tints go through
+  `color-mix(… var(--accent) 16%, transparent)`, never a copied `rgba()`, or they stay
+  coral under every other theme. Scoped by attribute rather than only `:root`, so a
+  picker swatch carries `data-theme` itself and paints from the same values. Per
+  device (`localStorage`), applied by an inline `<head>` script before first paint.
 - **`esc()` for anything interpolated into innerHTML** — this app shows other
   people's words to you.
 - **Assert visibility by layout in tests** (`offsetWidth`/`getClientRects`), never
