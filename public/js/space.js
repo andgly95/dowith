@@ -31,21 +31,68 @@ export async function openSpace(id) {
   tab = 'open';
   kindTab = null;
   pillX = null;   // a new list starts on its first tab; nothing to travel from
+  fresh.clear();
+  lastSig = null;
   showScreen('scr-space');
   $('itemList').innerHTML = '<div class="empty">Loading…</div>';
   await refresh();
 }
 
-export async function refresh() {
+// `quiet` is coming back to the app: nobody asked for this load, so a failure
+// says nothing, and a list that has not changed is not redrawn — a redraw
+// replaces every row, and one landing under a finger swallows the tap.
+export async function refresh({ quiet = false } = {}) {
   if (!S.spaceId) return;
   try {
     const b = await get(`/api/space/${S.spaceId}/items`);
+    const sig = JSON.stringify([b.space, b.items, b.tabs]);
+    if (quiet && sig === lastSig) return;
+    lastSig = sig;
     S.space = b.space;
     S.items = b.items;
     S.groups = b.groups || [];
     S.tabs = b.tabs || [];
+    noteFresh(S.items);
     render();
-  } catch (_) { toast('Could not load that list'); }
+  } catch (_) { if (!quiet) toast('Could not load that list'); }
+}
+let lastSig = null;
+
+/* ── what is new since you last looked ─────────────────────────────────────
+
+   The other person added something while you were away. The list is the same
+   list either way, so without a mark their thing is just one more row and the
+   fact that THEY put it there — the whole point of a list kept with somebody —
+   goes unseen.
+
+   "Since you last looked" is the newest createdAt you have been shown, per
+   person and per list, in localStorage. It is the SERVER's clock on both sides
+   of the comparison, so a phone that is a few minutes out cannot mark
+   everything or nothing. The first visit on a device sets the mark silently:
+   everything is new to a phone that has never looked, and a list where every
+   row pulses has said nothing.
+
+   A row is marked once — the first time it is drawn — and then it is just a
+   row. Per-device and best-effort: storage that throws means nothing is ever
+   marked, which is the old behaviour, not a broken one. */
+const fresh = new Set();
+
+function noteFresh(items) {
+  const me = S.wire && S.wire.me && S.wire.me.id;
+  if (!me) return;
+  const key = `dw-seen:${me}:${S.spaceId}`;
+  const newest = items.reduce((m, i) => Math.max(m, i.createdAt || 0), 0);
+  let seen = null;
+  try {
+    const v = localStorage.getItem(key);
+    if (v !== null && Number.isFinite(Number(v))) seen = Number(v);
+  } catch (_) { return; }
+  if (seen !== null) {
+    for (const i of items) if (!i.mine && !i.done && (i.createdAt || 0) > seen) fresh.add(i.id);
+  }
+  if (seen === null || newest > seen) {
+    try { localStorage.setItem(key, String(newest)); } catch (_) {}
+  }
 }
 
 /* ── render ─────────────────────────────────────────────────────────────── */
@@ -93,10 +140,11 @@ function itemHtml(it) {
       target="_blank" rel="noopener noreferrer">${
       lead ? `${esc(k.go || 'Open')} ↗` : 'link'}</a>`);
   }
+  const isNew = !it.done && fresh.has(it.id);
   if (it.done && it.doneByName) bits.push(`<span class="who">${esc(it.doneByName)} ticked it off ${esc(ago(it.doneAt))}</span>`);
-  else if (!it.mine) bits.push(`<span class="who">${esc(it.author.name)}</span>`);
+  else if (!it.mine) bits.push(`<span class="who">${esc(it.author.name)}${isNew ? '<em class="new">new</em>' : ''}</span>`);
 
-  return `<div class="it ${it.done ? 'done' : ''}" data-it="${esc(it.id)}">
+  return `<div class="it ${it.done ? 'done' : ''} ${isNew ? 'fresh' : ''}" data-it="${esc(it.id)}">
     <button class="tick" data-tick aria-label="${it.done ? 'Not done after all' : 'Done'}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"/></svg>
     </button>
@@ -214,6 +262,9 @@ function render() {
         : shown.map(itemHtml).join(''))
       : `<div class="empty">${esc(emptyLine())}</div>`;
   }
+
+  // Marked once, the first time it is drawn; after that it is just a row.
+  list.querySelectorAll('.fresh[data-it]').forEach(el => fresh.delete(el.dataset.it));
 
   list.querySelectorAll('[data-it]').forEach((row) => {
     const id = row.dataset.it;
@@ -350,12 +401,14 @@ function cardHtml(it) {
   const src = posterSrc(w);
   const year = w && w.year ? String(w.year) : '';
   const prov = (w && w.providers) || [];
-  return `<div class="card ${it.done ? 'done' : ''}" data-it="${esc(it.id)}">
+  const isNew = !it.done && fresh.has(it.id);
+  return `<div class="card ${it.done ? 'done' : ''} ${isNew ? 'fresh' : ''}" data-it="${esc(it.id)}">
     <div class="art" data-open>
       ${src
     ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async">`
     : `<div class="noart"><span>${esc(it.title)}</span></div>`}
       ${it.done ? '<div class="seen">Seen</div>' : ''}
+      ${isNew ? '<div class="new">New</div>' : ''}
       <button class="tick" data-tick aria-label="${it.done ? 'Not done after all' : 'Done'}">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"/></svg>
       </button>
@@ -378,9 +431,14 @@ function renderNav() {
     : kindList().map(k => ({ ...k, count: 0 }));
   if (!kindTab) kindTab = defaultKind();
   const nav = $('kindNav');
+  // A dot on any OTHER tab holding something new from them, so a film she
+  // added while you are looking at Activities is not waiting there unseen. Not
+  // on the tab you are on — the row itself says so there.
+  const newIn = new Set((S.items || []).filter(i => fresh.has(i.id) && !i.done).map(kindOrDefault));
   nav.innerHTML = tabs.map(k => `<button data-kind="${esc(k.id)}"
       class="${k.id === kindTab ? 'on' : ''}" aria-current="${k.id === kindTab ? 'page' : 'false'}">
-      <span class="ic"><span class="gl">${iconFor(k.id)}</span></span>
+      <span class="ic"><span class="gl">${iconFor(k.id)}</span>${
+        k.id !== kindTab && newIn.has(k.id) ? '<i class="dot" role="img" aria-label="something new"></i>' : ''}</span>
       <b>${k.count ? `<i class="n">${k.count > 99 ? '99+' : k.count}</i>` : ''}${
         esc(k.plural)}</b>
       </button>`).join('') + '<span class="pill" aria-hidden="true"></span>';

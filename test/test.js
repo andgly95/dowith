@@ -1100,6 +1100,79 @@ async function nudges() {
     assert.strictEqual(await push.itemAdded(item('private'), () => 'x'), 0);
   });
 
+  /* Ticking something off. "Linnea ticked off record shopping" is the nice
+     bit — and every row below is the same question as the ones above, asked
+     about a different moment: could this reach somebody it should not? */
+  const ticked = (vis, by, extra = {}) => {
+    const it = { ...item(vis), id: `t-${vis}-${by}`, done: true, doneBy: by, doneAt: 2, ...extra };
+    st.items = [it];
+    return it;
+  };
+
+  await t('a tick-off is told to the others, and the AUTHOR is one of them', () => {
+    // Linnea ticks off Andrew's thing — Andrew is exactly who wants to know.
+    assert.deepStrictEqual(names(push.doneAudienceFor(ticked('shared', 'L').id, 'L')), ['A']);
+    assert.deepStrictEqual(names(push.doneAudienceFor(ticked('shared', 'A').id, 'A')), ['L'],
+      'and when he ticks off his own, she hears');
+  });
+
+  await t('whoever ticked it is never told about it', () => {
+    for (const v of ['shared', 'public']) {
+      for (const by of ['A', 'L']) {
+        assert.ok(!push.doneAudienceFor(ticked(v, by).id, by).some(u => u.id === by), `${v} by ${by}`);
+      }
+    }
+  });
+
+  await t('a PRIVATE thing ticked off is told to nobody', () => {
+    assert.deepStrictEqual(push.doneAudienceFor(ticked('private', 'A').id, 'A'), []);
+  });
+
+  await t('a standing wish ticked off is told only to people who know who did it', () => {
+    // Sam can see Andrew's standing wish, but he and Linnea share nothing — he
+    // must not get "Linnea ticked something off" about a stranger.
+    assert.deepStrictEqual(names(push.doneAudienceFor(ticked('public', 'L').id, 'L')), ['A']);
+    // Andrew ticking it off is news to both of the people he shares a list with.
+    assert.deepStrictEqual(names(push.doneAudienceFor(ticked('public', 'A').id, 'A')), ['L', 'S']);
+  });
+
+  await t('the tick-off audience never exceeds who could see it on a screen', () => {
+    for (const v of ['private', 'shared', 'public']) {
+      for (const by of ['A', 'L', 'S']) {
+        const it = ticked(v, by);
+        for (const u of push.doneAudienceFor(it.id, by)) {
+          assert.ok(SP.canSee(it, u.id, st.spaces), `${v} by ${by}: ${u.id} cannot see it`);
+        }
+      }
+    }
+  });
+
+  await t('decided when it SENDS: un-ticked, re-ticked by someone else, or deleted is nobody', () => {
+    // The route waits before sending so a mis-tap can be undone. Whatever
+    // happened in the meantime wins over what was true at the tap.
+    const it = ticked('shared', 'L');
+    it.done = false; it.doneBy = null;
+    assert.deepStrictEqual(push.doneAudienceFor(it.id, 'L'), [], 'un-ticked in the meantime');
+    it.done = true; it.doneBy = 'A';
+    assert.deepStrictEqual(push.doneAudienceFor(it.id, 'L'), [],
+      'somebody else ticked it since — theirs is the nudge that counts');
+    it.doneBy = 'L';
+    it.visibility = 'private';
+    assert.deepStrictEqual(push.doneAudienceFor(it.id, 'L'), [], 'made private in the meantime');
+    it.visibility = 'shared';
+    st.items = [];
+    assert.deepStrictEqual(push.doneAudienceFor(it.id, 'L'), [], 'deleted in the meantime');
+  });
+
+  await t('a tick-off waiting to send is cancelled by stop()', async () => {
+    // A held timer that outlives the process's work would keep a test run (or a
+    // shutdown) alive for half a minute; stop() has to take them with it.
+    const it = ticked('shared', 'L');
+    push.doneLater(it, 'L', null, 60000);
+    push.stop();
+    assert.strictEqual(await push.itemDone(it.id, 'L', null), 0, 'and sending by hand reaches no live device');
+  });
+
   await t('the weekly digest only fires on its day, at its hour, once', async () => {
     st.items = Array.from({ length: 4 }, (_, i) => ({
       id: `d${i}`, spaceId: 'sp1', authorId: 'A', title: `thing ${i}`,

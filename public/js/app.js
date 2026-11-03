@@ -4,7 +4,7 @@ import { $, showScreen, toast, closeSheet, openSheet, initialOf } from './util.j
 import { loadState, get, subscribePush, unsubscribePush } from './api.js';
 import { initAuth, checkAuth, showAuth, signOut } from './auth.js';
 import { initShelf, renderShelf } from './shelf.js';
-import { initSpace, openSpace } from './space.js';
+import { initSpace, openSpace, refresh } from './space.js';
 import { initShare, incoming, openShare } from './share.js';
 
 function toShelf() {
@@ -110,7 +110,7 @@ function paintNudge() {
   $('optNudge').checked = on;
   $('nudgeSub').textContent = on
     ? 'on for this device — and a nudge on Sundays'
-    : 'when someone adds something to a list';
+    : 'when someone adds or ticks off something';
 }
 
 async function start() {
@@ -144,9 +144,18 @@ async function start() {
   if (inc) openShare(inc);
 
   // Somebody else may have added something while you were away.
+  //
+  // The list as well as the shelf. This used to stop at the shelf, which was
+  // fine while the app opened on the shelf — and then it started landing in the
+  // list, so coming back to it showed whatever was there when you left. Tapping
+  // a nudge lands here too: the notification focuses the open app rather than
+  // reloading it, so without this, "Linnea added something" opened onto a list
+  // without it.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
-    loadState().then(() => { if (S.spaceId) return; renderShelf(); }).catch(() => {});
+    loadState()
+      .then(() => (S.spaceId ? refresh({ quiet: true }) : renderShelf()))
+      .catch(() => {});
   });
 }
 

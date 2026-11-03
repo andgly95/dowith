@@ -365,6 +365,54 @@ input,textarea{font:inherit;color:var(--ink)}
   .it.celebrating .tick svg path{stroke-dashoffset:0}
   .it.celebrating .it-bd b{animation:none;color:var(--faint);text-decoration-color:var(--faint)}
 }
+/* ─── something new from them ───────────────────────────────────────────────
+   The other person added it while you were away (see noteFresh in space.js).
+   It breathes twice and settles, and the name under it says "new" — so the
+   moment is noticed and then the row is just a row. Twice, not forever: a
+   pulse that never stops is an alarm, and this is good news.
+
+   The glow is a pseudo-element BEHIND the row rather than a background on it,
+   so it can be rounded and overhang the row a little without rounding the
+   hairline under it. `isolation` keeps z-index:-1 inside the row instead of
+   sending it behind the page. */
+@keyframes fresh-breathe{
+  0%{opacity:0} 22%{opacity:1} 45%{opacity:.3} 68%{opacity:.85} 100%{opacity:0}
+}
+.it.fresh{position:relative;isolation:isolate}
+.it.fresh::before{
+  content:'';position:absolute;inset:3px -9px;border-radius:13px;z-index:-1;
+  background:color-mix(in srgb, var(--accent) 15%, transparent);
+  opacity:0;pointer-events:none;
+  animation:fresh-breathe 2.6s ease-in-out .25s;
+}
+.it-meta .new{
+  font-style:normal;font-weight:600;color:var(--accent);margin-left:6px;
+  letter-spacing:.06em;text-transform:uppercase;font-size:10px;
+}
+
+/* A poster does it with a ring rather than a wash — a tint over the art would
+   only muddy the poster — and a tag where "Seen" goes. Just "New": a card is
+   three to a row, "New from Andrew" truncated, and only the other person's
+   things are ever marked, so the name was saying nothing. */
+@keyframes fresh-ring{
+  0%{box-shadow:0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent)}
+  22%{box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 85%, transparent)}
+  45%{box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent)}
+  68%{box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 70%, transparent)}
+  100%{box-shadow:0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent)}
+}
+.card.fresh .art{animation:fresh-ring 2.6s ease-in-out .25s}
+.card .new{
+  position:absolute;top:7px;left:7px;padding:2px 7px;border-radius:7px;
+  font:600 9.5px/1.5 var(--sans);letter-spacing:.07em;text-transform:uppercase;
+  background:color-mix(in srgb, var(--bg) 70%, transparent);color:var(--accent);
+  backdrop-filter:blur(3px);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .it.fresh::before,.card.fresh .art{animation:none}
+}
+
 .it-bd{flex:1;min-width:0}
 .it-bd b{
   display:block;font:400 17px/1.4 var(--serif);letter-spacing:-.005em;
@@ -648,6 +696,18 @@ input,textarea{font:inherit;color:var(--ink)}
   transition:background .16s ease,color .16s ease;
 }
 .kindnav .gl{display:block;line-height:0}
+/* Something new from them on a tab you are not looking at. A dot, not a
+   number: the count beside the label is already "how many", and this only
+   says "go and look". Ringed in the page colour so it reads cut out of the
+   icon rather than stuck on top of it. */
+.kindnav .ic{position:relative}
+@keyframes dot-pulse{0%,100%{transform:scale(1)} 50%{transform:scale(1.45)}}
+.kindnav .dot{
+  position:absolute;top:1px;right:9px;width:7px;height:7px;border-radius:50%;
+  background:var(--accent);box-shadow:0 0 0 2px var(--bg);
+  animation:dot-pulse 1.1s ease-in-out .3s 3;
+}
+@media (prefers-reduced-motion: reduce){ .kindnav .dot{animation:none} }
 /* The marker is one travelling element (see placePill in space.js), not a
    background on the active tab — so it can move between them. */
 .kindnav{position:relative}

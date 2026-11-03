@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 126 assertions + a headless-chromium check
+- **Tests:** `npm test` — 133 assertions + a headless-chromium check
 
 ## The model
 
@@ -271,6 +271,24 @@ goes; it is not the primary action, the list under it is.
   assertion that guarded it was kept and pointed at the panes directly, because that
   trap (`display:flex` beating the UA `[hidden]` rule) is not about the map and has now
   bitten this app twice.
+
+**Coming back to the app refreshes the list you are in.** It used to refresh only
+the shelf, which was right while the app opened on the shelf — and then it started
+landing in the list, so returning showed whatever was there when you left. Tapping
+a nudge lands here too: the notification *focuses* the open app rather than
+reloading it. The refresh is `quiet` — no error toast for a load nobody asked for,
+and an unchanged list is **not redrawn**, because a redraw replaces every row and
+one landing under a finger swallows the tap.
+
+**What the other person added since you last looked is marked — once.** It breathes
+twice and settles, the name under it says `NEW` (a poster gets a ring and a `New`
+tag where `Seen` goes), and any *other* tab holding something new gets a small dot.
+"Since you last looked" is the newest `createdAt` you have been shown, per person
+and per list, in `localStorage` — server clock on both sides, so a phone a few
+minutes out cannot mark everything or nothing. The first visit on a device sets the
+mark silently: everything is new to a phone that has never looked, and a list where
+every row pulses has said nothing. Marked the first time it is drawn, then it is
+just a row; reduced motion keeps the label and drops the pulse.
 
 **The composer shows who a new thing is for only once you start typing.** Visibility is
 a question about the thing being written, so it has no business being on screen before
@@ -523,6 +541,19 @@ because a lock screen reads itself out loud in a room.
 - The author is never told about their own thought.
 - `itemAdded` fires **after the response and is never awaited** — a slow push
   service must not make adding something feel slow.
+- **Ticking something off tells the others** — "Linnea ticked off record
+  shopping" is the nice bit, and it used to reach nobody until they happened to
+  look. `doneAudienceFor()` is `audienceFor()` minus whoever ticked it (NOT minus
+  the author: when Linnea ticks off Andrew's thing, Andrew is who wants to know),
+  narrowed to people who share a list with the ticker — a standing wish is
+  visible across all its author's lists, and Sam must not hear "Linnea ticked
+  something off" about a stranger. Narrows, never widens; asserted as a property.
+- **Held 30s, decided at send time.** The row vanishes into the record, so
+  undoing a mis-tap takes a few seconds; the nudge waits that long and then asks
+  the store as it is *now* — un-ticked, re-ticked by somebody else, deleted or
+  made private in the meantime all mean nobody. Only the not-done → done
+  transition schedules one; a second tick restarts the wait rather than queueing
+  a second nudge, and `stop()` cancels anything pending.
 - The weekly digest goes out Sunday evening, needs at least three open things to be
   worth sending, and a failed send doesn't burn the week. "Not much on the list" is
   not a failure and doesn't count against the retry budget.

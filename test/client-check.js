@@ -652,6 +652,66 @@ function connectCdp(wsUrl) {
     await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
     await sleep(400);
 
+    // ── coming back to it ───────────────────────────────────────────────
+    // Andrew adds something on his phone while Linnea's app sits in the
+    // background. When she comes back, it has to be THERE — the return used to
+    // refresh only the shelf, and the app no longer opens on the shelf — and it
+    // has to say it is new, because "he put it there" is the point.
+    const asAndrew = (p, body) => fetch(`${BASE}${p}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: `${AUTH.COOKIE}=${AUTH.sign(A, SECRET)}` },
+      body: JSON.stringify(body),
+    }).then((r) => { if (!r.ok) throw new Error(`${p} -> ${r.status}`); return r.json(); });
+    const comeBack = async () => {
+      await evalJs(`document.dispatchEvent(new Event('visibilitychange'))`);
+      await sleep(900);
+    };
+
+    // Nothing has changed: a quiet refresh must not redraw, or a row would be
+    // replaced under whatever finger was on it.
+    await evalJs(`document.querySelector('#itemList [data-it]').dataset.probe = 'still me'`);
+    await comeBack();
+    check(await evalJs(`(document.querySelector('#itemList [data-it]') || {}).dataset?.probe`) === 'still me',
+      'coming back to an unchanged list must not redraw it');
+    check(await evalJs(`document.querySelectorAll('#itemList .fresh').length`) === 0,
+      'and nothing is new — everything he wrote earlier was here the last time she looked');
+
+    await asAndrew('/api/space/sp1/item', { title: 'Swing dancing on Thursday', visibility: 'shared', kind: 'activity' });
+    await comeBack();
+    check(/Swing dancing on Thursday/.test(await evalJs(`document.getElementById('itemList').innerText`)),
+      'what he added while she was away is on her screen when she comes back');
+    const freshRow = await evalJs(`(() => {
+      const r = document.querySelector('#itemList .it.fresh');
+      return r && { text: r.innerText, anim: getComputedStyle(r, '::before').animationName }; })()`);
+    check(freshRow && /Swing dancing/.test(freshRow.text), 'and it is marked as new');
+    check(/new/i.test(freshRow.text) && /Andrew/.test(freshRow.text), `saying who, and that it is new: ${freshRow && freshRow.text}`);
+    check(freshRow.anim === 'fresh-breathe', `with the pulse on it, got ${freshRow.anim}`);
+
+    // Once. The next draw is just a row.
+    await evalJs(`document.getElementById('tabDone').click()`); await sleep(300);
+    await evalJs(`document.getElementById('tabDone').click()`); await sleep(400);
+    check(await evalJs(`document.querySelectorAll('#itemList .fresh').length`) === 0,
+      'marked once, the first time it is drawn — then it is just a row');
+
+    // Something new on a tab she is NOT looking at gets a dot there, so it is
+    // not sitting unseen under Films while she is on Activities.
+    await asAndrew('/api/space/sp1/item', { title: 'Before Sunrise', visibility: 'shared', kind: 'movie' });
+    await comeBack();
+    check(await visible('#kindNav [data-kind="movie"] .dot'), 'the Films tab says there is something new');
+    check(!(await visible('#kindNav [data-kind="activity"] .dot')), 'and only the tab it is on');
+    await evalJs(`document.querySelector('#kindNav [data-kind="movie"]').click()`);
+    await sleep(500);
+    check(/^new$/i.test(await evalJs(`(document.querySelector('#itemList .card.fresh .new') || {}).innerText || ''`)),
+      'the poster says it is new');
+    check(!(await visible('#kindNav [data-kind="movie"] .dot')), 'and the dot goes once you are looking');
+    // A private one of his must never be "new" to her — it must never be there.
+    await asAndrew('/api/space/sp1/item', { title: 'A secret film', visibility: 'private', kind: 'movie' });
+    await comeBack();
+    check(!/A secret film/.test(await evalJs(`document.getElementById('itemList').innerText`)),
+      'a private thing of his did not arrive with the refresh');
+    await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
+    await sleep(400);
+
     // ── [hidden] still means hidden, by LAYOUT ─────────────────────────
     // The map is parked, so its flow cannot be driven from the UI — but the
     // property that block existed to guard is not about the map. `.items{
