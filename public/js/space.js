@@ -8,12 +8,20 @@ import { S } from './state.js';
 import { $, esc, toast, showScreen, ago, openSheet, closeSheet } from './util.js';
 import { get, post, patch, del, applyWire } from './api.js';
 import { initMap, renderMap, resolvePlaces } from './map.js';
+import { calendarHtml, dayKey, todayKey, dayLabel, timeLabel } from './calendar.js';
 
 let onChange = () => {};
 let onBack = () => {};
 let editing = null;      // item id open in the sheet
 let editingVis = 'shared';
-let tab = 'open';        // 'open' | 'done' | 'map'
+let tab = 'open';        // 'open' | 'done' | 'cal' | 'map'
+// Which month the calendar shows and which day is selected. Lives across
+// renders, so ticking something off from the agenda doesn't page you away.
+let cal = { month: null, sel: null };
+const calToday = () => {
+  const n = new Date();
+  cal = { month: new Date(n.getFullYear(), n.getMonth(), 1), sel: todayKey() };
+};
 // Which kind you are looking at. Always one of them: the bottom nav IS the
 // navigation now, so there is no "looking at the list of groups" state to be in
 // and no way to be nowhere. Defaults to the kind everything starts as.
@@ -176,6 +184,8 @@ function render() {
   // tapping "Done together 15" on the Recipes tab produced two.
   const doneHere = inGroup(done, kindTab).length;
   doneBtn.innerHTML = `Done together${doneHere ? `<span class="n">${doneHere}</span>` : ''}`;
+  $('tabCal').classList.toggle('on', tab === 'cal');
+  $('tabCal').setAttribute('aria-pressed', String(tab === 'cal'));
 
   const list = $('itemList');
   // The map is parked until it has something worth showing. Its renderer and
@@ -193,6 +203,9 @@ function render() {
   // The bottom nav. One tab per kind, straight from the table on the server, so
   // adding a kind is still one line and still arrives everywhere at once.
   renderNav();
+  // The calendar spans every kind, so a bar saying which kind you are looking
+  // at would be a lie while it is open.
+  $('kindNav').hidden = tab === 'cal';
 
   // Two axes, and they are orthogonal: WHICH KIND you are looking at, and
   // whether you want what is still to do or what you have already done.
@@ -201,8 +214,12 @@ function render() {
   // list. The server says which (`art` on the manifest) so there is no second
   // list of film-ish kinds here to fall out of step with it.
   const art = !!(kindList().find(k => k.id === kindTab) || {}).art;
-  list.classList.toggle('shelf', art && tab !== 'done');
-  if (tab === 'done') {
+  list.classList.toggle('shelf', art && tab === 'open');
+  if (tab === 'cal') {
+    if (!cal.sel) calToday();
+    list.innerHTML = calendarHtml(S.items, cal, iconFor);
+    bindCalendar(list);
+  } else if (tab === 'done') {
     const seen = inGroup(done, kindTab);
     list.innerHTML = art && seen.length
       ? `<div class="grid">${seen.map(cardHtml).join('')}</div>`
@@ -368,6 +385,105 @@ function cardHtml(it) {
     ? `<img src="${esc(logoSrc(p))}" alt="${esc(p.name)}" title="${esc(p.name)}" loading="lazy">`
     : `<span>${esc(p.name)}</span>`)).join('')}</div>` : ''}
   </div>`;
+}
+
+/* ── calendar ─────────────────────────────────────────────────────────────── */
+
+function bindCalendar(list) {
+  list.querySelectorAll('[data-day]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.day;
+    cal.sel = k;
+    const [y, m] = k.split('-').map(Number);
+    // Tapping a greyed day from the next or last month takes you there.
+    const moved = y !== cal.month.getFullYear() || m - 1 !== cal.month.getMonth();
+    const dir = k > dayKey(cal.month) ? 1 : -1;
+    if (moved) cal.month = new Date(y, m - 1, 1);
+    render();
+    if (moved) slideMonth(dir); else enterAgenda();
+  }));
+  list.querySelectorAll('[data-cal="prev"],[data-cal="next"]').forEach(b => b.addEventListener('click', () => {
+    const dir = b.dataset.cal === 'next' ? 1 : -1;
+    cal.month = new Date(cal.month.getFullYear(), cal.month.getMonth() + dir, 1);
+    // Keep the selection inside the month you are looking at: today if it is
+    // there, otherwise the first.
+    const t = todayKey();
+    cal.sel = t.slice(0, 7) === dayKey(cal.month).slice(0, 7) ? t : dayKey(cal.month);
+    render();
+    slideMonth(dir);
+  }));
+  list.querySelectorAll('.cal [data-open]').forEach(b =>
+    b.addEventListener('click', () => openItem(b.dataset.open)));
+  const plan = list.querySelector('[data-cal="plan"]');
+  if (plan) plan.addEventListener('click', () => openPlan(cal.sel));
+}
+
+function slideMonth(dir) {
+  const g = document.querySelector('.cal-grid');
+  if (!g || calm() || !g.animate) return;
+  g.animate([{ opacity: 0, transform: `translateX(${dir * 26}px)` }, { opacity: 1, transform: 'none' }],
+    { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' });
+  enterAgenda();
+}
+
+function enterAgenda() {
+  if (calm()) return;
+  [...document.querySelectorAll('.cal-day > *')].forEach((el, i) => el.animate && el.animate(
+    [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }],
+    { duration: 300, delay: Math.min(i, 8) * 30, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }));
+}
+
+// Plan something for a day: pick from what is still to do and has no day yet.
+// Every kind, because a Saturday can hold a film and a recipe.
+let planDay = null;
+function openPlan(k) {
+  planDay = k;
+  $('psTitle').textContent = `Plan for ${dayLabel(k).toLowerCase().replace(/^(sun|mon|tue|wed|thu|fri|sat)/, (w) => w[0].toUpperCase() + w.slice(1))}`;
+  $('psTime').value = '';
+  const open = S.items.filter(i => !i.done && !(i.when && i.when.date));
+  $('psList').innerHTML = open.length
+    ? open.map(it => `<button class="ag" data-plan="${esc(it.id)}">
+        <span class="gl">${iconFor(it.kind)}</span>
+        <span class="t"><b>${esc(it.title)}</b><small>${esc(kindOf(it.kind).label)}${
+          it.mine ? '' : ` · ${esc(it.author.name)}`}</small></span></button>`).join('')
+    : '<div class="ag-empty">Everything on the list already has a day.</div>';
+  $('psList').querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click', async () => {
+    try {
+      const r = await post(`/api/item/${b.dataset.plan}/when`, { date: planDay, time: $('psTime').value || null });
+      applyWire(r.state);
+      closeSheet('planSheet');
+      await refresh();
+      onChange();
+    } catch (_) { toast('Could not plan that'); }
+  }));
+  openSheet('planSheet');
+}
+
+// The When field in the item sheet. Saves on change rather than on Save,
+// because it is not the author's alone: someone who cannot edit the item has no
+// Save button, and is still allowed to put it on a day.
+function paintWhen(it) {
+  const fld = $('isWhenFld');
+  fld.hidden = !!it.done;              // the record says when it happened
+  $('isDate').value = (it.when && it.when.date) || '';
+  $('isTime').value = (it.when && it.when.time) || '';
+  $('isTime').disabled = !$('isDate').value;
+  $('isWhenClear').hidden = !it.when;
+  $('isWhenBy').textContent = it.when && it.plannedByName
+    ? `planned by ${it.plannedByName}` : '';
+}
+
+async function saveWhen() {
+  const id = editing;
+  const date = $('isDate').value;
+  try {
+    const r = await post(`/api/item/${id}/when`,
+      date ? { date, time: $('isTime').value || null } : { clear: true });
+    applyWire(r.state);
+    const i = S.items.findIndex(x => x.id === id);
+    if (i >= 0) S.items[i] = r.item;
+    paintWhen(r.item);
+    if (tab === 'cal') render();
+  } catch (_) { toast('Could not set the day'); }
 }
 
 // One tab per kind, built from what the server shipped. Empty tabs stay: this
@@ -645,6 +761,7 @@ function openItem(id) {
   kindPicker($('isKind'), () => editingKind, (k) => { editingKind = k; kindFields(); });
   kindFields();
   paintWatchRow(it);
+  paintWhen(it);
   // Somebody else's wording is theirs. You can see it and tick it off; you cannot
   // rewrite it.
   const ro = !it.canEdit;
@@ -799,6 +916,23 @@ export function initSpace(changeHandler, backHandler) {
     render();
     enter(0);
   });
+  // The calendar: a view across every kind, of what you did and what you mean
+  // to. Opens on today, every time — the question is always "what's coming".
+  $('tabCal').addEventListener('click', () => {
+    tab = tab === 'cal' ? 'open' : 'cal';
+    if (tab === 'cal') calToday();
+    $('spaceScroll').scrollTop = 0;
+    render();
+    if (tab === 'cal') enterAgenda(); else enter(0);
+    if (tab === 'open') placePill($('kindNav'));
+  });
+  for (const f of ['isDate', 'isTime']) $(f).addEventListener('change', () => {
+    $('isTime').disabled = !$('isDate').value;
+    saveWhen();
+  });
+  $('isWhenClear').addEventListener('click', () => { $('isDate').value = ''; $('isTime').value = ''; saveWhen(); });
+  $('psCancel').addEventListener('click', () => closeSheet('planSheet'));
+  $('planSheet').addEventListener('click', (e) => { if (e.target === $('planSheet')) closeSheet('planSheet'); });
   // Rotating moves every tab, so put the marker back under its icon — without
   // travelling, since nothing was chosen.
   window.addEventListener('resize', () => { pillX = null; placePill($('kindNav')); });

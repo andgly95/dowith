@@ -483,6 +483,35 @@ secret), and the URL dug out of `text` as well as `url`, since Android puts it i
 either. One tap on the list, one on Add. The share is then stripped from the URL so
 a reload can't add it twice.
 
+## The calendar — what you did, and what you mean to
+
+`public/js/calendar.js`, a renderer over items like the map. Reached from a
+**Calendar** toggle beside `Done together`; while it is open the kind bar and the
+composer go, because it spans every kind.
+
+- **The past needs no new data.** Every finished thing already has `doneAt`, so it
+  sits on the day it was ticked off — sage dot. Not the day it was *planned* for:
+  the calendar says what happened, and plans slip.
+- **A plan is `item.when = { date: 'YYYY-MM-DD', time: 'HH:MM' | null }`** — coral
+  dot. A **calendar date, not an instant**: "Saturday" is the same Saturday for both
+  of you, and a timestamp would be a different day for anyone in another timezone,
+  or for the server, which runs in UTC. Client-side dates are LOCAL (`dayKey`),
+  never `toISOString()`. `cleanWhen` refuses impossible days (2026-02-30) rather
+  than repairing them; a plan moved to a day nobody chose is worse than none.
+- **Scheduling is its own operation, like ticking off** — `setWhen`, its own route,
+  the `complete` right: anyone who can see the item can put it on a day, and
+  `plannedBy` records who. A PATCH cannot set it and creating cannot smuggle one in.
+  Chosen deliberately: picking a day is part of doing the thing together, and
+  "Linnea planned Baltimore for Saturday" is the same nice bit as ticking off.
+- **The When field in the item sheet saves on change**, not on Save — somebody who
+  did not write the item has no Save button and is still allowed to plan it.
+- **Plan something for a day** (today onward) picks from open items with no day
+  yet, across every kind. Under today, **Coming up** lists the next planned things,
+  so the next few weeks are visible without paging.
+- The grid is **always six rows**, so the agenda under it never jumps between months.
+- Not yet: a nudge when somebody plans something, and the weekly digest mentioning
+  what is coming up. Both would go through `audienceFor()` like every other push.
+
 ## The record
 
 Done items leave the to-do list and appear under **Done together**, newest first,
@@ -578,6 +607,7 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `GET /api/space/:id/items` · `POST /api/space/:spaceId/item` | the list itself |
 | `POST /api/space/:id/invite` | mint an invite into this list |
 | `PATCH`·`DELETE /api/item/:id` · `POST /api/item/:id/done` | one thing |
+| `POST /api/item/:id/when` | put it on a day `{date, time?}` or `{clear:true}` — anyone who can see it |
 | `GET /api/square/status` · `POST /api/square/import` | the bridge (501) |
 | `GET /share` | share target / Shortcut / bookmarklet — serves the shell |
 | `POST /api/space/:id/geocode` | resolve place names you can see, batched |

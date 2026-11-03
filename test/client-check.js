@@ -205,8 +205,10 @@ function connectCdp(wsUrl) {
     // ONE CONTROL, not three. "To do" was a tab for the state you were already
     // in, and the map is parked until it has something worth showing — its
     // renderer is untouched, only the way in is gone.
-    check(await evalJs(`document.querySelectorAll('#spaceTabs button').length`) === 1,
-      'the list has one toggle, not a tab bar');
+    // Two since the calendar: views you switch INTO, never "To do" (the state
+    // you are already in) and never the map.
+    check(await evalJs(`[...document.querySelectorAll('#spaceTabs button')].map(b => b.dataset.tab).join()`)
+      === 'cal,done', 'the toggles are Calendar and Done together, and nothing else');
     check(await visible('#tabDone'), 'and it is the record');
     // Small, and over on the right. It inherited the size and weight of the
     // three-up row it is no longer part of, which put a bold card-backed button
@@ -517,6 +519,42 @@ function connectCdp(wsUrl) {
       require('fs').writeFileSync(process.env.SHOT, Buffer.from(data, 'base64'));
     }
     await evalJs(`document.documentElement.dataset.theme = 'dusk'`);
+
+    // ── the calendar ────────────────────────────────────────────────────
+    // A view across every kind: the kind bar and the composer go (by LAYOUT —
+    // the [hidden] trap has bitten this app three times), the month is six
+    // rows whatever the month, and it opens on today.
+    await evalJs(`document.getElementById('tabCal').click()`);
+    await sleep(400);
+    check(await evalJs(`document.querySelectorAll('.cal-grid .cd').length`) === 42, 'six rows of days, always');
+    check(!(await visible('#kindNav')), 'the kind bar is gone while the calendar is open');
+    check(!(await visible('#newItem')), 'and so is the composer');
+    check(await evalJs(`(() => { const d = new Date(), p = n => String(n).padStart(2, '0');
+      return document.querySelector('.cd.sel').dataset.day === d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); })()`),
+      'it opens on today');
+    // Plan something for today through the sheet, as a person would.
+    await evalJs(`document.querySelector('[data-cal="plan"]').click()`);
+    await sleep(200);
+    const planned = await evalJs(`(() => { const b = document.querySelector('#psList [data-plan]');
+      const t = b && b.querySelector('b').textContent; document.getElementById('psTime').value = '19:30'; b && b.click(); return t; })()`);
+    check(!!planned, 'the plan sheet offers things with no day yet');
+    await sleep(900);
+    check(await evalJs(`!!document.querySelector('.cd.sel b i.p')`), 'today gets a dot');
+    check((await evalJs(`document.querySelector('.cal-day').innerText`)).includes(planned),
+      `and the agenda lists what was planned (${planned})`);
+    check(/7:30pm/.test(await evalJs(`document.querySelector('.cal-day').innerText`)), 'at the time chosen');
+    if (process.env.SHOT_CAL) {
+      const { data } = await S('Page.captureScreenshot', { format: 'png' });
+      require('fs').writeFileSync(process.env.SHOT_CAL, Buffer.from(data, 'base64'));
+    }
+    // Paging moves the month and keeps the grid whole.
+    const m0 = await evalJs(`document.querySelector('.cal-hd b').textContent`);
+    await evalJs(`document.querySelector('[data-cal="next"]').click()`);
+    await sleep(200);
+    check(await evalJs(`document.querySelector('.cal-hd b').textContent`) !== m0, 'next month pages');
+    await evalJs(`document.getElementById('tabCal').click()`);
+    await sleep(300);
+    check(await visible('#kindNav'), 'and closing it brings the kind bar back');
     check(await evalJs(`document.querySelectorAll('#itemList .it').length`) >= 1,
       'classifying moved it to the Recipes tab');
 

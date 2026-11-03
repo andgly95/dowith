@@ -139,6 +139,20 @@ async function gate() {
 
   const ctx = { id: 'i1', authorId: 'andrew', spaceId: 'sp1', now: 1000 };
 
+  await t('a plan is a calendar date, and an impossible one is refused', () => {
+    const W = ITEMS.cleanWhen;
+    assert.deepStrictEqual(W({ date: '2026-12-05' }), { date: '2026-12-05', time: null });
+    assert.deepStrictEqual(W({ date: '2028-02-29', time: '09:05' }), { date: '2028-02-29', time: '09:05' });
+    for (const bad of ['2026-02-30', '2027-02-29', '2026-13-01', '2026-1-5', '1999-12-31', '2026-12-05T10:00Z', '', null]) {
+      assert.strictEqual(W({ date: bad }), null, `refused ${bad}`);
+    }
+    assert.strictEqual(W({ date: '2026-12-05', time: '24:00' }).time, null, 'a bad time drops the time, not the day');
+    assert.strictEqual(W('2026-12-05'), null);
+    // New items start unplanned.
+    assert.strictEqual(ITEMS.cleanItem({ title: 'x', when: { date: '2026-12-05' } },
+      { id: 'i', authorId: 'a', spaceId: 's' }).when, null, 'and creating cannot smuggle a plan in');
+  });
+
   await t('an item needs a title and nothing else', () => {
     assert.strictEqual(ITEMS.cleanItem({ title: '   ' }, ctx), null);
     assert.strictEqual(ITEMS.cleanItem({}, ctx), null);
@@ -1262,6 +1276,7 @@ async function server() {
       ['GET', '/api/state'], ['POST', '/api/space'], ['GET', '/api/space/sp1/items'],
       ['POST', '/api/space/sp1/item'], ['POST', '/api/space/sp1/invite'],
       ['PATCH', '/api/item/x'], ['POST', '/api/item/x/done'], ['DELETE', '/api/item/x'],
+      ['POST', '/api/item/x/when'],
       ['GET', '/api/square/status'],
     ]) {
       const { status } = await api(m, p, m === 'GET' ? null : {}, null);
@@ -1316,6 +1331,7 @@ async function server() {
       ['PATCH', `/api/item/${priv.id}`, { title: 'pwned' }],
       ['DELETE', `/api/item/${priv.id}`, null],
       ['POST', `/api/item/${priv.id}/done`, { done: true }],
+      ['POST', `/api/item/${priv.id}/when`, { date: '2026-12-05' }],
     ]) {
       assert.strictEqual((await api(m, p, b, L)).status, 404, `${m} ${p}`);
     }
@@ -1333,6 +1349,27 @@ async function server() {
     const done = await api('POST', `/api/item/${shared.id}/done`, { done: true }, L);
     assert.strictEqual(done.status, 200);
     assert.strictEqual(done.body.item.doneByName, 'Linnea', 'whoever got there first gets the credit');
+  });
+
+  await t('anyone who can see a thing can put it on a day — and who did is recorded', async () => {
+    const it = (await api('GET', '/api/space/sp1/items', null, L)).body.items
+      .find(i => i.title === 'See Khruangbin live');
+    assert.strictEqual(it.canEdit, false, 'it is not hers to edit');
+    assert.strictEqual(it.when, null, 'unplanned reads as null, not undefined');
+    const r = await api('POST', `/api/item/${it.id}/when`, { date: '2026-12-05', time: '20:30' }, L);
+    assert.strictEqual(r.status, 200, 'but it is hers to plan');
+    assert.deepStrictEqual(r.body.item.when, { date: '2026-12-05', time: '20:30' });
+    assert.strictEqual(r.body.item.plannedByName, 'Linnea');
+    // A PATCH cannot set it — not even the author's own.
+    await api('PATCH', `/api/item/${it.id}`, { when: { date: '2030-01-01' } }, A);
+    const mine = (await api('GET', '/api/space/sp1/items', null, A)).body.items.find(i => i.id === it.id);
+    assert.strictEqual(mine.when.date, '2026-12-05', 'a patch does not move a plan');
+    // A day that does not exist is refused, and the plan stands.
+    assert.strictEqual((await api('POST', `/api/item/${it.id}/when`, { date: '2026-02-30' }, A)).status, 400);
+    // And it can be taken off the calendar again.
+    const c = await api('POST', `/api/item/${it.id}/when`, { clear: true }, A);
+    assert.strictEqual(c.body.item.when, null);
+    assert.strictEqual(c.body.item.plannedBy, null);
   });
 
   await t('a list you are not in does not exist as far as you are concerned', async () => {

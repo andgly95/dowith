@@ -76,6 +76,7 @@
          the map is parked until it has something to show — its renderer is
          untouched, just unreachable. -->
     <div class="seg" id="spaceTabs">
+      <button id="tabCal" data-tab="cal" aria-pressed="false"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg>Calendar</button>
       <button id="tabDone" data-tab="done" aria-pressed="false">Done together</button>
     </div>
     <div class="scroll" id="spaceScroll">
@@ -132,12 +133,30 @@
     <div class="fld"><span>What kind</span><div class="kind-row" id="isKind"></div></div>
     <!-- Only for the kinds that have art. Shows what it is pinned to, and lets
          you pin it to something else. -->
+    <!-- Anyone who can see it can put it on a day, so this saves on change and
+         stays live when the rest of the sheet is somebody else's. -->
+    <div class="fld" id="isWhenFld"><span>When <em>optional</em></span>
+      <div class="when-row">
+        <input id="isDate" type="date"><input id="isTime" type="time">
+        <button type="button" class="ghost" id="isWhenClear">Clear</button>
+      </div>
+      <small class="when-by" id="isWhenBy"></small></div>
     <div class="fld" id="isWatchFld" hidden><span>Which one</span>
       <button class="matchrow" id="isWatch"></button></div>
     <div class="vis-row" id="isVis"></div>
     <button class="primary" id="isSave">Save</button>
     <button class="danger" id="isDelete">Delete</button>
     <button class="ghost" id="isCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- plan something for a day -->
+<div id="planSheet" class="modal" hidden>
+  <div class="modal-in">
+    <div class="modal-hd"><b id="psTitle">Plan</b><span>pick from the list</span></div>
+    <label class="fld"><span>Time <em>optional</em></span><input id="psTime" type="time"></label>
+    <div class="ps-list" id="psList"></div>
+    <button class="ghost" id="psCancel">Cancel</button>
   </div>
 </div>
 
