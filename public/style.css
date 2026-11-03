@@ -53,6 +53,9 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior-y:none}
 body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 input,textarea{font:inherit;color:var(--ink)}
+/* The UA placeholder is a light grey that reads as text somebody typed. It is
+   a hint, so it sits at the faintest step of the scale. */
+::placeholder{color:var(--faint);opacity:1}
 
 /* inset:0 — the shell ends where iOS stops DRAWING, which is not the screen.
    MEASURED on an iPhone 16 Pro Max, standalone, iOS 26, via the readout:
@@ -606,10 +609,16 @@ input,textarea{font:inherit;color:var(--ink)}
   transition:background .16s ease,color .16s ease;
 }
 .kindnav .gl{display:block;line-height:0}
-.kindnav button.on .ic{background:rgba(242,132,92,.16)}
+/* The marker is one travelling element (see placePill in space.js), not a
+   background on the active tab — so it can move between them. */
+.kindnav{position:relative}
+.kindnav .pill{
+  position:absolute;left:0;top:0;border-radius:14px;pointer-events:none;
+  background:rgba(242,132,92,.16);transform-origin:center;z-index:0;
+}
+.kindnav button{position:relative;z-index:1;transition:color .22s ease}
 .kindnav button.on{color:var(--accent)}
-.kindnav button:active .ic{background:var(--card)}
-.kindnav button.on:active .ic{background:rgba(242,132,92,.24)}
+.kindnav button:not(.on):active .ic{background:var(--card)}
 
 .kindnav b{
   font:600 10.5px/1.1 var(--sans);letter-spacing:.015em;

@@ -335,6 +335,16 @@ things fixed it, and they are the three things a nav is made of:
   between tabs and read as belonging to neither. Beside the word it counts it needs no
   anchor at all — `Films 4`, one step dimmer.
 
+**Switching tabs moves.** The marker is ONE element (`.pill`) that travels to the
+new icon, stretching toward where it is going and settling with a small overshoot.
+The icon gives a spring, and the list's rows arrive from the side you moved toward,
+staggered (the Done toggle makes them rise instead, because that is a change of
+state, not a step sideways). It is **entrance-only and the render stays
+synchronous**, so the DOM is final the instant a tap lands — the suite clicks a tab
+and asserts at once, and motion must never be a gate in front of a correct screen.
+`renderNav()` rewrites the bar on every render, so `pillX` is what carries the
+marker from where it was. Reduced motion gets none of it.
+
 **The `Done together` count is the count of what it would show you.** It was the whole
 list's while the list underneath was one kind's, so "Done together 15" on the Recipes
 tab produced two.

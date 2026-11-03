@@ -490,6 +490,16 @@ function connectCdp(wsUrl) {
     // It is a recipe now, so it is under the Recipes tab.
     await evalJs(`document.querySelector('#kindNav [data-kind="recipe"]').click()`);
     await sleep(500);
+    // The marker is one element that travels, so it has to END UP under the
+    // icon it travelled to — measured by layout, after the motion settles.
+    const pillOff = await evalJs(`(() => {
+      const p = document.querySelector('#kindNav .pill').getBoundingClientRect();
+      const i = document.querySelector('#kindNav button.on .ic').getBoundingClientRect();
+      return Math.round(Math.abs(p.left - i.left) + Math.abs(p.width - i.width)); })()`);
+    check(pillOff <= 2, `the marker settles under the chosen tab (off by ${pillOff}px)`);
+    check(await evalJs(`getComputedStyle(document.getElementById('newItem'), '::placeholder').color`)
+      !== await evalJs(`getComputedStyle(document.getElementById('newItem')).color`),
+      'a placeholder is not drawn in the colour of typed text');
     check(await evalJs(`document.querySelectorAll('#itemList .it').length`) >= 1,
       'classifying moved it to the Recipes tab');
 

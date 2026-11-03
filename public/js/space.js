@@ -30,6 +30,7 @@ export async function openSpace(id) {
   S.compose = 'shared';
   tab = 'open';
   kindTab = null;
+  pillX = null;   // a new list starts on its first tab; nothing to travel from
   showScreen('scr-space');
   $('itemList').innerHTML = '<div class="empty">Loading…</div>';
   await refresh();
@@ -382,14 +383,78 @@ function renderNav() {
       <span class="ic"><span class="gl">${iconFor(k.id)}</span></span>
       <b>${k.count ? `<i class="n">${k.count > 99 ? '99+' : k.count}</i>` : ''}${
         esc(k.plural)}</b>
-      </button>`).join('');
+      </button>`).join('') + '<span class="pill" aria-hidden="true"></span>';
+  placePill(nav);
   nav.querySelectorAll('[data-kind]').forEach((b) => {
     b.addEventListener('click', () => {
       if (kindTab === b.dataset.kind) return;
+      const ids = tabs.map(t => t.id);
+      const dir = Math.sign(ids.indexOf(b.dataset.kind) - ids.indexOf(kindTab)) || 1;
       kindTab = b.dataset.kind;
       $('spaceScroll').scrollTop = 0;
       render();
+      enter(dir);
+      pop(nav.querySelector('button.on .gl'));
     });
+  });
+}
+
+/* ── tab motion ─────────────────────────────────────────────────────────────
+   The marker is ONE element that travels, rather than five backgrounds that
+   switch — the eye follows a thing that moves, and a thing that appears in a
+   new place has to be found. It stretches toward where it is going and settles
+   with a little overshoot, which is what makes it read as physical.
+   renderNav() rewrites the bar on every render, so the pill is re-created each
+   time; `pillX` is what carries it from where it was to where it is now.
+   Everything here is entrance-only and the render is synchronous, so the DOM is
+   already in its final state the moment a tap lands — motion is decoration on
+   top of a correct screen, never a gate in front of one. */
+let pillX = null;
+
+function placePill(nav) {
+  const pill = nav.querySelector('.pill');
+  const ic = nav.querySelector('button.on .ic');
+  if (!pill || !ic) return;
+  const n = nav.getBoundingClientRect(), r = ic.getBoundingClientRect();
+  if (!n.width) return;                       // not laid out (screen hidden)
+  const x = r.left - n.left;
+  pill.style.cssText = `width:${r.width}px;height:${r.height}px;top:${r.top - n.top}px;transform:translateX(${x}px)`;
+  const from = pillX;
+  pillX = x;
+  if (from === null || from === x || calm() || !pill.animate) return;
+  const mid = (from + x) / 2;
+  const stretch = 1 + Math.min(Math.abs(x - from) / r.width, 3) * 0.28;
+  pill.animate([
+    { transform: `translateX(${from}px) scaleX(1)` },
+    { transform: `translateX(${mid}px) scaleX(${stretch})`, offset: 0.45 },
+    { transform: `translateX(${x}px) scaleX(1)` },
+  ], { duration: 440, easing: 'cubic-bezier(.34,1.45,.55,1)' });
+}
+
+// The icon you just chose gives a small spring, so the tap has an answer
+// at the place you tapped as well as in the list.
+function pop(el) {
+  if (!el || calm() || !el.animate) return;
+  el.animate([
+    { transform: 'scale(.78)' }, { transform: 'scale(1.14)', offset: 0.55 }, { transform: 'scale(1)' },
+  ], { duration: 380, easing: 'cubic-bezier(.3,.7,.4,1)' });
+}
+
+// The list arrives from the side you moved toward, one row after another.
+// dir 0 (the Done toggle) rises instead, because that is a change of state,
+// not a step sideways. Staggering stops after ten — anything later is below
+// the fold, and waiting on it would only make the screen feel slow.
+function enter(dir) {
+  if (calm()) return;
+  const list = $('itemList');
+  const grid = list.querySelector('.grid');
+  const els = [...(grid || list).children];
+  els.forEach((el, i) => {
+    if (!el.animate) return;
+    el.animate([
+      { opacity: 0, transform: dir ? `translateX(${dir * 22}px)` : 'translateY(10px)' },
+      { opacity: 1, transform: 'none' },
+    ], { duration: 360, delay: Math.min(i, 10) * 28, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
   });
 }
 
@@ -732,7 +797,11 @@ export function initSpace(changeHandler, backHandler) {
   $('tabDone').addEventListener('click', () => {
     tab = tab === 'done' ? 'open' : 'done';
     render();
+    enter(0);
   });
+  // Rotating moves every tab, so put the marker back under its icon — without
+  // travelling, since nothing was chosen.
+  window.addEventListener('resize', () => { pillX = null; placePill($('kindNav')); });
   initMap((id) => openItem(id));
   $('spaceMenu').addEventListener('click', openSettings);
   $('btnAdd').addEventListener('click', add);
