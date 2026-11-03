@@ -9,7 +9,7 @@ Things like *go record shopping*, *watch "Obsession"*, *go swing dancing* — no
 chores. That shapes everything from the tick being a ring rather than a checkbox
 to the default visibility being `shared`.
 
-Port **3006**. Repo not yet published; not yet deployed (see Deployment).
+Port **3006**. Public at [github.com/andgly95/dowith](https://github.com/andgly95/dowith) (remote `github`); not yet deployed (see Deployment).
 
 ## Stack
 
