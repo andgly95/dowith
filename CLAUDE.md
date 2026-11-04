@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 126 assertions + a headless-chromium check
+- **Tests:** `npm test` — 130 assertions + a headless-chromium check
 
 ## The model
 
@@ -509,8 +509,10 @@ composer go, because it spans every kind.
   yet, across every kind. Under today, **Coming up** lists the next planned things,
   so the next few weeks are visible without paging.
 - The grid is **always six rows**, so the agenda under it never jumps between months.
-- Not yet: a nudge when somebody plans something, and the weekly digest mentioning
-  what is coming up. Both would go through `audienceFor()` like every other push.
+- **Planning nudges** the people who can see it ("Linnea planned something ·
+  Baltimore · Sat 8 Nov · 7pm"), only when the DAY changes — moving the time is
+  fiddling, and clearing a plan wakes nobody. Not yet: the weekly digest
+  mentioning what is coming up.
 
 ## The record
 
@@ -549,7 +551,10 @@ because a lock screen reads itself out loud in a room.
 - A **private item notifies nobody**, and there is a second test for that with
   devices actually subscribed — an audience of zero is easy to get right by
   accident when nobody is reachable.
-- The author is never told about their own thought.
+- The author is never told about their own thought. More generally,
+  `audienceFor(item, actorId)` leaves out **whoever acted** — the author for
+  "added", the doer for **ticked off** and **planned** — so the author IS told
+  when somebody else finishes or plans their item. Un-ticking tells nobody.
 - `itemAdded` fires **after the response and is never awaited** — a slow push
   service must not make adding something feel slow.
 - The weekly digest goes out Sunday evening, needs at least three open things to be

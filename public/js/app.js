@@ -143,7 +143,7 @@ function paintNudge() {
   $('optNudge').checked = on;
   $('nudgeSub').textContent = on
     ? 'on for this device — and a nudge on Sundays'
-    : 'when someone adds something to a list';
+    : 'when someone adds, plans or ticks off something';
 }
 
 async function start() {

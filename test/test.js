@@ -1086,6 +1086,27 @@ async function nudges() {
     }
   });
 
+  await t('ticking off or planning tells everyone who can see it except whoever did it', () => {
+    // Linnea acts on Andrew's shared item: Andrew hears, Linnea does not.
+    assert.deepStrictEqual(names(push.audienceFor(item('shared'), 'L')), ['A'],
+      'the author is told when somebody else acts on their item');
+    assert.deepStrictEqual(names(push.audienceFor(item('public'), 'L')), ['A', 'S']);
+    assert.deepStrictEqual(push.audienceFor(item('private'), 'A'), [],
+      'a private thing ticked off by its author is still nobody else\'s business');
+    const SPmod = require('../lib/spaces');
+    for (const v of ['private', 'shared', 'public']) for (const actor of ['A', 'L', 'S']) {
+      for (const u of push.audienceFor(item(v), actor)) {
+        assert.ok(u.id !== actor && SPmod.canSee(item(v), u.id, st.spaces), `${v}/${actor}: ${u.id}`);
+      }
+    }
+  });
+
+  await t('a plan reads as the day somebody chose, whatever zone the server is in', () => {
+    assert.strictEqual(push.whenLabel({ date: '2026-11-08', time: '19:00' }), 'Sun 8 Nov · 7pm');
+    assert.strictEqual(push.whenLabel({ date: '2026-11-08', time: '09:30' }), 'Sun 8 Nov · 9:30am');
+    assert.strictEqual(push.whenLabel({ date: '2026-11-08', time: null }), 'Sun 8 Nov');
+  });
+
   await t('nothing is sent to somebody with no device subscribed', async () => {
     assert.strictEqual(await push.itemAdded(item('shared'), () => 'Andrew'), 0,
       'audience is not the same as reachable');
