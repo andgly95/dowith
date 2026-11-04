@@ -511,7 +511,7 @@ function connectCdp(wsUrl) {
       bg: getComputedStyle(document.body).backgroundColor,
       pill: getComputedStyle(document.querySelector('#kindNav .pill')).backgroundColor,
     })`);
-    check(olive.bg === 'rgb(27, 30, 18)', `olive paints the page: ${olive.bg}`);
+    check(olive.bg === 'rgb(31, 26, 18)', `olive paints the page: ${olive.bg}`);
     check(!/242, 132, 92/.test(olive.pill) && !/0\.949/.test(olive.pill),
       `and the tab marker is not left coral: ${olive.pill}`);
     if (process.env.SHOT) {

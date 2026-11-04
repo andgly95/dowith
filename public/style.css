@@ -35,20 +35,20 @@
    data-theme itself and paint from the very same values — no second copy of
    the palette in JavaScript to drift out of step. */
 [data-theme="olive"]{
-  --bg:#1b1e12;          /* deep olive */
-  --card:#252916;
-  --card2:#2e331d;
-  --line:#3b4126;
-  --ink:#eef0e3;
-  --ink2:#c5c9b3;
-  --dim:#90957c;
-  --faint:#686d57;
-  --accent:#c8b45a;      /* brass — the warm thing against the green */
+  --bg:#1f1a12;          /* bark — brown first, olive underneath */
+  --card:#2a2418;
+  --card2:#342d1f;
+  --line:#463c2a;
+  --ink:#f0ebdf;
+  --ink2:#cdc4ae;
+  --dim:#9c927a;
+  --faint:#736a56;
+  --accent:#c8b45a;      /* brass — the warm thing against the wood */
   --accent2:#9dbb84;     /* leaf, for something already done */
   --warn:#d9824e;
   --on-accent:#221c05;
   --on-accent2:#13200d;
-  --scrim:rgba(10,11,5,.86);
+  --scrim:rgba(12,9,5,.86);
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -113,8 +113,10 @@ input,textarea{font:inherit;color:var(--ink)}
 .topbar>div:first-of-type{flex:1;min-width:0}
 .topbar .ttl{flex:1;min-width:0;text-align:center}
 .topbar .with{
-  font:11px/1 var(--sans);letter-spacing:.16em;text-transform:uppercase;
-  color:var(--faint);margin-bottom:5px;
+  /* --dim, not --faint, and a weight: 11px at --faint on the dark ground read
+     as out of focus on a phone, not as quiet. */
+  font:600 11px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);margin-bottom:5px;
 }
 .sub{color:var(--dim);font:italic 400 14px/1.4 var(--serif);margin-top:3px}
 .icon-btn{
