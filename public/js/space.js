@@ -9,7 +9,7 @@ import { $, esc, toast, showScreen, ago, openSheet, closeSheet } from './util.js
 import { get, post, patch, del, applyWire } from './api.js';
 import { initMap, renderMap, resolvePlaces } from './map.js';
 import { calendarHtml, dayKey, todayKey, dayLabel, timeLabel } from './calendar.js';
-import { initRose, openRose } from './rose.js';
+import { initRose, openRose, peekRose } from './rose.js';
 
 let onChange = () => {};
 let onBack = () => {};
@@ -43,6 +43,7 @@ export async function openSpace(id) {
   showScreen('scr-space');
   $('itemList').innerHTML = '<div class="empty">Loading…</div>';
   await refresh();
+  peekRose();   // a dot on the rose if there is a match you have not seen
 }
 
 export async function refresh() {

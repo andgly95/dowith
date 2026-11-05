@@ -1419,6 +1419,24 @@ async function server() {
       { kind: 'try', id: 'blindfold', level: 'obviously' }, { kind: 'try', id: '__proto__', level: 'yes' }, {}]) {
       assert.strictEqual((await api('POST', P, bad, A)).status, 400, JSON.stringify(bad));
     }
+    // Your own question: she sees the question, not who asked or how he answered.
+    const added = (await api('POST', P, { kind: 'custom-add', label: '  Dancing   in the kitchen ' }, A)).body;
+    const q = added.custom.find(c => c.label === 'Dancing in the kitchen');
+    assert.ok(q && q.byMe, 'tidied, and marked as his on his side');
+    assert.strictEqual((await api('POST', P, { kind: 'custom-add', label: 'dancing in the kitchen' }, L)).status, 400,
+      'asking the same thing twice is noise');
+    await tryIt(q.id, 'love', A);
+    const seen = (await api('GET', P, null, L)).body;
+    assert.strictEqual(seen.custom.find(c => c.id === q.id).byMe, false);
+    assert.ok(!seen.matches.some(m => m.id === q.id), 'no match until she answers too');
+    await tryIt(q.id, 'yes', L);
+    assert.ok((await api('GET', P, null, L)).body.matches.some(m => m.id === q.id), 'and then it is one');
+    assert.strictEqual((await api('POST', P, { kind: 'custom-remove', id: q.id }, L)).status, 404,
+      'only whoever asked can take it back');
+    const gone = (await api('POST', P, { kind: 'custom-remove', id: q.id }, A)).body;
+    assert.ok(!gone.custom.length && !gone.matches.some(m => m.id === q.id) && !(q.id in gone.mine.try),
+      'and taking it back takes the answers with it');
+    assert.strictEqual((await tryIt(q.id, 'yes', A)).status, 400, 'a removed question cannot be answered');
     // Not in the list: it does not exist. Not a pair: it does not exist either.
     assert.strictEqual((await api('GET', P, null, S)).status, 404);
     const solo = (await api('POST', '/api/space', { name: 'just me' }, A)).body.space.id;

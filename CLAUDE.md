@@ -516,10 +516,27 @@ composer go, because it spans every kind.
 
 ## Just us — the pleasure inventory (`lib/pleasure.js`, `public/js/rose.js`)
 
-The 🌹 in the corner of a **pair** list (where the ⋯ was — the list settings now open
-from tapping the title). Two halves: a **body map** (part × touching/kissing/licking/
-biting/massage/scratching) and **things to try**, each answered on one scale —
-Yes, please · Yes · Maybe · Soft no · No. Tapping your answer again clears it.
+A **line-drawn rose** in the corner of a **pair** list (where the ⋯ was — the list
+settings open from tapping the title, which carries a small ⌄ to say so). Deliberately
+not the 🌹 emoji: phones get glanced at, and this should be findable, not conspicuous.
+
+- **Body** is a figure, front and back, that you tap where you mean (part × touching/
+  kissing/licking/biting/massage/scratching). Each area fills with `--rose` in proportion
+  to how warmly the two of you answered, and glows where you both said yes — the figure
+  is the summary. Tiny zones carry larger invisible hit areas.
+- **Things to try** are grouped gentle → playful → adventurous → your own, and open as
+  **one card at a time**, gentlest first: swipe right yes, left no, up maybe, or tap a
+  dot. "The list" shows every answer, the matches, and **your own questions** — the
+  question is shared (your partner has to see it to answer it), your answer is not, and
+  only whoever asked can take it back.
+- **One scale, five dots, cool → warm left to right** (No … Yes, please), so a dot and a
+  swipe agree. The label shows only under the chosen dot; unanswered rows show the ends.
+  The first cut had warm on the left and contradicted its own swipe hint.
+- **A new match is a moment**: the rose draws itself over the sheet. A match you have
+  not seen puts a dot on the corner rose — on screen only, never a push. "Seen" is per
+  device in `localStorage`, which is fine for a dot.
+- Its own room: `--rose` (a token per theme) tints the sheet and the scrim.
+- Tapping your answer again clears it.
 
 The privacy rules are the feature, and they live in `pleasure.view()`, pure and tested:
 

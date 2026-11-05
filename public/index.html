@@ -67,9 +67,13 @@
       <!-- The title IS the way into the list's settings now; the corner is the rose. -->
       <button type="button" class="ttl" id="spaceSettings" aria-label="List settings">
         <div class="with">to do with</div>
-        <h1 id="spaceTitle">—</h1>
+        <h1><span id="spaceTitle">—</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></h1>
       </button>
-      <button class="icon-btn rose-btn" id="spaceRose" aria-label="Just us">🌹</button>
+      <!-- A line rose drawn to the nav's icon spec, not the 🌹 emoji: phones get
+           glanced at, and this should be findable without being conspicuous. -->
+      <button class="icon-btn rose-btn" id="spaceRose" aria-label="Just us">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 5.2c0 3.3 2.2 5.8 5 5.8s5-2.5 5-5.8c-1.4.9-2.7.9-3.6 0-.6-.6-1-1.5-1.4-2.7-.4 1.2-.8 2.1-1.4 2.7-.9.9-2.2.9-3.6 0z"/><path d="M9.8 6.9c.6.8 1.4 1.2 2.2 1.2s1.6-.4 2.2-1.2"/><path d="M12 11v10"/><path d="M12 16.2c-1.9-.2-3.5-1.3-4.1-3.2 2 0 3.5 1 4.1 3.2z"/><path d="M12 18.6c1.9-.2 3.5-1.3 4.1-3.2-2 0-3.5 1-4.1 3.2z"/></svg>
+      </button>
     </header>
     <!-- One control, not three. "To do" was the state you were already in, and
          the map is parked until it has something to show — its renderer is
@@ -191,7 +195,7 @@
 <!-- the pleasure inventory: just the two of you (lib/pleasure.js) -->
 <div id="roseSheet" class="modal" hidden>
   <div class="modal-in rose">
-    <div class="modal-hd"><b>Just us 🌹</b><span id="rsWho"></span></div>
+    <div class="modal-hd"><b>Just us</b><span id="rsWho"></span></div>
     <div class="rs-tabs" role="tablist">
       <button type="button" data-rs="body" class="on">Body</button>
       <button type="button" data-rs="try">Things to try</button>

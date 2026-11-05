@@ -560,7 +560,7 @@ function connectCdp(wsUrl) {
     await evalJs(`document.getElementById('spaceRose').click()`);
     await sleep(500);
     check(await visible('#roseSheet'), 'and opens the inventory');
-    await evalJs(`document.querySelector('#roseSheet [data-part="neck"]').click()`);
+    await evalJs(`document.querySelector('#roseSheet .zone[data-part="neck"]').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
     await sleep(100);
     await evalJs(`document.querySelector('#roseSheet [data-act="kiss"][data-level="love"]').click()`);
     await sleep(500);
@@ -571,6 +571,16 @@ function connectCdp(wsUrl) {
       require('fs').writeFileSync(process.env.SHOT_ROSE, Buffer.from(data, 'base64'));
     }
     await evalJs(`document.querySelector('#roseSheet [data-rs="try"]').click()`);
+    await sleep(100);
+    check(await visible('#rsCard'), 'things to try start one card at a time');
+    await evalJs(`document.querySelector('#rsCard [data-level="love"]').click()`);
+    await sleep(700);
+    check(/1 of/.test(await evalJs(`document.querySelector('.rs-prog').textContent`)), 'answering a card moves on');
+    if (process.env.SHOT_ROSE3) {
+      const { data } = await S('Page.captureScreenshot', { format: 'png' });
+      require('fs').writeFileSync(process.env.SHOT_ROSE3, Buffer.from(data, 'base64'));
+    }
+    await evalJs(`document.querySelector('#roseSheet [data-mode="list"]').click()`);
     await sleep(100);
     await evalJs(`document.querySelector('#roseSheet [data-id="blindfold"][data-level="yes"]').click()`);
     await sleep(500);
