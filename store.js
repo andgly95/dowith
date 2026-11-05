@@ -22,6 +22,9 @@ function defaultState() {
     // Geocode cache, shared across everybody — a place's coordinates are not
     // anybody's private business, and looking one up twice is rude to OSM.
     places: {},
+    // The pleasure inventory, keyed by PAIR of people (sorted ids joined by
+    // '|'), never by list — see lib/pleasure.js. Served by two routes only.
+    pleasure: {},
     seq: 1,
   };
 }

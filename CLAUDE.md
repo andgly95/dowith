@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 130 assertions + a headless-chromium check
+- **Tests:** `npm test` — 131 assertions + a headless-chromium check
 
 ## The model
 
@@ -248,9 +248,9 @@ honest 34 and the clamp changed nothing); and *"size it to `100lvh`"* (it got cl
 The first four were inferred from photographs. **Measure before changing the layout** — and the readout below exists
 so you can.
 
-**There is a readout in the account sheet** — screen, window, visual viewport, `#app`,
-safe insets, standalone yes/no. Every layout bug in this app so far has been a number
-inferred from a photograph; six lines on screen turn the next one into a measurement.
+There *was* a readout in the account sheet (screen, viewport, insets) and a "Show taps"
+overlay; both were removed at the user's request once the layout settled. If a layout
+bug comes back, put a temporary one back and **measure** — `git log -S paintMetrics`.
 
 
 **The app lands IN your first list, not on the shelf of lists.** Almost everybody has
@@ -514,6 +514,27 @@ composer go, because it spans every kind.
   fiddling, and clearing a plan wakes nobody. Not yet: the weekly digest
   mentioning what is coming up.
 
+## Just us — the pleasure inventory (`lib/pleasure.js`, `public/js/rose.js`)
+
+The 🌹 in the corner of a **pair** list (where the ⋯ was — the list settings now open
+from tapping the title). Two halves: a **body map** (part × touching/kissing/licking/
+biting/massage/scratching) and **things to try**, each answered on one scale —
+Yes, please · Yes · Maybe · Soft no · No. Tapping your answer again clears it.
+
+The privacy rules are the feature, and they live in `pleasure.view()`, pure and tested:
+
+- **Keyed by the PAIR OF PEOPLE** (sorted ids), never by list. A list can change hands;
+  if one of you leaves and somebody new joins, they are a different pair and see nothing.
+  Leaving a pair list also deletes that pair's answers.
+- **Pairs only.** A group list answers 404 and shows no rose.
+- **Body answers are shown to your partner in full** — that half exists to say "this,
+  not that".
+- **Things to try are shown only as MATCHES** — both of you at Maybe or warmer. The
+  partner's try answers are never sent to the client at all, so a "no" can never reveal
+  a "yes", and suggesting something costs nothing.
+- Two routes and nowhere else: no push, no digest, nothing on `/api/state`, no third
+  party. The catalogue is server-side and an id outside it is refused.
+
 ## The record
 
 Done items leave the to-do list and appear under **Done together**, newest first,
@@ -613,6 +634,7 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `POST /api/space/:id/invite` | mint an invite into this list |
 | `PATCH`·`DELETE /api/item/:id` · `POST /api/item/:id/done` | one thing |
 | `POST /api/item/:id/when` | put it on a day `{date, time?}` or `{clear:true}` — anyone who can see it |
+| `GET`·`POST /api/space/:id/pleasure` | the rose — pairs only; partner's try answers appear only as matches |
 | `GET /api/square/status` · `POST /api/square/import` | the bridge (501) |
 | `GET /share` | share target / Shortcut / bookmarklet — serves the shell |
 | `POST /api/space/:id/geocode` | resolve place names you can see, batched |

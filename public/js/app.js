@@ -60,79 +60,7 @@ async function openAccount() {
   } catch (_) { $('squareState').textContent = 'unavailable'; }
   paintNudge();
   paintThemes();
-  paintMetrics();
   openSheet('meSheet');
-}
-
-// What this phone actually reports.
-//
-// Every layout bug in this app so far has been a number inferred from a
-// photograph. The screen, the viewport and the safe areas are six lines, and
-// having them on screen turns the next one of these into a measurement.
-function paintMetrics() {
-  const vv = window.visualViewport;
-  const app = $('app').getBoundingClientRect();
-  // Custom properties come back from getComputedStyle as their unevaluated
-  // text (`min(env(…), 34px)`), so measure them through a real box instead.
-  // Likewise the viewport units: each one is a different question on iOS.
-  const probe = (css) => {
-    const d = document.createElement('div');
-    d.style.cssText = `position:fixed;top:0;left:0;width:0;visibility:hidden;pointer-events:none;${css}`;
-    document.body.appendChild(d);
-    const h = Math.round(d.getBoundingClientRect().height);
-    d.remove();
-    return h;
-  };
-  const env = (s) => probe(`height:env(safe-area-inset-${s},0px)`);
-  // Only measurable while a list is on screen; from the shelf it has no box.
-  const navEl = document.querySelector('.kindnav');
-  const navR = navEl && navEl.getBoundingClientRect().height ? navEl.getBoundingClientRect() : null;
-  $('meMetrics').innerHTML = [
-    ['screen', `${window.screen.width}×${window.screen.height}`],
-    ['window', `${window.innerWidth}×${window.innerHeight}`],
-    ['visual', vv ? `${Math.round(vv.width)}×${Math.round(vv.height)}` : '—'],
-    ['html', `${document.documentElement.clientHeight}`],
-    ['#app', `${Math.round(app.top)}→${Math.round(app.bottom)}`],
-    ['nav', navR ? `${Math.round(navR.top)}→${Math.round(navR.bottom)}` : '—'],
-    ['vh lvh svh dvh', ['100vh', '100lvh', '100svh', '100dvh'].map((u) => probe(`height:${u}`)).join(' ')],
-    ['env t/b', `${env('top')} / ${env('bottom')}`],
-    ['safe t/b', `${probe('height:var(--safe-t)')} / ${probe('height:var(--safe-b)')}`],
-    ['standalone', window.matchMedia('(display-mode: standalone)').matches
-      || window.navigator.standalone ? 'yes' : 'no'],
-  ].map(([k, v]) => `<span><i>${k}</i>${v}</span>`).join('');
-}
-
-// Show taps: a ring where the BROWSER thinks each touch landed, and the numbers
-// that would explain a gap between that and your finger. A tap offset is a
-// number like any other layout bug here, and this turns it into a measurement.
-// Until reload; nothing is stored.
-let tapsOn = false;
-function showTaps() {
-  if (tapsOn) return;
-  tapsOn = true;
-  const bar = document.createElement('div');
-  bar.className = 'tapbar';
-  document.body.appendChild(bar);
-  document.addEventListener('pointerdown', (e) => {
-    const ring = document.createElement('div');
-    ring.className = 'tapring';
-    ring.style.left = `${e.clientX}px`;
-    ring.style.top = `${e.clientY}px`;
-    document.body.appendChild(ring);
-    setTimeout(() => ring.remove(), 2500);
-    const vv = window.visualViewport;
-    const hit = document.elementFromPoint(e.clientX, e.clientY);
-    const what = hit && (hit.closest('[data-day]') || {}).dataset;
-    const r = hit ? hit.getBoundingClientRect() : null;
-    bar.textContent = [
-      `tap ${Math.round(e.clientX)},${Math.round(e.clientY)}`,
-      `scrollY ${Math.round(window.scrollY)}`,
-      vv ? `vv top ${Math.round(vv.offsetTop)} pageTop ${Math.round(vv.pageTop)} h ${Math.round(vv.height)}` : 'no vv',
-      `#app top ${Math.round(document.getElementById('app').getBoundingClientRect().top)}`,
-      `hit ${what && what.day ? `day ${what.day}` : hit ? hit.tagName.toLowerCase() + (hit.className && typeof hit.className === 'string' ? '.' + hit.className.split(' ')[0] : '') : '—'}`
-        + (r ? ` [${Math.round(r.top)}–${Math.round(r.bottom)}]` : ''),
-    ].join(' · ');
-  }, true);
 }
 
 function paintNudge() {
@@ -159,7 +87,6 @@ async function start() {
     paintNudge();
   });
   $('meSignOut').addEventListener('click', signOut);
-  $('meTaps').addEventListener('click', () => { showTaps(); closeSheet('meSheet'); });
   $('meCancel').addEventListener('click', () => closeSheet('meSheet'));
   $('meSheet').addEventListener('click', (e) => { if (e.target === $('meSheet')) closeSheet('meSheet'); });
   // Land in the list, not on the shelf of lists.

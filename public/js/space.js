@@ -9,6 +9,7 @@ import { $, esc, toast, showScreen, ago, openSheet, closeSheet } from './util.js
 import { get, post, patch, del, applyWire } from './api.js';
 import { initMap, renderMap, resolvePlaces } from './map.js';
 import { calendarHtml, dayKey, todayKey, dayLabel, timeLabel } from './calendar.js';
+import { initRose, openRose } from './rose.js';
 
 let onChange = () => {};
 let onBack = () => {};
@@ -163,6 +164,9 @@ function render() {
   const sp = S.space;
   if (!sp) return;
   $('spaceTitle').textContent = sp.title;
+  // The rose is for two people. A group list has no inventory, and no corner
+  // button pretending it might.
+  $('spaceRose').hidden = !sp.isPair;
 
   const open = S.items.filter(i => !i.done);
   const done = S.items.filter(i => i.done)
@@ -937,7 +941,9 @@ export function initSpace(changeHandler, backHandler) {
   // travelling, since nothing was chosen.
   window.addEventListener('resize', () => { pillX = null; placePill($('kindNav')); });
   initMap((id) => openItem(id));
-  $('spaceMenu').addEventListener('click', openSettings);
+  $('spaceSettings').addEventListener('click', openSettings);
+  $('spaceRose').addEventListener('click', openRose);
+  initRose();
   $('btnAdd').addEventListener('click', add);
   $('newItem').addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
   $('newItem').addEventListener('input', syncComposer);

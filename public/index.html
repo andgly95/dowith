@@ -64,13 +64,12 @@
       <button class="icon-btn" id="spaceBack" aria-label="Back">
         <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <div class="ttl">
+      <!-- The title IS the way into the list's settings now; the corner is the rose. -->
+      <button type="button" class="ttl" id="spaceSettings" aria-label="List settings">
         <div class="with">to do with</div>
         <h1 id="spaceTitle">—</h1>
-      </div>
-      <button class="icon-btn" id="spaceMenu" aria-label="List settings">
-        <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
       </button>
+      <button class="icon-btn rose-btn" id="spaceRose" aria-label="Just us">🌹</button>
     </header>
     <!-- One control, not three. "To do" was the state you were already in, and
          the map is parked until it has something to show — its renderer is
@@ -189,6 +188,19 @@
   </div>
 </div>
 
+<!-- the pleasure inventory: just the two of you (lib/pleasure.js) -->
+<div id="roseSheet" class="modal" hidden>
+  <div class="modal-in rose">
+    <div class="modal-hd"><b>Just us 🌹</b><span id="rsWho"></span></div>
+    <div class="rs-tabs" role="tablist">
+      <button type="button" data-rs="body" class="on">Body</button>
+      <button type="button" data-rs="try">Things to try</button>
+    </div>
+    <div id="rsBody"></div>
+    <button class="ghost" id="rsClose">Close</button>
+  </div>
+</div>
+
 <!-- account -->
 <div id="meSheet" class="modal" hidden>
   <div class="modal-in">
@@ -205,9 +217,6 @@
       <span><b>Theme</b><small>on this device</small>
         <span class="theme-row" id="themePick"></span></span>
     </div>
-    <div class="fld"><span>This screen</span>
-      <div class="metrics" id="meMetrics">—</div>
-      <button type="button" class="ghost" id="meTaps">Show taps</button></div>
     <button class="ghost" id="meSignOut">Sign out</button>
     <button class="ghost" id="meCancel">Close</button>
   </div>

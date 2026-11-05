@@ -555,6 +555,35 @@ function connectCdp(wsUrl) {
     await evalJs(`document.getElementById('tabCal').click()`);
     await sleep(300);
     check(await visible('#kindNav'), 'and closing it brings the kind bar back');
+    // The rose: in a pair list it sits in the corner, and the title opens settings.
+    check(await visible('#spaceRose'), 'the rose is in the corner of a pair list');
+    await evalJs(`document.getElementById('spaceRose').click()`);
+    await sleep(500);
+    check(await visible('#roseSheet'), 'and opens the inventory');
+    await evalJs(`document.querySelector('#roseSheet [data-part="neck"]').click()`);
+    await sleep(100);
+    await evalJs(`document.querySelector('#roseSheet [data-act="kiss"][data-level="love"]').click()`);
+    await sleep(500);
+    check(await evalJs(`!!document.querySelector('#roseSheet [data-act="kiss"][data-level="love"].on')`),
+      'an answer sticks after the round trip');
+    if (process.env.SHOT_ROSE) {
+      const { data } = await S('Page.captureScreenshot', { format: 'png' });
+      require('fs').writeFileSync(process.env.SHOT_ROSE, Buffer.from(data, 'base64'));
+    }
+    await evalJs(`document.querySelector('#roseSheet [data-rs="try"]').click()`);
+    await sleep(100);
+    await evalJs(`document.querySelector('#roseSheet [data-id="blindfold"][data-level="yes"]').click()`);
+    await sleep(500);
+    if (process.env.SHOT_ROSE2) {
+      const { data } = await S('Page.captureScreenshot', { format: 'png' });
+      require('fs').writeFileSync(process.env.SHOT_ROSE2, Buffer.from(data, 'base64'));
+    }
+    await evalJs(`document.getElementById('rsClose').click()`);
+    await evalJs(`document.getElementById('spaceSettings').click()`);
+    await sleep(100);
+    check(await visible('#spaceSheet'), 'tapping the title opens the list settings');
+    await evalJs(`document.getElementById('ssCancel').click()`);
+
     check(await evalJs(`document.querySelectorAll('#itemList .it').length`) >= 1,
       'classifying moved it to the Recipes tab');
 

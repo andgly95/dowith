@@ -1297,7 +1297,7 @@ async function server() {
       ['GET', '/api/state'], ['POST', '/api/space'], ['GET', '/api/space/sp1/items'],
       ['POST', '/api/space/sp1/item'], ['POST', '/api/space/sp1/invite'],
       ['PATCH', '/api/item/x'], ['POST', '/api/item/x/done'], ['DELETE', '/api/item/x'],
-      ['POST', '/api/item/x/when'],
+      ['POST', '/api/item/x/when'], ['GET', '/api/space/sp1/pleasure'], ['POST', '/api/space/sp1/pleasure'],
       ['GET', '/api/square/status'],
     ]) {
       const { status } = await api(m, p, m === 'GET' ? null : {}, null);
@@ -1393,6 +1393,43 @@ async function server() {
     assert.strictEqual(c.body.item.plannedBy, null);
   });
 
+  await t('the rose: body answers are shared, things to try only where you BOTH lean yes', async () => {
+    const P = '/api/space/sp1/pleasure';
+    const body = (part, act, level, who) => api('POST', P, { kind: 'body', part, act, level }, who);
+    const tryIt = (id, level, who) => api('POST', P, { kind: 'try', id, level }, who);
+    assert.strictEqual((await body('neck', 'kiss', 'love', A)).status, 200);
+    await tryIt('blindfold', 'yes', A);
+    await tryIt('roleplay', 'love', A);
+    await tryIt('roleplay', 'soft', L);      // her no must not reveal his yes
+    await tryIt('blindfold', 'maybe', L);    // a maybe and a yes is a match
+    await tryIt('spanking', 'love', L);      // his silence must not reveal her yes
+    const hers = (await api('GET', P, null, L)).body;
+    assert.strictEqual(hers.partner, 'Andrew');
+    assert.deepStrictEqual(hers.theirs.body, { neck: { kiss: 'love' } }, 'his body answers are hers to see');
+    assert.deepStrictEqual(hers.matches.map(m => m.id), ['blindfold']);
+    assert.strictEqual(hers.theirs.try, undefined, 'his try answers are never sent, only matches');
+    assert.ok(!JSON.stringify(hers).includes('"roleplay":"love"'), 'his yes does not leak through her no');
+    const his = (await api('GET', P, null, A)).body;
+    assert.ok(!JSON.stringify(his.theirs).includes('spanking') && !his.matches.some(m => m.id === 'spanking'));
+    // Tapping the same answer again takes it back: null clears.
+    await body('neck', 'kiss', null, A);
+    assert.deepStrictEqual((await api('GET', P, null, L)).body.theirs.body, {});
+    // Nothing outside the catalogue, and no level outside the scale.
+    for (const bad of [{ kind: 'body', part: 'neck', act: 'stab', level: 'yes' },
+      { kind: 'try', id: 'blindfold', level: 'obviously' }, { kind: 'try', id: '__proto__', level: 'yes' }, {}]) {
+      assert.strictEqual((await api('POST', P, bad, A)).status, 400, JSON.stringify(bad));
+    }
+    // Not in the list: it does not exist. Not a pair: it does not exist either.
+    assert.strictEqual((await api('GET', P, null, S)).status, 404);
+    const solo = (await api('POST', '/api/space', { name: 'just me' }, A)).body.space.id;
+    assert.strictEqual((await api('GET', `/api/space/${solo}/pleasure`, null, A)).status, 404);
+    // A different pair sees a different book: Andrew and Sam start blank.
+    const sam = (await api('GET', '/api/space/sp2/pleasure', null, S)).body;
+    assert.deepStrictEqual([sam.theirs.body, sam.matches], [{}, []]);
+    assert.strictEqual((await api('GET', '/api/state', null, L)).body.pleasure, undefined,
+      'and none of it rides along on /api/state');
+  });
+
   await t('a list you are not in does not exist as far as you are concerned', async () => {
     assert.strictEqual((await api('GET', '/api/space/sp1/items', null, S)).status, 404);
     assert.strictEqual((await api('POST', '/api/space/sp1/item', { title: 'x' }, S)).status, 404);
@@ -1423,8 +1460,13 @@ async function server() {
 
   await t('leaving takes you out without deleting what the others kept', async () => {
     const before = (await api('GET', '/api/space/sp2/items', null, A)).body.items.length;
+    await api('POST', '/api/space/sp2/pleasure', { kind: 'try', id: 'toys', level: 'yes' }, S);
     await api('POST', '/api/space/sp2/leave', {}, S);
     assert.strictEqual((await api('GET', '/api/space/sp2/items', null, S)).status, 404, 'Sam is out');
+    await new Promise(r => setTimeout(r, 400));   // past the store's write debounce
+    const disk = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+    assert.ok(!Object.keys(disk.pleasure || {}).some(k => k.split('|').includes(S)),
+      'leaving a pair takes the rose answers with it');
     const after = await api('GET', '/api/space/sp2/items', null, A);
     assert.strictEqual(after.status, 200, 'Andrew still has it');
     assert.strictEqual(after.body.items.length, before);
