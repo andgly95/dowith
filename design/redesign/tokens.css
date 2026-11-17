@@ -1,0 +1,68 @@
+/* Do With redesign: tokens.
+   Not loaded by the app. Copy these into public/style.css (see HANDOFF.md §2).
+
+   1. FOREST replaces OLIVE. Same 14 tokens, same shape as every other theme block.
+      Every text pairing clears WCAG AA, including --dim on --card2 (Olive's was 4.4:1):
+
+        --ink   on --bg     15.5:1      --accent    on --bg        8.5:1
+        --ink2  on --card   10.2:1      --on-accent on --accent    8.2:1
+        --dim   on --bg      6.9:1      --accent2   on --card      8.9:1
+        --dim   on --card    6.2:1      --on-accent2 on --accent2  9.1:1
+        --dim   on --card2   5.4:1      --warn      on --card      5.4:1
+        --faint on --bg      3.6:1   ← decoration only (grabbers), never text
+
+      Phones that saved Olive have localStorage `dw-theme = "olive"`. Map it to
+      "forest" in the inline <head> script AND in app.js, or they silently fall
+      back to Dusk. */
+[data-theme="forest"]{
+  --bg:#111a15;          /* deep pine */
+  --card:#18241d;
+  --card2:#213027;
+  --line:#2d3f34;
+  --ink:#edf1e7;         /* birch */
+  --ink2:#c6d1c4;
+  --dim:#93a69a;
+  --faint:#627569;
+  --accent:#e8a658;      /* lantern amber: the one warm thing among the trees */
+  --accent2:#93cfa0;     /* fern, for something already done */
+  --warn:#e07a5f;
+  --on-accent:#2a1705;
+  --on-accent2:#0d2416;
+  --scrim:rgba(5,10,7,.86);
+  --rose:#e08a92;        /* wild rose, for the rose screen */
+}
+
+/* 2. NEW DERIVED TOKENS. Declared on :root AND [data-theme] on purpose: a custom
+      property that reads var(--bg) resolves where it is declared, so declaring it
+      only on :root would freeze it to the root's theme, and a theme-picker swatch
+      carrying its own data-theme would paint with the wrong --sheet. */
+:root,[data-theme]{
+  --sheet:color-mix(in srgb, var(--bg) 50%, var(--card));         /* bottom sheets */
+  --accent-tint:color-mix(in srgb, var(--accent) 16%, transparent); /* selected chips, empty + button, nav pill (already 16%) */
+  --sage-tint:color-mix(in srgb, var(--accent2) 16%, transparent);  /* "Been together", "We went here" */
+  --glass:color-mix(in srgb, var(--sheet) 86%, transparent);        /* controls floating over the map */
+
+  --r-card:20px;    /* grouped rows, the list card on the shelf */
+  --r-sheet:26px;   /* top corners of a bottom sheet */
+  --r-field:14px;   /* inputs, segmented controls */
+  --r-tile:13px;    /* the 44px emoji tile */
+  --tap:44px;       /* minimum hit target */
+}
+
+/* 3. CONTRAST FIXES that apply to both themes.
+      --faint (#6b6274 on Dusk) is 3.2:1 on --bg and 2.9:1 on --card, and it is
+      currently the placeholder colour AND the tick ring's border. Both need to be
+      read, so both move to --dim (5.6:1 / 5.1:1). */
+::placeholder{color:var(--dim)}
+/* .tick{border-color:var(--dim)} */
+
+/* 4. GOOGLE MAP STYLE (Places tab). Cloud-based map styling cannot read CSS
+      variables, so each theme gets its own Map ID styled with these values, which
+      are what the mockups' drawn map uses:
+
+                 land      water     park      road      major road  label
+        Dusk     #1d1821   #253142   #2c2d33   #2d292f   #3f3a3f     #868082
+        Forest   #15201a   #21363f   #26372b   #27302a   #39413b     #7f867e
+
+      Pins are HTML (AdvancedMarkerElement content), so they CAN use the tokens:
+      --sheet fill, 2.5px ring in --accent (to go) or --accent2 (been). */

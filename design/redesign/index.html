@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Do With redesign: every screen</title>
+<style>
+  body{margin:0;background:#0c0a0d;color:#f4eee9;font:15px/1.5 -apple-system,BlinkMacSystemFont,system-ui,sans-serif}
+  header{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 24px;background:#0c0a0dee}
+  h1{font:600 20px/1.2 'Iowan Old Style',Georgia,serif;margin:0 auto 0 0}
+  button{font:inherit;color:inherit;background:#2b2430;border:0;border-radius:18px;padding:8px 16px;min-height:40px;cursor:pointer}
+  button[aria-pressed="true"]{background:#f2845c;color:#2a1206;font-weight:600}
+  main{display:flex;flex-wrap:wrap;gap:40px 32px;padding:24px}
+  figure{margin:0;display:flex;flex-direction:column;gap:8px}
+  figcaption{color:#b5aab9;font-size:13.5px}
+  iframe{width:390px;border:0;border-radius:24px;background:#17131a}
+</style>
+</head>
+<body>
+<header>
+  <h1>Do With redesign</h1>
+  <button type="button" data-t="" aria-pressed="true">Dusk</button>
+  <button type="button" data-t="forest/" aria-pressed="false">Forest</button>
+</header>
+<main id="grid"></main>
+<script>
+  // Static renders: each screen in its starting state. See HANDOFF.md for what each one means.
+  const SCREENS = [
+    ['01-activities', 'Activities', 844], ['02-adding', 'Adding something', 844], ['03-item-sheet', 'One thing, opened', 1090],
+    ['04-films', 'Films', 844], ['05-your-lists', 'Your lists', 844], ['06-account', 'Account', 844],
+    ['07-places', 'Places: to go', 844], ['08-places-been', 'Places: been together', 844], ['09-add-place', 'Adding a place', 844],
+    ['10-place', 'A place, opened', 1500], ['11-place-been', 'A place, opened (been)', 1500],
+  ];
+  const grid = document.getElementById('grid');
+  function show(prefix) {
+    grid.replaceChildren(...SCREENS.map(([file, label, h]) => {
+      const fig = document.createElement('figure');
+      const frame = document.createElement('iframe');
+      frame.src = `screens/${prefix}${file}.html`; frame.height = h; frame.title = label; frame.loading = 'lazy';
+      const cap = document.createElement('figcaption'); cap.textContent = label;
+      fig.append(frame, cap);
+      return fig;
+    }));
+  }
+  document.querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('[data-t]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    show(b.dataset.t);
+  }));
+  show('');
+</script>
+</body>
+</html>

@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Do With: a place, opened</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0C0A0D}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+input,textarea{font:inherit}
+input::placeholder,textarea::placeholder{color:#9A90A2;opacity:1}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 1500px; box-sizing: border-box; overflow: hidden; background: {{t.bg}}; color: {{t.text}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+    <div aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 390px; height: 470px; overflow: hidden"><svg width="100%" height="100%" viewBox="0 0 390 470" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="display: block">
+      <rect x="-60" y="-60" width="520" height="620" fill="{{t.mapLand}}"></rect>
+      <g fill="{{t.mapPark}}">
+        <path d="M199 -10 C 194 40 207 70 190 110 C 181 136 188 160 177 186 L 167 181 C 176 152 169 128 177 103 C 191 66 179 34 186 -10 Z"></path>
+        <ellipse cx="200" cy="94" rx="20" ry="13"></ellipse>
+        <rect x="176" y="279" width="98" height="16" rx="4"></rect>
+        <ellipse cx="338" cy="210" rx="36" ry="24"></ellipse>
+        <ellipse cx="116" cy="300" rx="30" ry="19"></ellipse>
+        <path d="M196 318 C 206 330 214 352 219 374 L 208 376 C 204 356 196 338 187 323 Z"></path>
+      </g>
+      <g fill="none" stroke="{{t.mapRoad}}" stroke-width="1.4" stroke-linecap="round">
+        <path d="M52 110 L 64 480"></path><path d="M-10 262 L 132 254"></path>
+        <path d="M170 140 L 410 132"></path><path d="M178 214 L 410 206"></path>
+        <path d="M250 -10 L 254 300"></path><path d="M205 -10 L 238 262"></path>
+        <path d="M300 -10 L 296 480"></path><path d="M160 334 L 410 324"></path>
+        <path d="M110 -10 L 128 150"></path><path d="M330 120 L 410 160"></path>
+      </g>
+      <g fill="none" stroke="{{t.mapMajor}}" stroke-width="2.6" stroke-linecap="round">
+        <path d="M-10 222 L 150 212"></path><path d="M236 252 L 344 194"></path><path d="M150 212 L 178 214"></path>
+      </g>
+      <g fill="none" stroke="{{t.mapWater}}" stroke-linecap="round">
+        <path d="M -20 64 C 40 86 92 118 120 158 C 142 192 152 232 168 270 C 184 308 198 344 204 392 C 208 428 210 452 212 490" stroke-width="20"></path>
+        <path d="M 206 380 C 236 366 262 348 290 324 C 318 300 350 274 410 252" stroke-width="11"></path>
+      </g>
+      <circle cx="198" cy="304" r="9" fill="{{t.mapWater}}"></circle>
+      <text x="18" y="300" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">ARLINGTON</text><text x="66" y="238" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">GEORGETOWN</text><text x="258" y="100" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">ADAMS MORGAN</text><text x="314" y="254" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">NORTHEAST</text><text x="176" y="320" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">THE MALL</text><text x="312" y="318" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">CAPITOL HILL</text><text x="236" y="400" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">THE WHARF</text><text x="290" y="392" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">NAVY YARD</text>
+      <circle cx="38" cy="236" r="14" fill="rgba(96, 165, 255, 0.22)"></circle>
+      <circle cx="38" cy="236" r="6.5" fill="#60A5FF" stroke="#FFFFFF" stroke-width="2"></circle>
+    </svg></div>
+    <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: {{t.scrim}}"></div>
+    <section role="dialog" aria-label="Arboretum" style="position: absolute; top: 44px; left: 0; right: 0; bottom: 0; box-sizing: border-box; background: {{t.sheet}}; border-radius: 26px 26px 0 0; padding: 8px 12px 32px; display: flex; flex-direction: column; gap: 18px">
+      <div aria-hidden="true" style="align-self: center; width: 38px; height: 5px; border-radius: 3px; background: {{t.faint}}"></div>
+
+      <div style="position: relative; height: 180px; border-radius: 20px; overflow: hidden">
+        <svg width="100%" height="100%" viewBox="261 168 150 72" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="display: block">
+      <rect x="-60" y="-60" width="520" height="620" fill="{{t.mapLand}}"></rect>
+      <g fill="{{t.mapPark}}">
+        <path d="M199 -10 C 194 40 207 70 190 110 C 181 136 188 160 177 186 L 167 181 C 176 152 169 128 177 103 C 191 66 179 34 186 -10 Z"></path>
+        <ellipse cx="200" cy="94" rx="20" ry="13"></ellipse>
+        <rect x="176" y="279" width="98" height="16" rx="4"></rect>
+        <ellipse cx="338" cy="210" rx="36" ry="24"></ellipse>
+        <ellipse cx="116" cy="300" rx="30" ry="19"></ellipse>
+        <path d="M196 318 C 206 330 214 352 219 374 L 208 376 C 204 356 196 338 187 323 Z"></path>
+      </g>
+      <g fill="none" stroke="{{t.mapRoad}}" stroke-width="1.4" stroke-linecap="round">
+        <path d="M52 110 L 64 480"></path><path d="M-10 262 L 132 254"></path>
+        <path d="M170 140 L 410 132"></path><path d="M178 214 L 410 206"></path>
+        <path d="M250 -10 L 254 300"></path><path d="M205 -10 L 238 262"></path>
+        <path d="M300 -10 L 296 480"></path><path d="M160 334 L 410 324"></path>
+        <path d="M110 -10 L 128 150"></path><path d="M330 120 L 410 160"></path>
+      </g>
+      <g fill="none" stroke="{{t.mapMajor}}" stroke-width="2.6" stroke-linecap="round">
+        <path d="M-10 222 L 150 212"></path><path d="M236 252 L 344 194"></path><path d="M150 212 L 178 214"></path>
+      </g>
+      <g fill="none" stroke="{{t.mapWater}}" stroke-linecap="round">
+        <path d="M -20 64 C 40 86 92 118 120 158 C 142 192 152 232 168 270 C 184 308 198 344 204 392 C 208 428 210 452 212 490" stroke-width="20"></path>
+        <path d="M 206 380 C 236 366 262 348 290 324 C 318 300 350 274 410 252" stroke-width="11"></path>
+      </g>
+      <circle cx="198" cy="304" r="9" fill="{{t.mapWater}}"></circle>
+      <text x="18" y="300" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">ARLINGTON</text><text x="66" y="238" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">GEORGETOWN</text><text x="258" y="100" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">ADAMS MORGAN</text><text x="314" y="254" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">NORTHEAST</text><text x="176" y="320" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">THE MALL</text><text x="312" y="318" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">CAPITOL HILL</text><text x="236" y="400" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">THE WHARF</text><text x="290" y="392" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">NAVY YARD</text>
+      <circle cx="38" cy="236" r="14" fill="rgba(96, 165, 255, 0.22)"></circle>
+      <circle cx="38" cy="236" r="6.5" fill="#60A5FF" stroke="#FFFFFF" stroke-width="2"></circle>
+    </svg>
+        <div aria-hidden="true" style="position: absolute; left: 159px; top: 28px; display: flex; flex-direction: column; align-items: center">
+          <span style="position: relative; z-index: 1; width: 54px; height: 54px; box-sizing: border-box; border-radius: 27px; background: {{t.sheet}}; border: 3px solid {{pinRing}}; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; font-size: 27px; line-height: 1">🌳</span>
+          <span style="width: 12px; height: 12px; margin-top: -8px; background: {{pinRing}}; transform: rotate(45deg); border-radius: 2px"></span>
+        </div>
+        <a href="Places.dc.html" aria-label="Close" style="position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; border-radius: 22px; background: {{t.glass}}; backdrop-filter: blur(12px); color: {{t.text}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"></path></svg></a>
+        <span style="position: absolute; left: 12px; bottom: 9px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; color: {{t.text2}}; opacity: 0.8">Map · Google</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 4px; padding: 0 6px">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <h1 style="flex: 1; margin: 0; font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 28px; line-height: 1.12; font-weight: 600; letter-spacing: -0.015em">Arboretum</h1>
+          <button type="button" aria-label="Change the words" style="width: 44px; height: 44px; flex-shrink: 0; border: 0; border-radius: 22px; background: {{t.raised}}; color: {{t.text2}}; display: flex; align-items: center; justify-content: center; padding: 0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.5 3.8a2.3 2.3 0 0 1 3.2 3.2L7.6 19.1 3.5 20.5l1.4-4.1z"></path></svg></button>
+        </div>
+        <span style="display: flex; align-items: center; gap: 6px; font-size: 15.5px; font-weight: 600; color: {{t.text2}}"><span style="display: flex; color: {{pinRing}}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.8s6.6-5.4 6.6-10.1a6.6 6.6 0 1 0-13.2 0C5.4 15.4 12 20.8 12 20.8z"></path><circle cx="12" cy="10.5" r="2.4"></circle></svg></span>U.S. National Arboretum</span>
+        <span style="font-size: 13.5px; color: {{t.dim}}">Botanical garden · Northeast · 8.9 mi</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px">
+        <button type="button" style="border: 0; background: transparent; padding: 4px 0; color: inherit; display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 44px"><span aria-hidden="true" style="width: 54px; height: 54px; border-radius: 27px; background: {{t.accent}}; color: {{t.onAccent}}; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 11.2L20.5 3.5l-7.7 17-2.1-7.2z"></path></svg></span><span style="font-size: 12.5px; font-weight: 600; color: {{t.text2}}">Directions</span></button>
+        <button type="button" style="border: 0; background: transparent; padding: 4px 0; color: inherit; display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 44px"><span aria-hidden="true" style="width: 54px; height: 54px; border-radius: 27px; background: {{t.surface}}; color: {{t.text}}; display: flex; align-items: center; justify-content: center"><sc-if value="{{notBeen}}" hint-placeholder-val="{{ true }}"><span style="display: flex"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"></rect><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"></path></svg></span></sc-if><sc-if value="{{isBeen}}" hint-placeholder-val="{{ false }}"><span style="display: flex"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 0 1 14.6-5.9L20.5 8.5"></path><path d="M20.5 3.5v5h-5"></path><path d="M20.5 12a8.5 8.5 0 0 1-14.6 5.9L3.5 15.5"></path><path d="M3.5 20.5v-5h5"></path></svg></span></sc-if></span><span style="font-size: 12.5px; font-weight: 600; color: {{t.text2}}">{{planLabel}}</span></button>
+        <button type="button" style="border: 0; background: transparent; padding: 4px 0; color: inherit; display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 44px"><span aria-hidden="true" style="width: 54px; height: 54px; border-radius: 27px; background: {{t.surface}}; color: {{t.text}}; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"></path></svg></span><span style="font-size: 12.5px; font-weight: 600; color: {{t.text2}}">Website</span></button>
+        <button type="button" style="border: 0; background: transparent; padding: 4px 0; color: inherit; display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 44px"><span aria-hidden="true" style="width: 54px; height: 54px; border-radius: 27px; background: {{t.surface}}; color: {{t.text}}; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5v6a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-6"></path><path d="M16 7l-4-4-4 4M12 3v12.5"></path></svg></span><span style="font-size: 12.5px; font-weight: 600; color: {{t.text2}}">Share</span></button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="background: {{t.surface}}; border-radius: 18px; overflow: hidden">
+          <div style="position: relative; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px"><span aria-hidden="true" style="display: flex; width: 26px; justify-content: center; color: {{t.dim}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path></svg></span><span style="flex: 1; font-size: 15px"><span style="color: {{t.sage}}; font-weight: 600">Open today</span> · 8 AM–5 PM</span></div>
+          <div style="position: relative; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px"><div aria-hidden="true" style="position: absolute; left: 52px; right: 0; top: 0; height: 1px; background: {{t.line}}"></div><span aria-hidden="true" style="display: flex; width: 26px; justify-content: center; color: {{t.dim}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.8s6.6-5.4 6.6-10.1a6.6 6.6 0 1 0-13.2 0C5.4 15.4 12 20.8 12 20.8z"></path><circle cx="12" cy="10.5" r="2.4"></circle></svg></span><span style="flex: 1; font-size: 15px">3501 New York Ave NE</span></div>
+          <div style="position: relative; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px"><div aria-hidden="true" style="position: absolute; left: 52px; right: 0; top: 0; height: 1px; background: {{t.line}}"></div><span aria-hidden="true" style="display: flex; width: 26px; justify-content: center; color: {{t.dim}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"></path></svg></span><span style="flex: 1; font-size: 15px; color: {{t.accent}}">usna.usda.gov</span></div>
+        </div>
+        <span style="padding: 0 6px; font-size: 12px; line-height: 1.4; color: {{t.dim}}">Hours and address come from Google Maps, fresh each time you open this.</span>
+      </div>
+
+      <sc-if value="{{notBeen}}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <h2 style="margin: 0; padding: 0 6px; font-size: 15px; font-weight: 600">Your plan</h2>
+          <div style="background: {{t.surface}}; border-radius: 18px; overflow: hidden">
+            <div style="position: relative; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px"><span aria-hidden="true" style="display: flex; width: 26px; justify-content: center; color: {{t.dim}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"></rect><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"></path></svg></span><span style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 15px">When</span><span style="font-size: 13px; color: {{t.dim}}">Not planned yet · Linnea can plan it too</span></span><button type="button" style="min-height: 44px; border: 0; background: transparent; color: {{t.accent}}; font-size: 14.5px; font-weight: 600; padding: 0 2px">Pick a day</button></div>
+            <div style="position: relative; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px"><div aria-hidden="true" style="position: absolute; left: 52px; right: 0; top: 0; height: 1px; background: {{t.line}}"></div><span aria-hidden="true" style="display: flex; width: 26px; justify-content: center; color: {{t.dim}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9a2.5 2.5 0 0 0 0 5v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2.5 2.5 0 0 1 0-5V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z"></path><path d="M14 5.5v2M14 11v2M14 16.5v2"></path></svg></span><span style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 15px">Book ahead</span><span style="font-size: 13px; color: {{t.dim}}">A nudge to reserve once it has a day</span></span><button type="button" role="switch" aria-checked="{{book}}" aria-label="Book ahead" onClick="{{toggleBook}}" style="width: 52px; height: 44px; flex-shrink: 0; border: 0; background: transparent; padding: 0; display: flex; align-items: center; justify-content: center"><span style="position: relative; width: 50px; height: 30px; border-radius: 15px; background: {{track}}; display: block"><span style="position: absolute; top: 3px; left: {{knobLeft}}; width: 24px; height: 24px; border-radius: 12px; background: {{knob}}; display: block"></span></span></button></div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isBeen}}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 12px; background: {{t.sageTint}}; border-radius: 20px; padding: 14px 14px 16px">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <span style="display: flex; color: {{t.sage}}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8.5 12.2l2.4 2.4 4.8-4.9"></path></svg></span>
+            <span style="flex: 1; display: flex; flex-direction: column; gap: 1px">
+              <span style="font-size: 16px; font-weight: 600">Been together</span>
+              <span style="font-size: 13px; color: {{t.text2}}">Sat, Nov 8 · Linnea ticked it off</span>
+            </span>
+            <button type="button" style="min-height: 44px; border: 0; background: transparent; color: {{t.sage}}; font-size: 14px; font-weight: 600; padding: 0 2px">Change date</button>
+          </div>
+          <div role="group" aria-label="Would you go back?" style="display: flex; flex-direction: column; gap: 8px">
+            <span style="font-size: 13.5px; font-weight: 600; color: {{t.text2}}">Would you go back?</span>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px">
+              <sc-for list="{{again}}" as="X" hint-placeholder-count="3"><button type="button" aria-pressed="{{X.pressed}}" onClick="{{X.pick}}" style="min-height: 38px; border: 0; border-radius: 19px; background: {{X.bg}}; color: {{X.fg}}; padding: 0 14px; font-size: 14px; font-weight: 600">{{X.label}}</button></sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="display: flex; align-items: center; gap: 12px; background: {{t.surface}}; border-radius: 18px; padding: 6px 6px 6px 14px; min-height: 56px">
+        <span aria-hidden="true" style="display: flex; width: 26px; justify-content: center; color: {{t.dim}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.8"></circle><path d="M4.5 20.5c.8-4 3.8-6.3 7.5-6.3s6.7 2.3 7.5 6.3"></path></svg></span>
+        <span style="flex: 1; font-size: 15px">Whose idea</span>
+        <div role="group" aria-label="Whose idea" style="display: flex; gap: 2px; background: {{t.raised}}; border-radius: 14px; padding: 3px">
+          <sc-for list="{{whose}}" as="X" hint-placeholder-count="2"><button type="button" aria-pressed="{{X.pressed}}" onClick="{{X.pick}}" style="min-height: 38px; border: 0; border-radius: 12px; background: {{X.bg}}; color: {{X.fg}}; padding: 0 12px; font-size: 14px; font-weight: 600">{{X.label}}</button></sc-for>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <label for="plNotes" style="padding: 0 6px; font-size: 15px; font-weight: 600">{{notesLabel}}</label>
+        <textarea id="plNotes" rows="3" placeholder="{{notesHint}}" style="box-sizing: border-box; width: 100%; border: 0; border-radius: 16px; background: {{t.surface}}; color: {{t.text}}; padding: 13px 16px; font-size: 16px; line-height: 1.45; resize: none; outline: none"></textarea>
+      </div>
+
+      <div role="group" aria-label="Who sees it" style="display: flex; flex-direction: column; gap: 8px">
+        <span style="padding: 0 6px; font-size: 15px; font-weight: 600">Who sees it</span>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; background: {{t.surface}}; border-radius: 16px; padding: 4px">
+          <sc-for list="{{visOpts}}" as="X" hint-placeholder-count="3"><button type="button" aria-pressed="{{X.pressed}}" onClick="{{X.pick}}" style="min-height: 44px; border: 0; border-radius: 12px; background: {{X.bg}}; color: {{X.fg}}; padding: 0 12px; font-size: 14px; font-weight: 600">{{X.label}}</button></sc-for>
+        </div>
+        <span style="padding: 0 6px; font-size: 12.5px; line-height: 1.4; color: {{t.dim}}">{{visHint}}</span>
+      </div>
+
+      <sc-if value="{{notBeen}}" hint-placeholder-val="{{ true }}">
+        <button type="button" onClick="{{markBeen}}" style="min-height: 54px; border: 0; border-radius: 18px; background: {{t.sageTint}}; color: {{t.sage}}; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 16px; font-weight: 600"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8.5 12.2l2.4 2.4 4.8-4.9"></path></svg>We went here</button>
+      </sc-if>
+      <sc-if value="{{isBeen}}" hint-placeholder-val="{{ false }}">
+        <button type="button" onClick="{{markNotBeen}}" style="min-height: 48px; border: 0; background: transparent; color: {{t.dim}}; font-size: 14.5px; font-weight: 500">Not been after all</button>
+      </sc-if>
+
+      <div style="background: {{t.surface}}; border-radius: 18px; overflow: hidden">
+        <a href="AddPlace.dc.html" style="position: relative; display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 0 14px"><span aria-hidden="true" style="display: flex; width: 26px; justify-content: center; color: {{t.dim}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M20.5 20.5l-4.8-4.8"></path></svg></span><span style="flex: 1; font-size: 15px">Change the place</span><span style="display: flex; color: {{t.dim}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"></path></svg></span></a>
+        <div style="position: relative; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px"><div aria-hidden="true" style="position: absolute; left: 52px; right: 0; top: 0; height: 1px; background: {{t.line}}"></div><span aria-hidden="true" style="display: flex; width: 26px; justify-content: center; color: {{t.dim}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3.5l4 4-4 4M20 7.5H5M8 20.5l-4-4 4-4M4 16.5h15"></path></svg></span><span style="flex: 1; font-size: 15px">Move to another tab</span><span style="display: flex; color: {{t.dim}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"></path></svg></span></div>
+        <div style="position: relative; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px"><div aria-hidden="true" style="position: absolute; left: 52px; right: 0; top: 0; height: 1px; background: {{t.line}}"></div><span aria-hidden="true" style="display: flex; width: 26px; justify-content: center; color: {{t.dim}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9.5 7V5h5v2M6.5 7l.9 12a1.5 1.5 0 0 0 1.5 1.4h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7"></path></svg></span><span style="flex: 1; font-size: 15px; color: {{t.warn}}">Delete</span></div>
+      </div>
+    </section>
+  </div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme": {"editor": "enum", "default": "dusk", "options": ["dusk", "forest"]}, "$preview": {"width": 390, "height": 1500}}'>
+class Component extends DCLogic {
+  theme(key) {
+    var P = {
+      dusk: { bg: '#17131A', card: '#211C26', card2: '#2B2430', line: '#332B3A', ink: '#F4EEE9', ink2: '#CBBFC6', dim: '#948A9C', faint: '#6B6274', accent: '#F2845C', sage: '#8FB9A8', warn: '#E0714F', onAccent: '#2A1206', onSage: '#10251D', rose: '#E0708A' },
+      forest: { bg: '#111A15', card: '#18241D', card2: '#213027', line: '#2D3F34', ink: '#EDF1E7', ink2: '#C6D1C4', dim: '#93A69A', faint: '#627569', accent: '#E8A658', sage: '#93CFA0', warn: '#E07A5F', onAccent: '#2A1705', onSage: '#0D2416', rose: '#E08A92' }
+    };
+    var p = P[key] || P.dusk;
+    function hex(h) { var n = parseInt(String(h).replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+    function toHex(c) { return '#' + c.map(function (v) { var s = Math.round(Math.max(0, Math.min(255, v))).toString(16); return s.length < 2 ? '0' + s : s; }).join('').toUpperCase(); }
+    function mix(a, b, w) { return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w, a[2] + (b[2] - a[2]) * w]; }
+    function lum(c) { var r = c.map(function (v) { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r[0] + 0.7152 * r[1] + 0.0722 * r[2]; }
+    function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    function ensure(c, ref, min, toward) { var x = c; for (var i = 0; i < 20 && ratio(x, ref) < min; i++) x = mix(x, toward, 0.06); return x; }
+    function rgba(c, a) { return 'rgba(' + Math.round(c[0]) + ', ' + Math.round(c[1]) + ', ' + Math.round(c[2]) + ', ' + a + ')'; }
+    var bg = hex(p.bg), card = hex(p.card), card2 = hex(p.card2), ink = hex(p.ink), acc = hex(p.accent), sage = hex(p.sage);
+    var dim = ensure(hex(p.dim), card2, 4.5, ink);
+    return {
+      key: p === P.forest ? 'forest' : 'dusk',
+      bg: p.bg, surface: p.card, raised: p.card2, line: p.line,
+      sheet: toHex(mix(bg, card, 0.5)),
+      text: p.ink, text2: p.ink2, dim: toHex(dim), faint: p.faint,
+      accent: p.accent, accentTint: rgba(acc, 0.16), onAccent: p.onAccent,
+      sage: p.sage, sageTint: rgba(sage, 0.16), onSage: p.onSage,
+      warn: p.warn, rose: p.rose,
+      scrim: rgba(mix(bg, [0, 0, 0], 0.5), 0.7),
+      glass: rgba(mix(bg, card, 0.5), 0.86),
+      mapLand: toHex(mix(bg, card, 0.6)),
+      mapWater: toHex(mix(bg, [70, 118, 160], 0.3)),
+      mapPark: toHex(mix(mix(bg, card, 0.6), sage, 0.13)),
+      mapRoad: toHex(mix(bg, ink, 0.1)),
+      mapMajor: toHex(mix(bg, ink, 0.18)),
+      mapLabel: toHex(mix(bg, ink, 0.5))
+    };
+  }
+  lead(title) {
+    var m = /^((?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:️|⃣|\p{Emoji_Modifier}|\p{Regional_Indicator}|‍\p{Extended_Pictographic})*)\s*/u.exec(title);
+    if (!m) return { emoji: '', rest: title };
+    return { emoji: m[1], rest: title.slice(m[0].length) };
+  }
+
+  renderVals() {
+    var self = this;
+    var t = this.theme(this.props.theme ?? 'dusk');
+    var st = this.state || {};
+    var been = st.been != null ? st.been : false;
+    var whose = st.whose || 'L';
+    var vis = st.vis || 'shared';
+    var book = !!st.book;
+    var again = st.again || 'soon';
+    function opt(cur, key, id, label, extra) {
+      var on = cur === id;
+      return { label: label, pressed: on ? 'true' : 'false', bg: on ? (extra || t.sheet) : 'transparent', fg: on ? t.text : t.dim,
+        pick: function () { var o = {}; o[key] = id; self.setState(o); } };
+    }
+    var VIS = [['private', 'Just me', 'Only you. Not even Linnea sees it.'], ['shared', 'Us', 'You and Linnea.'], ['public', 'Anyone', 'A standing wish, in every list you keep.']];
+    var hint = VIS.filter(function (v) { return v[0] === vis; })[0][2];
+    return {
+      t: t,
+      isBeen: been, notBeen: !been,
+      pinRing: been ? t.sage : t.accent,
+      planLabel: been ? 'Go again' : 'Plan it',
+      book: book ? 'true' : 'false',
+      toggleBook: function () { self.setState({ book: !book }); },
+      track: book ? t.accent : t.raised, knob: book ? t.onAccent : t.text2, knobLeft: book ? '23px' : '3px',
+      whose: [opt(whose, 'whose', 'A', 'Mine'), opt(whose, 'whose', 'L', 'Linnea’s')],
+      again: [
+        { id: 'soon', label: 'Can’t wait' }, { id: 'maybe', label: 'Maybe someday' }, { id: 'once', label: 'Once was enough' }
+      ].map(function (a) {
+        var on = again === a.id;
+        return { label: a.label, pressed: on ? 'true' : 'false', bg: on ? t.sage : t.sheet, fg: on ? t.onSage : t.text2,
+          pick: function () { self.setState({ again: a.id }); } };
+      }),
+      notesLabel: been ? 'What was it like?' : 'Why go',
+      notesHint: been ? 'Something you want to remember' : 'What made you want to go?',
+      visOpts: VIS.map(function (v) { return opt(vis, 'vis', v[0], v[1], t.raised); }),
+      visHint: hint,
+      markBeen: function () { self.setState({ been: true }); },
+      markNotBeen: function () { self.setState({ been: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>
