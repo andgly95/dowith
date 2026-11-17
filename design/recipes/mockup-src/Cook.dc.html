@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Do With: cooking, step by step</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0C0A0D}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+input,textarea{font:inherit}
+input::placeholder,textarea::placeholder{color:#9A90A2;opacity:1}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; background: {{t.bg}}; color: {{t.text}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; display: flex; flex-direction: column">
+    <header style="flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; padding: 8px 12px 0">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+        <a href="Recipe.dc.html" aria-label="Stop cooking" style="width: 44px; height: 44px; border-radius: 22px; background: {{t.surface}}; color: {{t.text}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"></path></svg></a>
+        <span aria-live="polite" style="font-size: 15.5px; font-weight: 600">Step {{n}} of 6</span>
+        <span style="min-height: 36px; display: flex; align-items: center; padding: 0 12px; border-radius: 18px; background: {{t.surface}}; font-size: 13.5px; font-weight: 600; color: {{t.text2}}">Serves 4</span>
+      </div>
+      <div aria-hidden="true" style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; padding: 0 4px">
+        <sc-for list="{{segs}}" as="g" hint-placeholder-count="6"><span style="height: 4px; border-radius: 2px; background: {{g.c}}"></span></sc-for>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px; font-size: 12.5px; color: {{t.dim}}">
+        <span style="display: flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>Screen stays on</span>
+        <span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 10px; background: {{t.raised}}; color: {{t.text2}}; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700">L</span>Linnea’s on step 4</span>
+      </div>
+      <sc-if value="{{hasTray}}" hint-placeholder-val="{{ true }}">
+        <div role="group" aria-label="Running timers" style="display: flex; gap: 8px; flex-wrap: wrap; padding: 2px 4px 0">
+          <sc-for list="{{tray}}" as="r" hint-placeholder-count="1">
+            <button type="button" onClick="{{r.go}}" style="min-height: 40px; border: 0; border-radius: 20px; background: {{r.bg}}; color: {{r.fg}}; display: flex; align-items: center; gap: 8px; padding: 0 14px; font-size: 14px; font-weight: 600"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2h4"></path><path d="M12 14l3-3"></path><circle cx="12" cy="14" r="8"></circle></svg>{{r.label}}<span style="font-variant-numeric: tabular-nums">{{r.left}}</span></button>
+          </sc-for>
+        </div>
+      </sc-if>
+    </header>
+
+    <main style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 22px; padding: 22px 20px 16px">
+      <span aria-hidden="true" style="width: 44px; height: 44px; border-radius: 22px; background: {{t.accentTint}}; color: {{t.accent}}; display: flex; align-items: center; justify-content: center; font-size: 19px; font-weight: 700">{{n}}</span>
+      <p style="margin: 0; font-size: 25px; line-height: 1.38; font-weight: 500; letter-spacing: -0.01em">{{text}}</p>
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <span style="font-size: 13.5px; font-weight: 600; color: {{t.text2}}">For this step</span>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <sc-for list="{{uses}}" as="u" hint-placeholder-count="2">
+            <span style="min-height: 38px; display: flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 12px; background: {{t.surface}}; font-size: 15px"><b style="font-weight: 650">{{u.amt}}</b><span style="color: {{t.text2}}">{{u.n}}</span></span>
+          </sc-for>
+        </div>
+      </div>
+      <sc-if value="{{hasTimer}}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; align-items: center; gap: 14px; padding: 16px 16px 16px 20px; border-radius: 22px; background: {{t.surface}}">
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 13.5px; font-weight: 600; color: {{t.text2}}">{{timerName}}</span>
+            <span aria-live="polite" style="font-size: 40px; line-height: 1.05; font-weight: 700; font-variant-numeric: tabular-nums; color: {{timerColor}}">{{timerLeft}}</span>
+          </span>
+          <button type="button" aria-label="{{timerAria}}" onClick="{{timerTap}}" style="width: 60px; height: 60px; border: 0; border-radius: 30px; background: {{t.accent}}; color: {{t.onAccent}}; display: flex; align-items: center; justify-content: center; padding: 0">
+            <sc-if value="{{timerRunning}}" hint-placeholder-val="{{ false }}"><span style="display: flex"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg></span></sc-if>
+            <sc-if value="{{timerStopped}}" hint-placeholder-val="{{ true }}"><span style="display: flex"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"></path></svg></span></sc-if>
+          </button>
+        </div>
+      </sc-if>
+    </main>
+
+    <div style="flex-shrink: 0; display: flex; gap: 10px; padding: 10px 16px 24px">
+      <button type="button" onClick="{{back}}" aria-disabled="{{firstStep}}" style="min-height: 58px; border: 0; border-radius: 20px; background: {{t.surface}}; color: {{backFg}}; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 22px; font-size: 16px; font-weight: 600"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>Back</button>
+      <sc-if value="{{notLast}}" hint-placeholder-val="{{ true }}">
+        <button type="button" onClick="{{next}}" style="flex: 1; min-height: 58px; border: 0; border-radius: 20px; background: {{t.accent}}; color: {{t.onAccent}}; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 16.5px; font-weight: 700">Next step<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"></path></svg></button>
+      </sc-if>
+      <sc-if value="{{isLast}}" hint-placeholder-val="{{ false }}">
+        <a href="CookDone.dc.html" style="flex: 1; min-height: 58px; border-radius: 20px; background: {{t.sage}}; color: {{t.onSage}}; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 16.5px; font-weight: 700"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"></path></svg>Finish</a>
+      </sc-if>
+    </div>
+  </div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme": {"editor": "enum", "default": "dusk", "options": ["dusk", "forest"]}, "$preview": {"width": 390, "height": 844}}'>
+class Component extends DCLogic {
+  theme(key) {
+    var P = {
+      dusk: { bg: '#17131A', card: '#211C26', card2: '#2B2430', line: '#332B3A', ink: '#F4EEE9', ink2: '#CBBFC6', dim: '#948A9C', faint: '#6B6274', accent: '#F2845C', sage: '#8FB9A8', warn: '#E0714F', onAccent: '#2A1206', onSage: '#10251D', rose: '#E0708A' },
+      forest: { bg: '#111A15', card: '#18241D', card2: '#213027', line: '#2D3F34', ink: '#EDF1E7', ink2: '#C6D1C4', dim: '#93A69A', faint: '#627569', accent: '#E8A658', sage: '#93CFA0', warn: '#E07A5F', onAccent: '#2A1705', onSage: '#0D2416', rose: '#E08A92' }
+    };
+    var p = P[key] || P.dusk;
+    function hex(h) { var n = parseInt(String(h).replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+    function toHex(c) { return '#' + c.map(function (v) { var s = Math.round(Math.max(0, Math.min(255, v))).toString(16); return s.length < 2 ? '0' + s : s; }).join('').toUpperCase(); }
+    function mix(a, b, w) { return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w, a[2] + (b[2] - a[2]) * w]; }
+    function lum(c) { var r = c.map(function (v) { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r[0] + 0.7152 * r[1] + 0.0722 * r[2]; }
+    function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    function ensure(c, ref, min, toward) { var x = c; for (var i = 0; i < 20 && ratio(x, ref) < min; i++) x = mix(x, toward, 0.06); return x; }
+    function rgba(c, a) { return 'rgba(' + Math.round(c[0]) + ', ' + Math.round(c[1]) + ', ' + Math.round(c[2]) + ', ' + a + ')'; }
+    var bg = hex(p.bg), card = hex(p.card), card2 = hex(p.card2), ink = hex(p.ink), acc = hex(p.accent), sage = hex(p.sage);
+    var dim = ensure(hex(p.dim), card2, 4.5, ink);
+    return {
+      key: p === P.forest ? 'forest' : 'dusk',
+      bg: p.bg, surface: p.card, raised: p.card2, line: p.line,
+      sheet: toHex(mix(bg, card, 0.5)),
+      text: p.ink, text2: p.ink2, dim: toHex(dim), faint: p.faint,
+      accent: p.accent, accentTint: rgba(acc, 0.16), onAccent: p.onAccent,
+      sage: p.sage, sageTint: rgba(sage, 0.16), onSage: p.onSage,
+      warn: p.warn, rose: p.rose,
+      scrim: rgba(mix(bg, [0, 0, 0], 0.5), 0.7),
+      glass: rgba(mix(bg, card, 0.5), 0.86),
+      mapLand: toHex(mix(bg, card, 0.6)),
+      mapWater: toHex(mix(bg, [70, 118, 160], 0.3)),
+      mapPark: toHex(mix(mix(bg, card, 0.6), sage, 0.13)),
+      mapRoad: toHex(mix(bg, ink, 0.1)),
+      mapMajor: toHex(mix(bg, ink, 0.18)),
+      mapLabel: toHex(mix(bg, ink, 0.5))
+    };
+  }
+  lead(title) {
+    var m = /^((?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:️|⃣|\p{Emoji_Modifier}|\p{Regional_Indicator}|‍\p{Extended_Pictographic})*)\s*/u.exec(title);
+    if (!m) return { emoji: '', rest: title };
+    return { emoji: m[1], rest: title.slice(m[0].length) };
+  }
+
+  recipe() {
+    return {
+      base: 4,
+      ing: [
+        { id: 'chk', q: 1.5, u: 'lb', n: 'boneless chicken thighs', mine: true, hers: false },
+        { id: 'flr', q: 0.25, u: 'cup', n: 'all-purpose flour', mine: true, hers: true },
+        { id: 'oil', q: 2, u: 'tbsp', n: 'olive oil', mine: true, hers: true },
+        { id: 'gar', q: 4, u: 'cloves', n: 'garlic, minced', mine: true, hers: true },
+        { id: 'sdt', q: 0.5, u: 'cup', n: 'sun-dried tomatoes, chopped', mine: false, hers: true },
+        { id: 'brt', q: 1, u: 'cup', n: 'chicken broth', mine: true, hers: false },
+        { id: 'crm', q: 0.75, u: 'cup', n: 'heavy cream', mine: false, hers: true },
+        { id: 'par', q: 0.5, u: 'cup', n: 'grated parmesan', mine: false, hers: true },
+        { id: 'thy', q: 1, u: 'tsp', n: 'dried thyme', mine: true, hers: true },
+        { id: 'rpf', q: 0.5, u: 'tsp', n: 'red pepper flakes', mine: true, hers: false },
+        { id: 'bas', q: 0, u: '', n: 'fresh basil, to serve', mine: true, hers: true }
+      ],
+      steps: [
+        { t: 'Pat the chicken dry, season it with salt and pepper, and dust it with the flour.', use: ['chk', 'flr'] },
+        { t: 'Heat the oil in a large skillet over medium-high. Sear the chicken until golden, about 5 minutes a side, then move it to a plate.', use: ['oil', 'chk'], timer: 300, tl: 'Sear' },
+        { t: 'Lower the heat to medium. Add the garlic and sun-dried tomatoes and cook until fragrant, about 2 minutes.', use: ['gar', 'sdt'], timer: 120, tl: 'Garlic' },
+        { t: 'Pour in the broth and cream, add the thyme and pepper flakes, and bring it to a gentle simmer.', use: ['brt', 'crm', 'thy', 'rpf'] },
+        { t: 'Stir in the parmesan, return the chicken, and simmer until the sauce thickens and the chicken is cooked through, about 10 minutes.', use: ['par', 'chk'], timer: 600, tl: 'Simmer' },
+        { t: 'Tear the basil over the top and serve.', use: ['bas'] }
+      ]
+    };
+  }
+  amount(q, scale) {
+    if (!q) return '';
+    var v = q * scale, w = Math.floor(v + 1e-9), f = v - w;
+    var F = [[0, ''], [0.125, '⅛'], [0.25, '¼'], [0.333, '⅓'], [0.5, '½'], [0.667, '⅔'], [0.75, '¾'], [1, '']];
+    var best = F[0];
+    F.forEach(function (x) { if (Math.abs(x[0] - f) < Math.abs(best[0] - f)) best = x; });
+    if (best[0] === 1) { w += 1; best = F[0]; }
+    return (w ? String(w) : '') + best[1] || '0';
+  }
+  clock(s) { s = Math.max(0, Math.round(s)); var m = Math.floor(s / 60), r = s % 60; return m + ':' + (r < 10 ? '0' : '') + r; }
+
+  renderVals() {
+    var self = this;
+    var t = this.theme(this.props.theme ?? 'dusk');
+    var st = this.state || {};
+    var R = this.recipe();
+    var i = st.i != null ? st.i : 2;
+    var now = Date.now();
+    this.t0 = this.t0 || now;
+    var timers = st.timers || { 1: { end: this.t0 + 192000, total: 300, running: true } };
+    var anyRunning = Object.keys(timers).some(function (k) { return timers[k].running && timers[k].end > now; });
+    if (anyRunning && !this.tick) this.tick = setTimeout(function () { self.tick = null; self.setState({ now: Date.now() }); }, 1000);
+    var byId = {};
+    R.ing.forEach(function (g) { byId[g.id] = g; });
+    var step = R.steps[i];
+    function left(tm) { return tm.running ? Math.max(0, (tm.end - now) / 1000) : (tm.left != null ? tm.left : tm.total); }
+    var mine = timers[i];
+    var secs = step.timer ? (mine ? left(mine) : step.timer) : 0;
+    var running = !!(mine && mine.running && secs > 0);
+    var tray = Object.keys(timers).filter(function (k) { return Number(k) !== i && timers[k].running; }).map(function (k) {
+      var s = left(timers[k]), up = s <= 0;
+      return { label: R.steps[k].tl + ' ·', left: up ? 'done' : self.clock(s), bg: up ? t.sage : t.accentTint, fg: up ? t.onSage : t.accent,
+        go: function () { self.setState({ i: Number(k) }); } };
+    });
+    return {
+      t: t, n: i + 1, text: step.t,
+      segs: R.steps.map(function (s, k) { return { c: k <= i ? t.accent : t.raised }; }),
+      uses: step.use.map(function (id) { var g = byId[id]; return { amt: (self.amount(g.q, 1) + (g.u ? ' ' + g.u : '')).trim(), n: g.n.replace(/,.*$/, '') }; }),
+      hasTimer: !!step.timer, timerName: step.timer ? step.tl + ' · ' + (step.timer / 60) + ' min' : '',
+      timerLeft: this.clock(secs), timerColor: secs <= 0 && mine ? t.sage : t.text,
+      timerRunning: running, timerStopped: !running, timerAria: running ? 'Pause timer' : 'Start timer',
+      timerTap: function () {
+        var o = Object.assign({}, timers);
+        if (running) o[i] = { total: step.timer, left: secs, running: false };
+        else o[i] = { total: step.timer, end: Date.now() + (secs > 0 ? secs : step.timer) * 1000, running: true };
+        self.setState({ timers: o });
+      },
+      hasTray: tray.length > 0, tray: tray,
+      firstStep: i === 0 ? 'true' : 'false', backFg: i === 0 ? t.faint : t.text,
+      back: function () { if (i > 0) self.setState({ i: i - 1 }); },
+      next: function () { if (i < R.steps.length - 1) self.setState({ i: i + 1 }); },
+      isLast: i === R.steps.length - 1, notLast: i !== R.steps.length - 1
+    };
+  }
+}
+</script>
+</body>
+</html>
