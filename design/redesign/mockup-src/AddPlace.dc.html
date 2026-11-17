@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Do With: adding a place</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0C0A0D}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+input,textarea{font:inherit}
+input::placeholder,textarea::placeholder{color:#9A90A2;opacity:1}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; background: {{t.bg}}; color: {{t.text}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+    <div style="position: absolute; top: 0; left: 0; width: 390px; height: 470px; overflow: hidden">
+      <svg width="100%" height="100%" viewBox="0 0 390 470" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="display: block">
+      <rect x="-60" y="-60" width="520" height="620" fill="{{t.mapLand}}"></rect>
+      <g fill="{{t.mapPark}}">
+        <path d="M199 -10 C 194 40 207 70 190 110 C 181 136 188 160 177 186 L 167 181 C 176 152 169 128 177 103 C 191 66 179 34 186 -10 Z"></path>
+        <ellipse cx="200" cy="94" rx="20" ry="13"></ellipse>
+        <rect x="176" y="279" width="98" height="16" rx="4"></rect>
+        <ellipse cx="338" cy="210" rx="36" ry="24"></ellipse>
+        <ellipse cx="116" cy="300" rx="30" ry="19"></ellipse>
+        <path d="M196 318 C 206 330 214 352 219 374 L 208 376 C 204 356 196 338 187 323 Z"></path>
+      </g>
+      <g fill="none" stroke="{{t.mapRoad}}" stroke-width="1.4" stroke-linecap="round">
+        <path d="M52 110 L 64 480"></path><path d="M-10 262 L 132 254"></path>
+        <path d="M170 140 L 410 132"></path><path d="M178 214 L 410 206"></path>
+        <path d="M250 -10 L 254 300"></path><path d="M205 -10 L 238 262"></path>
+        <path d="M300 -10 L 296 480"></path><path d="M160 334 L 410 324"></path>
+        <path d="M110 -10 L 128 150"></path><path d="M330 120 L 410 160"></path>
+      </g>
+      <g fill="none" stroke="{{t.mapMajor}}" stroke-width="2.6" stroke-linecap="round">
+        <path d="M-10 222 L 150 212"></path><path d="M236 252 L 344 194"></path><path d="M150 212 L 178 214"></path>
+      </g>
+      <g fill="none" stroke="{{t.mapWater}}" stroke-linecap="round">
+        <path d="M -20 64 C 40 86 92 118 120 158 C 142 192 152 232 168 270 C 184 308 198 344 204 392 C 208 428 210 452 212 490" stroke-width="20"></path>
+        <path d="M 206 380 C 236 366 262 348 290 324 C 318 300 350 274 410 252" stroke-width="11"></path>
+      </g>
+      <circle cx="198" cy="304" r="9" fill="{{t.mapWater}}"></circle>
+      <text x="18" y="300" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">ARLINGTON</text><text x="66" y="238" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">GEORGETOWN</text><text x="258" y="100" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">ADAMS MORGAN</text><text x="314" y="254" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">NORTHEAST</text><text x="176" y="320" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">THE MALL</text><text x="312" y="318" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">CAPITOL HILL</text><text x="236" y="400" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">THE WHARF</text><text x="290" y="392" fill="{{t.mapLabel}}" style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em">NAVY YARD</text>
+      <circle cx="38" cy="236" r="14" fill="rgba(96, 165, 255, 0.22)"></circle>
+      <circle cx="38" cy="236" r="6.5" fill="#60A5FF" stroke="#FFFFFF" stroke-width="2"></circle>
+    </svg>
+      <sc-for list="{{dots}}" as="d" hint-placeholder-count="6">
+        <span aria-hidden="true" style="position: absolute; left: {{d.left}}; top: {{d.top}}; width: 12px; height: 12px; border-radius: 6px; background: {{d.color}}; box-shadow: 0 0 0 2px {{t.mapLand}}; opacity: 0.55"></span>
+      </sc-for>
+      <sc-if value="{{choosing}}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{cands}}" as="c" hint-placeholder-count="3">
+          <span aria-hidden="true" style="position: absolute; left: {{c.left}}; top: {{c.top}}; width: 26px; height: 26px; box-sizing: border-box; border-radius: 13px; background: {{t.accent}}; color: {{t.onAccent}}; border: 2px solid {{t.mapLand}}; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700">{{c.n}}</span>
+        </sc-for>
+      </sc-if>
+      <sc-if value="{{added}}" hint-placeholder-val="{{ false }}">
+        <div style="position: absolute; left: 266px; top: 228px; display: flex; flex-direction: column; align-items: center">
+          <span style="position: relative; z-index: 1; width: 52px; height: 52px; box-sizing: border-box; border-radius: 26px; background: {{t.sheet}}; border: 2.5px solid {{t.accent}}; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; font-size: 26px; line-height: 1">🏛️</span>
+          <span aria-hidden="true" style="width: 10px; height: 10px; margin-top: -7px; background: {{t.accent}}; transform: rotate(45deg); border-radius: 2px"></span>
+          <span style="margin-top: 3px; white-space: nowrap; padding: 4px 10px; border-radius: 11px; background: {{t.sheet}}; font-size: 12.5px; font-weight: 600; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4)">Library of Congress</span>
+        </div>
+      </sc-if>
+    </div>
+    
+    <div style="position: absolute; top: 8px; left: 8px; right: 8px; display: flex; align-items: center; justify-content: space-between">
+      <a href="Home.dc.html" aria-label="All lists" style="width: 44px; height: 44px; border-radius: 22px; background: {{t.glass}}; backdrop-filter: blur(12px); color: {{t.text}}; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg></a>
+      <div role="group" aria-label="Show places" style="display: flex; gap: 2px; padding: 4px; border-radius: 24px; background: {{t.glass}}; backdrop-filter: blur(12px)">
+        <sc-for list="{{segs}}" as="g" hint-placeholder-count="2">
+          <button type="button" aria-pressed="{{g.pressed}}" onClick="{{g.pick}}" style="min-height: 38px; border: 0; border-radius: 19px; background: {{g.bg}}; color: {{g.fg}}; padding: 0 14px; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600">{{g.label}}<span style="font-weight: 500; opacity: 0.75; font-variant-numeric: tabular-nums">{{g.n}}</span></button>
+        </sc-for>
+      </div>
+      <button type="button" aria-label="Just us" style="width: 44px; height: 44px; border: 0; border-radius: 22px; background: {{t.glass}}; backdrop-filter: blur(12px); color: {{t.dim}}; display: flex; align-items: center; justify-content: center; padding: 0"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5.2c0 3.3 2.2 5.8 5 5.8s5-2.5 5-5.8c-1.4.9-2.7.9-3.6 0-.6-.6-1-1.5-1.4-2.7-.4 1.2-.8 2.1-1.4 2.7-.9.9-2.2.9-3.6 0z"></path><path d="M9.8 6.9c.6.8 1.4 1.2 2.2 1.2s1.6-.4 2.2-1.2"></path><path d="M12 11v10"></path><path d="M12 16.2c-1.9-.2-3.5-1.3-4.1-3.2 2 0 3.5 1 4.1 3.2z"></path><path d="M12 18.6c1.9-.2 3.5-1.3 4.1-3.2-2 0-3.5 1-4.1 3.2z"></path></svg></button>
+    </div>
+    <section aria-label="Add a place" style="position: absolute; top: 330px; left: 0; right: 0; bottom: 0; background: {{t.bg}}; border-radius: 26px 26px 0 0; box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.35); display: flex; flex-direction: column">
+      <div aria-hidden="true" style="align-self: center; width: 38px; height: 5px; border-radius: 3px; background: {{t.faint}}; margin-top: 8px"></div>
+      <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 10px 16px 6px; display: flex; flex-direction: column; gap: 10px">
+        <sc-if value="{{choosing}}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px">
+            <h2 style="margin: 0; font-size: 15px; font-weight: 600">Which one?</h2>
+            <span style="font-size: 12px; color: {{t.dim}}">Results from Google Maps</span>
+          </div>
+          <div role="list" style="background: {{t.surface}}; border-radius: 20px; overflow: hidden">
+            <sc-for list="{{cands}}" as="c" hint-placeholder-count="3">
+              <button type="button" role="listitem" onClick="{{c.pick}}" style="position: relative; width: 100%; min-height: 62px; border: 0; background: transparent; color: inherit; padding: 8px 14px 8px 12px; display: flex; align-items: center; gap: 12px; text-align: left">
+                <span aria-hidden="true" style="position: absolute; left: 64px; right: 0; top: 0; height: 1px; background: {{c.sepColor}}"></span>
+                <span aria-hidden="true" style="width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px; background: {{t.accentTint}}; color: {{t.accent}}; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700">{{c.n}}</span>
+                <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+                  <span style="font-size: 15.5px; line-height: 1.25; font-weight: 600">{{c.name}}</span>
+                  <span style="font-size: 13px; line-height: 1.3; color: {{t.dim}}">{{c.sub}}</span>
+                </span>
+                <span style="flex-shrink: 0; font-size: 13px; color: {{t.dim}}; font-variant-numeric: tabular-nums">{{c.mi}}</span>
+              </button>
+            </sc-for>
+          </div>
+          <p style="margin: 0; padding: 0 4px; font-size: 12.5px; line-height: 1.45; color: {{t.dim}}">Tap the right one to pin it. Tap + to add it as words, with no pin.</p>
+        </sc-if>
+        <sc-if value="{{added}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; align-items: center; gap: 12px; background: {{t.sageTint}}; border-radius: 18px; padding: 12px 14px">
+            <span style="display: flex; color: {{t.sage}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8.5 12.2l2.4 2.4 4.8-4.9"></path></svg></span>
+            <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+              <span style="font-size: 15px; font-weight: 600">Pinned to the map</span>
+              <span style="font-size: 13px; color: {{t.text2}}">Library of Congress · Capitol Hill · 6.3 mi</span>
+            </span>
+            <button type="button" onClick="{{undo}}" style="min-height: 44px; border: 0; background: transparent; color: {{t.sage}}; font-size: 14.5px; font-weight: 600; padding: 0 4px">Undo</button>
+          </div>
+          
+        <div style="background: {{t.surface}}; border-radius: 20px; overflow: hidden">
+          <sc-for list="{{rows}}" as="r" hint-placeholder-count="4">
+            <div style="position: relative; display: flex; align-items: center; gap: 12px; min-height: 66px; padding: 8px 2px 8px 12px; background: {{r.bg}}">
+              <div aria-hidden="true" style="position: absolute; left: 68px; right: 0; top: 0; height: 1px; background: {{r.sepColor}}"></div>
+              <span aria-hidden="true" style="position: relative; width: 44px; height: 44px; flex-shrink: 0; border-radius: 13px; background: {{t.raised}}; display: flex; align-items: center; justify-content: center; font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; font-size: 23px; line-height: 1; opacity: {{r.tileOpacity}}">{{r.emoji}}<span style="position: absolute; right: -5px; bottom: -5px; width: 19px; height: 19px; box-sizing: border-box; border-radius: 10px; background: {{t.raised}}; border: 2px solid {{t.surface}}; color: {{t.text2}}; display: flex; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 9.5px; font-weight: 700">{{r.by}}</span></span>
+              <sc-if value="{{r.linked}}" hint-placeholder-val="{{ false }}">
+                <a href="Place.dc.html" style="flex: 1; min-width: 0; min-height: 44px; display: flex; flex-direction: column; justify-content: center; gap: 2px">
+                  <span style="font-size: 16px; line-height: 1.3; font-weight: 500; color: {{r.titleColor}}; text-decoration: {{r.deco}}">{{r.rest}}</span>
+                  <span style="font-size: 13px; line-height: 1.3; color: {{t.dim}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.sub}}</span>
+                </a>
+              </sc-if>
+              <sc-if value="{{r.plain}}" hint-placeholder-val="{{ true }}">
+                <button type="button" onClick="{{r.pick}}" style="flex: 1; min-width: 0; min-height: 44px; border: 0; background: transparent; padding: 0; text-align: left; color: inherit; display: flex; flex-direction: column; justify-content: center; gap: 2px">
+                  <span style="font-size: 16px; line-height: 1.3; font-weight: 500; color: {{r.titleColor}}; text-decoration: {{r.deco}}">{{r.rest}}</span>
+                  <span style="max-width: 100%; font-size: 13px; line-height: 1.3; color: {{t.dim}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.sub}}</span>
+                </button>
+              </sc-if>
+              <button type="button" aria-label="{{r.label}}" aria-pressed="{{r.pressed}}" onClick="{{r.toggle}}" style="width: 48px; height: 48px; flex-shrink: 0; border: 0; background: transparent; padding: 0; display: flex; align-items: center; justify-content: center">
+                <span style="width: 26px; height: 26px; box-sizing: border-box; border-radius: 13px; border: 1.75px solid {{r.ringBorder}}; background: {{r.ringBg}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: center">
+                  <span style="display: flex; opacity: {{r.checkOpacity}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"></path></svg></span>
+                </span>
+              </button>
+            </div>
+          </sc-for>
+        </div>
+        </sc-if>
+      </div>
+      
+    <div style="flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; padding: 8px 16px 6px">
+      <sc-if value="{{typing}}" hint-placeholder-val="{{ false }}">
+        <div role="group" aria-label="Who it's for" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px">
+          <sc-for list="{{visOpts}}" as="v" hint-placeholder-count="3">
+            <button type="button" aria-pressed="{{v.pressed}}" onClick="{{v.pick}}" style="min-height: 48px; border: 0; border-radius: 14px; background: {{v.bg}}; color: {{v.fg}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px">
+              <span style="font-size: 14px; font-weight: 600">{{v.label}}</span>
+              <span style="font-size: 11.5px; font-weight: 500; color: {{v.hintColor}}">{{v.hint}}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+      <div style="position: relative">
+        <label for="newItem" class="sr">Add a place</label>
+        <input id="newItem" type="text" value="{{text}}" onChange="{{onText}}" placeholder="Add a place…" autocomplete="off" style="box-sizing: border-box; width: 100%; height: 52px; border-radius: 26px; border: 1.5px solid {{fieldBorder}}; background: {{t.surface}}; color: {{t.text}}; padding: 0 58px 0 20px; font-size: 16px; outline: none" />
+        <button type="button" aria-label="Add" onClick="{{add}}" style="position: absolute; right: 6px; top: 6px; width: 40px; height: 40px; border: 0; border-radius: 20px; background: {{addBg}}; color: {{addFg}}; display: flex; align-items: center; justify-content: center; padding: 0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        </button>
+      </div>
+    </div>
+      
+    <nav aria-label="Kinds" style="flex-shrink: 0; display: flex; padding: 2px 6px 14px">
+        <a href="Main.dc.html" style="flex: 1 1 0; min-width: 0; min-height: 56px; border: 0; background: transparent; color: {{t.dim}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 4px 0"><span style="width: 54px; height: 30px; border-radius: 15px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.7 5.1a2 2 0 0 0 1.3 1.3l5.1 1.7-5.1 1.7a2 2 0 0 0-1.3 1.3L12 19.8l-1.7-5.2a2 2 0 0 0-1.3-1.3L3.9 11.6l5.1-1.7a2 2 0 0 0 1.3-1.3z"></path></svg></span>
+          <span style="font-size: 11.5px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap">Activities <span style="font-weight: 500; opacity: 0.7; font-variant-numeric: tabular-nums">5</span></span></a><a href="Films.dc.html" style="flex: 1 1 0; min-width: 0; min-height: 56px; border: 0; background: transparent; color: {{t.dim}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 4px 0"><span style="width: 54px; height: 30px; border-radius: 15px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.2" y="4.8" width="17.6" height="14.4" rx="2.4"></rect><path d="M7.4 4.8v14.4M16.6 4.8v14.4"></path><g fill="currentColor" stroke="none"><rect x="4.6" y="7.4" width="1.6" height="1.6" rx=".4"></rect><rect x="4.6" y="11.2" width="1.6" height="1.6" rx=".4"></rect><rect x="4.6" y="15" width="1.6" height="1.6" rx=".4"></rect><rect x="17.8" y="7.4" width="1.6" height="1.6" rx=".4"></rect><rect x="17.8" y="11.2" width="1.6" height="1.6" rx=".4"></rect><rect x="17.8" y="15" width="1.6" height="1.6" rx=".4"></rect></g></svg></span>
+          <span style="font-size: 11.5px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap">Films <span style="font-weight: 500; opacity: 0.7; font-variant-numeric: tabular-nums">8</span></span></a><button type="button" style="flex: 1 1 0; min-width: 0; min-height: 56px; border: 0; background: transparent; color: {{t.dim}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 4px 0"><span style="width: 54px; height: 30px; border-radius: 15px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.2" y="7.6" width="17.6" height="11.6" rx="2.4"></rect><path d="M8.4 3.6L12 7.6l3.6-4"></path></svg></span>
+          <span style="font-size: 11.5px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap">Shows <span style="font-weight: 500; opacity: 0.7; font-variant-numeric: tabular-nums">5</span></span></button><button type="button" aria-current="page" style="flex: 1 1 0; min-width: 0; min-height: 56px; border: 0; background: transparent; color: {{t.accent}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 4px 0"><span style="width: 54px; height: 30px; border-radius: 15px; background: {{t.accentTint}}; display: flex; align-items: center; justify-content: center"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.8s6.6-5.4 6.6-10.1a6.6 6.6 0 1 0-13.2 0C5.4 15.4 12 20.8 12 20.8z"></path><circle cx="12" cy="10.5" r="2.4"></circle></svg></span>
+          <span style="font-size: 11.5px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap">Places <span style="font-weight: 500; opacity: 0.7; font-variant-numeric: tabular-nums">{{navCount}}</span></span></button><button type="button" style="flex: 1 1 0; min-width: 0; min-height: 56px; border: 0; background: transparent; color: {{t.dim}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 4px 0"><span style="width: 54px; height: 30px; border-radius: 15px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.4 10.2h15.2v4.6a4 4 0 0 1-4 4H8.4a4 4 0 0 1-4-4z"></path><path d="M2.9 10.2h18.2"></path><path d="M9 7.4c0-1.1 1-1.5 1-2.6M12.6 7.4c0-1.1 1-1.5 1-2.6"></path></svg></span>
+          <span style="font-size: 11.5px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap">Recipes <span style="font-weight: 500; opacity: 0.7; font-variant-numeric: tabular-nums">4</span></span></button>
+    </nav>
+    </section>
+  </div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme": {"editor": "enum", "default": "dusk", "options": ["dusk", "forest"]}, "$preview": {"width": 390, "height": 844}}'>
+class Component extends DCLogic {
+  theme(key) {
+    var P = {
+      dusk: { bg: '#17131A', card: '#211C26', card2: '#2B2430', line: '#332B3A', ink: '#F4EEE9', ink2: '#CBBFC6', dim: '#948A9C', faint: '#6B6274', accent: '#F2845C', sage: '#8FB9A8', warn: '#E0714F', onAccent: '#2A1206', onSage: '#10251D', rose: '#E0708A' },
+      forest: { bg: '#111A15', card: '#18241D', card2: '#213027', line: '#2D3F34', ink: '#EDF1E7', ink2: '#C6D1C4', dim: '#93A69A', faint: '#627569', accent: '#E8A658', sage: '#93CFA0', warn: '#E07A5F', onAccent: '#2A1705', onSage: '#0D2416', rose: '#E08A92' }
+    };
+    var p = P[key] || P.dusk;
+    function hex(h) { var n = parseInt(String(h).replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+    function toHex(c) { return '#' + c.map(function (v) { var s = Math.round(Math.max(0, Math.min(255, v))).toString(16); return s.length < 2 ? '0' + s : s; }).join('').toUpperCase(); }
+    function mix(a, b, w) { return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w, a[2] + (b[2] - a[2]) * w]; }
+    function lum(c) { var r = c.map(function (v) { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r[0] + 0.7152 * r[1] + 0.0722 * r[2]; }
+    function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    function ensure(c, ref, min, toward) { var x = c; for (var i = 0; i < 20 && ratio(x, ref) < min; i++) x = mix(x, toward, 0.06); return x; }
+    function rgba(c, a) { return 'rgba(' + Math.round(c[0]) + ', ' + Math.round(c[1]) + ', ' + Math.round(c[2]) + ', ' + a + ')'; }
+    var bg = hex(p.bg), card = hex(p.card), card2 = hex(p.card2), ink = hex(p.ink), acc = hex(p.accent), sage = hex(p.sage);
+    var dim = ensure(hex(p.dim), card2, 4.5, ink);
+    return {
+      key: p === P.forest ? 'forest' : 'dusk',
+      bg: p.bg, surface: p.card, raised: p.card2, line: p.line,
+      sheet: toHex(mix(bg, card, 0.5)),
+      text: p.ink, text2: p.ink2, dim: toHex(dim), faint: p.faint,
+      accent: p.accent, accentTint: rgba(acc, 0.16), onAccent: p.onAccent,
+      sage: p.sage, sageTint: rgba(sage, 0.16), onSage: p.onSage,
+      warn: p.warn, rose: p.rose,
+      scrim: rgba(mix(bg, [0, 0, 0], 0.5), 0.7),
+      glass: rgba(mix(bg, card, 0.5), 0.86),
+      mapLand: toHex(mix(bg, card, 0.6)),
+      mapWater: toHex(mix(bg, [70, 118, 160], 0.3)),
+      mapPark: toHex(mix(mix(bg, card, 0.6), sage, 0.13)),
+      mapRoad: toHex(mix(bg, ink, 0.1)),
+      mapMajor: toHex(mix(bg, ink, 0.18)),
+      mapLabel: toHex(mix(bg, ink, 0.5))
+    };
+  }
+  lead(title) {
+    var m = /^((?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:️|⃣|\p{Emoji_Modifier}|\p{Regional_Indicator}|‍\p{Extended_Pictographic})*)\s*/u.exec(title);
+    if (!m) return { emoji: '', rest: title };
+    return { emoji: m[1], rest: title.slice(m[0].length) };
+  }
+
+  places() { return [{"id": "p1", "title": "🎷 Jazz at Blues Alley", "name": "Blues Alley", "area": "Georgetown", "cat": "Jazz club", "mi": "3.6 mi", "x": 148, "y": 200, "by": "A"}, {"id": "p2", "title": "🌸 Dumbarton Oaks gardens", "name": "Dumbarton Oaks", "area": "Georgetown", "cat": "Garden", "mi": "3.9 mi", "x": 176, "y": 150, "by": "L"}, {"id": "p3", "title": "🍜 Ramen in Adams Morgan", "name": "Sakuramen", "area": "Adams Morgan", "cat": "Ramen", "mi": "4.8 mi", "x": 232, "y": 116, "by": "A"}, {"id": "p4", "title": "⛸️ Skate at the Sculpture Garden", "name": "Sculpture Garden Ice Rink", "area": "The Mall", "cat": "Ice rink", "mi": "4.9 mi", "x": 240, "y": 286, "by": "L"}, {"id": "p5", "title": "🦀 Crabs at the fish market", "name": "Maine Avenue Fish Market", "area": "The Wharf", "cat": "Seafood market", "mi": "5.4 mi", "x": 220, "y": 352, "by": "A"}, {"id": "p6", "title": "🌳 Arboretum", "name": "U.S. National Arboretum", "area": "Northeast", "cat": "Botanical garden", "mi": "8.9 mi", "x": 338, "y": 206, "by": "L"}, {"id": "b1", "title": "🐼 Pandas at the zoo", "name": "National Zoo", "area": "Woodley Park", "went": "Went Oct 4", "again": "Can’t wait to go back", "x": 198, "y": 98, "by": "L", "been": true}, {"id": "b2", "title": "⚾ Nats game", "name": "Nationals Park", "area": "Navy Yard", "went": "Went Sep 21", "again": "Glad we went", "x": 272, "y": 368, "by": "A", "been": true}]; }
+  rowsFor(list, sel, done, t) {
+    var self = this;
+    return list.map(function (p, i) {
+      var s = self.lead(p.title);
+      var d = !!p.been !== !!done[p.id];
+      return {
+        emoji: s.emoji, rest: s.rest, by: p.by,
+        sub: p.been ? p.went + ' · ' + p.again : p.name + ' · ' + p.area + ' · ' + p.mi,
+        bg: p.id === sel ? t.raised : 'transparent',
+        sepColor: i === 0 || p.id === sel ? 'transparent' : t.line,
+        linked: p.id === 'p6', plain: p.id !== 'p6',
+        titleColor: d && !p.been ? t.dim : t.text, deco: d && !p.been ? 'line-through' : 'none', tileOpacity: d && !p.been ? 0.55 : 1,
+        ringBorder: d ? t.sage : t.dim, ringBg: d ? t.sage : 'transparent', checkOpacity: d ? 1 : 0,
+        label: d ? 'Not been after all' : 'We went', pressed: d ? 'true' : 'false',
+        pick: function () { self.setState({ sel: p.id }); },
+        toggle: function () { var n = Object.assign({}, done); n[p.id] = !n[p.id]; self.setState({ done: n }); }
+      };
+    });
+  }
+  pinsFor(list, sel, t) {
+    var self = this;
+    return list.slice().sort(function (a, b) { return (a.id === sel) - (b.id === sel); }).map(function (p) {
+      var s = self.lead(p.title), on = p.id === sel, size = on ? 52 : 40, box = size + 4;
+      var w = p.name.length * 7 + 24, shift = 0;
+      if (p.x + w / 2 > 382) shift = 382 - (p.x + w / 2);
+      if (p.x - w / 2 < 8) shift = 8 - (p.x - w / 2);
+      return {
+        labelShift: Math.round(shift) + 'px',
+        emoji: s.emoji, selected: on, label: p.name, pressed: on ? 'true' : 'false', aria: p.name + (on ? ', selected' : ''),
+        left: (p.x - box / 2) + 'px', top: (p.y - size - 6) + 'px', box: box + 'px', boxH: (size + 8) + 'px',
+        size: size + 'px', fs: (on ? 26 : 20) + 'px', ring: p.been ? t.sage : t.accent,
+        pick: function () { self.setState({ sel: p.id }); }
+      };
+    });
+  }
+
+  initText() { return '🏛️ Library of Congress'; }
+  renderVals() {
+    var self = this;
+    var t = this.theme(this.props.theme ?? 'dusk');
+    var st = this.state || {};
+    var P = this.places();
+    var added = !!st.added;
+    
+    var text = st.text != null ? st.text : this.initText();
+    var vis = st.vis || 'shared';
+    var VIS = [
+      { id: 'private', label: 'Just me', hint: 'only you' },
+      { id: 'shared', label: 'Us', hint: 'you and Linnea' },
+      { id: 'public', label: 'Anyone', hint: 'all your people' }
+    ];
+    var composer = {
+      text: text,
+      typing: text.length > 0,
+      onText: function (e) { self.setState({ text: e.target.value }); },
+      fieldBorder: text.length ? t.accent : 'transparent',
+      addBg: text.length ? t.accent : t.accentTint,
+      addFg: text.length ? t.onAccent : t.accent,
+      visOpts: VIS.map(function (v) {
+        var on = v.id === vis;
+        return { label: v.label, hint: v.hint, pressed: on ? 'true' : 'false',
+          bg: on ? t.accentTint : t.surface, fg: on ? t.accent : t.text2, hintColor: on ? t.accent : t.dim,
+          pick: function () { self.setState({ vis: v.id }); } };
+      })
+    };
+
+    var C = [
+      { id: 'c1', n: '1', name: 'Library of Congress', sub: 'Thomas Jefferson Building · Capitol Hill', mi: '6.3 mi', x: 284, y: 282 },
+      { id: 'c2', n: '2', name: 'James Madison Memorial Building', sub: 'Library of Congress · Capitol Hill', mi: '6.3 mi', x: 306, y: 300 },
+      { id: 'c3', n: '3', name: 'John Adams Building', sub: 'Library of Congress · Capitol Hill', mi: '6.4 mi', x: 312, y: 274 }
+    ];
+    var go = P.filter(function (p) { return !p.been; });
+    var list = [{ id: 'new', title: '🏛️ Library of Congress', name: 'Library of Congress', area: 'Capitol Hill', mi: '6.3 mi', by: 'A' }].concat(go);
+    return Object.assign({
+      t: t,
+      choosing: !added, added: added,
+      segs: [{ label: 'To go', n: added ? 7 : 6, pressed: 'true', bg: t.accent, fg: t.onAccent, pick: function () {} },
+             { label: 'Been', n: 2, pressed: 'false', bg: 'transparent', fg: t.text2, pick: function () {} }],
+      dots: P.map(function (p) { return { left: (p.x - 6) + 'px', top: (p.y - 6) + 'px', color: p.been ? t.sage : t.accent }; }),
+      cands: C.map(function (c, i) {
+        return { n: c.n, name: c.name, sub: c.sub, mi: c.mi, sepColor: i === 0 ? 'transparent' : t.line,
+          left: (c.x - 13) + 'px', top: (c.y - 13) + 'px',
+          pick: function () { self.setState({ added: true, text: '' }); } };
+      }),
+      rows: this.rowsFor(list, 'new', {}, t),
+      undo: function () { self.setState({ added: false, text: null }); },
+      navCount: added ? 7 : 6,
+      add: function () { self.setState({ text: '' }); }
+    }, composer, added ? { typing: false } : {});
+  }
+}
+</script>
+</body>
+</html>
