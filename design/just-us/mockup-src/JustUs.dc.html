@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Do With: just us</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0C0A0D}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+input,textarea{font:inherit}
+input::placeholder,textarea::placeholder{color:#9A90A2;opacity:1}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; background: {{t.bg}}; color: {{t.text}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; padding: 14px 20px 0">
+    <div style="display: flex; justify-content: space-between; align-items: center; height: 44px; margin-left: -8px; color: {{t.text}}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg><span style="display: flex; color: {{t.rose}}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5.2c0 3.3 2.2 5.8 5 5.8s5-2.5 5-5.8c-1.4.9-2.7.9-3.6 0-.6-.6-1-1.5-1.4-2.7-.4 1.2-.8 2.1-1.4 2.7-.9.9-2.2.9-3.6 0z"/><path d="M9.8 6.9c.6.8 1.4 1.2 2.2 1.2s1.6-.4 2.2-1.2"/><path d="M12 11v10"/><path d="M12 16.2c-1.9-.2-3.5-1.3-4.1-3.2 2 0 3.5 1 4.1 3.2z"/><path d="M12 18.6c1.9-.2 3.5-1.3 4.1-3.2-2 0-3.5 1-4.1 3.2z"/></svg></span></div>
+    <div style="margin-top: 14px; font-size: 13px; color: {{t.dim}}">To do with</div>
+    <div style="font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 40px; line-height: 1.1; font-weight: 600">Sam</div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: {{t.scrim}}"></div>
+  <section role="dialog" aria-label="Just us" style="position: absolute; left: 0; right: 0; top: 118px; bottom: 0; box-sizing: border-box; border-radius: 28px 28px 0 0; background: linear-gradient(180deg, {{roomTop}} 0%, {{roomSheet}} 340px); padding: 8px 16px 28px; display: flex; flex-direction: column; gap: 20px">
+    <div aria-hidden="true" style="align-self: center; width: 38px; height: 5px; border-radius: 3px; background: {{roseLine}}"></div>
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-top: -6px; padding-left: 4px">
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <h1 style="margin: 0; font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-style: italic; font-size: 34px; line-height: 1.1; font-weight: 500">Just us</h1>
+        <span style="font-size: 14.5px; color: {{t.dim}}">with Sam · only the two of you</span>
+      </div>
+      <a href="JustUs.dc.html" aria-label="Close" style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 22px; background: {{roseTint}}; color: {{roseInk}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"></path></svg></a>
+    </div>
+
+    <a href="JustUs-Matches.dc.html" style="position: relative; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 22px 16px 18px; border-radius: 24px; background: linear-gradient(160deg, {{roseTint}} 0%, {{roomCard}} 70%); text-align: center; overflow: hidden">
+      <span aria-hidden="true" style="display: flex; color: {{t.rose}}; margin-bottom: 2px"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5.2c0 3.3 2.2 5.8 5 5.8s5-2.5 5-5.8c-1.4.9-2.7.9-3.6 0-.6-.6-1-1.5-1.4-2.7-.4 1.2-.8 2.1-1.4 2.7-.9.9-2.2.9-3.6 0z"/><path d="M9.8 6.9c.6.8 1.4 1.2 2.2 1.2s1.6-.4 2.2-1.2"/><path d="M12 11v10"/><path d="M12 16.2c-1.9-.2-3.5-1.3-4.1-3.2 2 0 3.5 1 4.1 3.2z"/><path d="M12 18.6c1.9-.2 3.5-1.3 4.1-3.2-2 0-3.5 1-4.1 3.2z"/></svg></span>
+      <span style="font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 54px; line-height: 1; font-weight: 600; color: {{t.text}}">{{nMatch}}</span>
+      <span style="font-size: 15.5px; color: {{t.text2}}">things you both want</span>
+      <sc-if value="{{hasNew}}" hint-placeholder-val="{{ true }}">
+        <span style="position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 12px; background: {{t.rose}}; color: {{onRose}}; font-size: 12.5px; font-weight: 700"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 3px; background: {{onRose}}"></span>2 new</span>
+      </sc-if>
+    </a>
+
+    <div style="flex-shrink: 0; display: flex; flex-direction: column; gap: 10px">
+      <a href="JustUs-Body.dc.html" style="display: flex; align-items: center; gap: 14px; min-height: 72px; padding: 12px 14px; border-radius: 20px; background: {{roomCard}}">
+          <span aria-hidden="true" style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; background: {{roseTint}}; color: {{roseInk}}; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="4.5" r="2.5"></circle><path d="M8 9.5h8l-1 6h-6z"></path><path d="M10 15.5 9.5 21M14 15.5l.5 5.5"></path></svg></span>
+          <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 16.5px; font-weight: 600">Body</span><span style="font-size: 13.5px; color: {{t.dim}}">Where each of you likes it · 11 of 15 places</span></span>
+          
+          <span aria-hidden="true" style="display: flex; color: {{t.dim}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span>
+        </a>
+      <a href="JustUs-Card.dc.html" style="display: flex; align-items: center; gap: 14px; min-height: 72px; padding: 12px 14px; border-radius: 20px; background: {{roomCard}}">
+          <span aria-hidden="true" style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; background: {{roseTint}}; color: {{roseInk}}; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="18" x="7" y="3" rx="2.5"></rect><path d="M4 7.5v11A2.5 2.5 0 0 0 6.5 21H15"></path></svg></span>
+          <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 16.5px; font-weight: 600">Things to try</span><span style="font-size: 13.5px; color: {{t.dim}}">{{tryLine}}</span></span>
+          <span aria-hidden="true" style="width: 30px; height: 30px; flex-shrink: 0; border-radius: 15px; background: conic-gradient({{t.rose}} 0 {{tryPct}}, {{roseTint}} {{tryPct}} 100%); display: flex; align-items: center; justify-content: center"><span style="width: 22px; height: 22px; border-radius: 11px; background: {{roomCard}}"></span></span>
+          <span aria-hidden="true" style="display: flex; color: {{t.dim}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span>
+        </a>
+      <a href="JustUs-Matches.dc.html" style="display: flex; align-items: center; gap: 14px; min-height: 72px; padding: 12px 14px; border-radius: 20px; background: {{roomCard}}">
+          <span aria-hidden="true" style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; background: {{roseTint}}; color: {{roseInk}}; display: flex; align-items: center; justify-content: center"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"></path></svg></span>
+          <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 16.5px; font-weight: 600">Ask your own</span><span style="font-size: 13.5px; color: {{t.dim}}">A question for the two of you</span></span>
+          
+          <span aria-hidden="true" style="display: flex; color: {{t.dim}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span>
+        </a>
+    </div>
+
+    <p style="margin: auto 0 0; display: flex; gap: 10px; padding: 0 6px; font-size: 13px; line-height: 1.5; color: {{t.dim}}">
+      <span aria-hidden="true" style="display: flex; flex-shrink: 0; margin-top: 2px; color: {{t.rose}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+      <span>Only the two of you can open this. Things to try show up only when you both lean yes, so a no never gives anything away.</span>
+    </p>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme": {"editor": "enum", "default": "dusk", "options": ["dusk", "forest"]}, "$preview": {"width": 390, "height": 844}}'>
+class Component extends DCLogic {
+  theme(key) {
+    var P = {
+      dusk: { bg: '#17131A', card: '#211C26', card2: '#2B2430', line: '#332B3A', ink: '#F4EEE9', ink2: '#CBBFC6', dim: '#948A9C', faint: '#6B6274', accent: '#F2845C', sage: '#8FB9A8', warn: '#E0714F', onAccent: '#2A1206', onSage: '#10251D', rose: '#E0708A' },
+      forest: { bg: '#111A15', card: '#18241D', card2: '#213027', line: '#2D3F34', ink: '#EDF1E7', ink2: '#C6D1C4', dim: '#93A69A', faint: '#627569', accent: '#E8A658', sage: '#93CFA0', warn: '#E07A5F', onAccent: '#2A1705', onSage: '#0D2416', rose: '#E08A92' }
+    };
+    var p = P[key] || P.dusk;
+    function hex(h) { var n = parseInt(String(h).replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+    function toHex(c) { return '#' + c.map(function (v) { var s = Math.round(Math.max(0, Math.min(255, v))).toString(16); return s.length < 2 ? '0' + s : s; }).join('').toUpperCase(); }
+    function mix(a, b, w) { return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w, a[2] + (b[2] - a[2]) * w]; }
+    function lum(c) { var r = c.map(function (v) { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r[0] + 0.7152 * r[1] + 0.0722 * r[2]; }
+    function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    function ensure(c, ref, min, toward) { var x = c; for (var i = 0; i < 20 && ratio(x, ref) < min; i++) x = mix(x, toward, 0.06); return x; }
+    function rgba(c, a) { return 'rgba(' + Math.round(c[0]) + ', ' + Math.round(c[1]) + ', ' + Math.round(c[2]) + ', ' + a + ')'; }
+    var bg = hex(p.bg), card = hex(p.card), card2 = hex(p.card2), ink = hex(p.ink), acc = hex(p.accent), sage = hex(p.sage);
+    var dim = ensure(hex(p.dim), card2, 4.5, ink);
+    return {
+      key: p === P.forest ? 'forest' : 'dusk',
+      bg: p.bg, surface: p.card, raised: p.card2, line: p.line,
+      sheet: toHex(mix(bg, card, 0.5)),
+      text: p.ink, text2: p.ink2, dim: toHex(dim), faint: p.faint,
+      accent: p.accent, accentTint: rgba(acc, 0.16), onAccent: p.onAccent,
+      sage: p.sage, sageTint: rgba(sage, 0.16), onSage: p.onSage,
+      warn: p.warn, rose: p.rose,
+      scrim: rgba(mix(bg, [0, 0, 0], 0.5), 0.7),
+      glass: rgba(mix(bg, card, 0.5), 0.86),
+      mapLand: toHex(mix(bg, card, 0.6)),
+      mapWater: toHex(mix(bg, [70, 118, 160], 0.3)),
+      mapPark: toHex(mix(mix(bg, card, 0.6), sage, 0.13)),
+      mapRoad: toHex(mix(bg, ink, 0.1)),
+      mapMajor: toHex(mix(bg, ink, 0.18)),
+      mapLabel: toHex(mix(bg, ink, 0.5))
+    };
+  }
+  lead(title) {
+    var m = /^((?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:️|⃣|\p{Emoji_Modifier}|\p{Regional_Indicator}|‍\p{Extended_Pictographic})*)\s*/u.exec(title);
+    if (!m) return { emoji: '', rest: title };
+    return { emoji: m[1], rest: title.slice(m[0].length) };
+  }
+
+  hx(h) { h = String(h).replace('#', ''); var n = parseInt(h, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+  hex(c) { return '#' + c.map(function (v) { v = Math.round(Math.max(0, Math.min(255, v))).toString(16); return v.length < 2 ? '0' + v : v; }).join('').toUpperCase(); }
+  mixc(a, b, w) { var x = this.hx(a), y = this.hx(b); return this.hex([x[0] + (y[0] - x[0]) * w, x[1] + (y[1] - x[1]) * w, x[2] + (y[2] - x[2]) * w]); }
+  rgba(h, a) { var c = this.hx(h); return 'rgba(' + c[0] + ', ' + c[1] + ', ' + c[2] + ', ' + a + ')'; }
+  room() {
+    var t = this.theme(this.props.theme ?? 'dusk');
+    var cool = this.mixc(t.faint, '#8C9AD0', 0.45);
+    var self = this;
+    var W = { no: 0, soft: 0.2, maybe: 0.5, yes: 0.78, love: 1 };
+    return {
+      t: t, cool: cool,
+      roseTint: this.rgba(t.rose, 0.16), roseLine: this.rgba(t.rose, 0.4), roseInk: this.mixc(t.rose, t.text, 0.25),
+      roomTop: this.mixc(t.sheet, t.rose, 0.12), roomSheet: this.mixc(t.sheet, t.rose, 0.04),
+      roomCard: this.mixc(t.surface, t.rose, 0.07), onRose: this.mixc(t.bg, '#000000', 0.35),
+      W: W,
+      warm: function (w) { return self.mixc(cool, t.rose, Math.max(0, Math.min(1, w))); }
+    };
+  }
+  levels() {
+    return [['no', 'No'], ['soft', 'Soft no'], ['maybe', 'Maybe'], ['yes', 'Yes'], ['love', 'Yes, please']];
+  }
+
+  renderVals() {
+    var r = this.room();
+    var answered = 14, total = 27;
+    return Object.assign(r, {
+      nMatch: 9, hasNew: true,
+      tryLine: answered + ' of ' + total + ' answered · 13 left', tryPct: Math.round(100 * answered / total) + '%'
+    });
+  }
+}
+</script>
+</body>
+</html>
