@@ -650,23 +650,39 @@ A **line-drawn rose** in the corner of a **pair** list (where the ⋯ was — th
 settings open from tapping the title, which carries a small ⌄ to say so). Deliberately
 not the 🌹 emoji: phones get glanced at, and this should be findable, not conspicuous.
 
-- **Body** is a figure, front and back, that you tap where you mean (part × touching/
-  kissing/licking/biting/massage/scratching). Each area fills with `--rose` in proportion
-  to how warmly the two of you answered, and glows where you both said yes — the figure
-  is the summary. Tiny zones carry larger invisible hit areas.
-- **Things to try** are grouped gentle → playful → adventurous → your own, and open as
-  **one card at a time**, gentlest first: swipe right yes, left no, up maybe, or tap a
-  dot. "The list" shows every answer, the matches, and **your own questions** — the
-  question is shared (your partner has to see it to answer it), your answer is not, and
-  only whoever asked can take it back.
-- **One scale, five dots, cool → warm left to right** (No … Yes, please), so a dot and a
-  swipe agree. The label shows only under the chosen dot; unanswered rows show the ends.
-  The first cut had warm on the left and contradicted its own swipe hint.
-- **A new match is a moment**: the rose draws itself over the sheet. A match you have
-  not seen puts a dot on the corner rose — on screen only, never a push. "Seen" is per
-  device in `localStorage`, which is fine for a dot.
-- Its own room: `--rose` (a token per theme) tints the sheet and the scrim.
-- Tapping your answer again clears it.
+Reworked on Nov 17 from the handoff on the `design/just-us` branch (PR #3). **Client
+only**: every screen is drawn from what `GET /api/space/:id/pleasure` already returned;
+`lib/pleasure.js`, its routes and its rules did not change, and must not for a redraw.
+
+- **It opens on a FRONT DOOR, every time, that names nothing.** The count of what you
+  both want ("2 new" when there is something unseen), and doors to Body, Things to try
+  and Ask your own — counts, never a label. A phone gets glanced at, and this is the
+  screen that is open when it does. It used to open straight onto new matches, which put
+  what they were on screen the moment it opened. The suite sets up a real match and
+  asserts the open sheet's text contains no try label and no part name.
+- **Body** is points on a soft figure (real buttons, 44px, laid over the SVG), glowing
+  with how much you like it there, with **Together / Yours / theirs** views and Front /
+  Back. Theirs is not a new disclosure: body answers were always shared in full. A part
+  both of you said yes to carries a rose ring in Together. Tap a point and each act is a
+  **row of five tiles**, cool → warm, yours filled, theirs marked with their initial on
+  the top edge of its tile — five tiles read as a scale where five dots read as a form.
+- **Things to try** is a deck, one card at a time, with five bubbles that grow and warm
+  toward Yes, please. Swipe right yes, left no, up maybe, as before. **Back** reopens the
+  last card answered in this sitting, answer showing, and answering again replaces it;
+  **Not now** skips. The end screen is rose, not coral.
+- **All answers** is every try answer by group, to change — named in words beside the
+  tiles, since nothing here is told by colour alone — and your own questions with *Take
+  back*. It shows no partner answers, because none are sent.
+- **You both want** groups the matches by the cooler of the two answers (both "yes,
+  please" / both yes / one of you maybe, saying which). It is the ONLY screen that marks
+  matches seen. **Pick one for us** chooses at random on the device — never the same
+  twice running, never stored or sent. **Ask your own** lives here.
+- **One colour ramp**, `--rose-cool` (No) to `--rose` (Yes, please), mixed in oklab; both
+  are tokens per theme. `--accent` appears nowhere inside the room.
+- **A new match is a moment**: the rose draws itself over the sheet, naming it — fine,
+  the person looking is the one who just answered. An unseen match puts a dot on the
+  corner rose — on screen only, never a push. "Seen" is per device in `localStorage`.
+- Tapping your answer again clears it (on a tile; on the deck, answering moves on).
 
 The privacy rules are the feature, and they live in `pleasure.view()`, pure and tested:
 
@@ -677,8 +693,9 @@ The privacy rules are the feature, and they live in `pleasure.view()`, pure and 
 - **Body answers are shown to your partner in full** — that half exists to say "this,
   not that".
 - **Things to try are shown only as MATCHES** — both of you at Maybe or warmer. The
-  partner's try answers are never sent to the client at all, so a "no" can never reveal
-  a "yes", and suggesting something costs nothing.
+  partner's try answers are never sent to the client except on a match (where both
+  levels come, so the matches can say how keen), so a "no" can never reveal a "yes",
+  and suggesting something costs nothing.
 - Two routes and nowhere else: no push, no digest, nothing on `/api/state`, no third
   party. The catalogue is server-side and an id outside it is refused.
 

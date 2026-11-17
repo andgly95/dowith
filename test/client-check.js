@@ -624,37 +624,96 @@ function connectCdp(wsUrl) {
     check(await visible('#kindNav'), 'and closing it brings the kind bar back');
     // The rose: in a pair list it sits in the corner, and the title opens settings.
     check(await visible('#spaceRose'), 'the rose is in the corner of a pair list');
+    // A match before it opens, and one body answer of his alone — set up as
+    // each of them, through the real route.
+    const answerAs = (uid, body) => fetch(`${BASE}/api/space/sp1/pleasure`, { method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: `${AUTH.COOKIE}=${encodeURIComponent(AUTH.sign(uid, SECRET))}` },
+      body: JSON.stringify(body) });
+    await answerAs(A, { kind: 'try', id: 'massage-oil', level: 'yes' });
+    await answerAs(A, { kind: 'try', id: 'blindfold', level: 'love' });
+    await answerAs(A, { kind: 'body', part: 'hips', act: 'kiss', level: 'yes' });
+    await answerAs(L, { kind: 'try', id: 'massage-oil', level: 'love' });
     await evalJs(`document.getElementById('spaceRose').click()`);
-    await sleep(500);
+    await sleep(600);
     check(await visible('#roseSheet'), 'and opens the inventory');
-    await evalJs(`document.querySelector('#roseSheet .zone[data-part="neck"]').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
-    await sleep(100);
+    // THE FRONT DOOR NAMES NOTHING: a phone gets glanced at, and this is what
+    // is open when it does. With a match present, not one label of a thing to
+    // try or a part of the body is on it.
+    const named = await evalJs(`fetch('/api/space/sp1/pleasure').then(r => r.json()).then((d) => {
+      const text = document.querySelector('#roseSheet .modal-in').textContent;
+      const words = [...d.try, ...d.custom, ...d.parts].map(x => x.label);
+      return { n: d.matches.length, hits: words.filter(w => new RegExp('\\\\b' + w.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&') + '\\\\b', 'i').test(text)) }; })`);
+    check(named.n === 1 && named.hits.length === 0, `the front door names nothing: ${JSON.stringify(named)}`);
+    check(/1 new/.test(await evalJs(`document.querySelector('#roseSheet .rs-matches').textContent`)), 'but says there is something new');
+    // Body: the three views tell the truth about whose answer is whose.
+    await evalJs(`document.querySelector('#roseSheet [data-rs="body"]').click()`);
+    await sleep(300);
+    const glows = async (v) => {
+      await evalJs(`document.querySelector('#roseSheet [data-view="${v}"]').click()`);
+      await sleep(150);
+      return evalJs(`document.querySelector('#roseSheet .pt[data-part="hips"]').classList.contains('ans')`);
+    };
+    check(await glows('together') && !(await glows('mine')) && await glows('theirs'),
+      'a part only he answered glows Together and in his view, and is hollow in Yours');
+    await evalJs(`document.querySelector('#roseSheet [data-view="together"]').click()`);
+    await sleep(150);
+    await evalJs(`document.querySelector('#roseSheet [data-part="neck"]').click()`);
+    await sleep(150);
     await evalJs(`document.querySelector('#roseSheet [data-act="kiss"][data-level="love"]').click()`);
     await sleep(500);
     check(await evalJs(`!!document.querySelector('#roseSheet [data-act="kiss"][data-level="love"].on')`),
       'an answer sticks after the round trip');
+    check(await evalJs(`(() => { const r = document.querySelector('#roseSheet .pt[data-part="neck"]').getBoundingClientRect();
+      return Math.min(r.width, r.height); })()`) >= 44, 'a point is a 44px target, not a 9px dot');
     if (process.env.SHOT_ROSE) {
       const { data } = await S('Page.captureScreenshot', { format: 'png' });
       require('fs').writeFileSync(process.env.SHOT_ROSE, Buffer.from(data, 'base64'));
     }
+    // Things to try: one card at a time, and Back brings the last one back.
+    await evalJs(`document.querySelector('#roseSheet [data-rs="door"]').click()`);
+    await sleep(150);
     await evalJs(`document.querySelector('#roseSheet [data-rs="try"]').click()`);
-    await sleep(100);
+    await sleep(300);
     check(await visible('#rsCard'), 'things to try start one card at a time');
-    await evalJs(`document.querySelector('#rsCard [data-level="love"]').click()`);
+    const answeredBefore = Number((await evalJs(`document.querySelector('.rs-prog').textContent`)).match(/(\d+) of/)[1]);
+    const firstCard = await evalJs(`document.getElementById('rsCard').dataset.id`);
+    await evalJs(`document.querySelector('#roseSheet .rs-bubbles [data-level="love"]').click()`);
     await sleep(700);
-    check(/1 of/.test(await evalJs(`document.querySelector('.rs-prog').textContent`)), 'answering a card moves on');
+    check(new RegExp(`${answeredBefore + 1} of`).test(await evalJs(`document.querySelector('.rs-prog').textContent`)), 'answering a card moves on');
+    check(await evalJs(`document.getElementById('rsCard').dataset.id`) !== firstCard, 'to the next one');
+    await evalJs(`document.querySelector('#roseSheet [data-back]').click()`);
+    await sleep(300);
+    check(await evalJs(`document.getElementById('rsCard').dataset.id`) === firstCard
+      && await evalJs(`!!document.querySelector('#roseSheet .rs-bubbles [data-level="love"].on')`),
+      'Back returns the last card, with its answer showing');
+    await evalJs(`document.querySelector('#roseSheet .rs-bubbles [data-level="yes"]').click()`);
+    await sleep(700);
     if (process.env.SHOT_ROSE3) {
       const { data } = await S('Page.captureScreenshot', { format: 'png' });
       require('fs').writeFileSync(process.env.SHOT_ROSE3, Buffer.from(data, 'base64'));
     }
     await evalJs(`document.querySelector('#roseSheet [data-mode="list"]').click()`);
-    await sleep(100);
+    await sleep(150);
     await evalJs(`document.querySelector('#roseSheet [data-id="blindfold"][data-level="yes"]').click()`);
-    await sleep(500);
+    await sleep(600);
+    check(await evalJs(`!!document.querySelector('#roseSheet [data-id="blindfold"][data-level="yes"].on')`), 'All answers changes an answer');
     if (process.env.SHOT_ROSE2) {
       const { data } = await S('Page.captureScreenshot', { format: 'png' });
       require('fs').writeFileSync(process.env.SHOT_ROSE2, Buffer.from(data, 'base64'));
     }
+    // You both want, grouped by how keen; a pick that is one of them.
+    await evalJs(`document.querySelector('#roseSheet [data-rs="try"]').click()`);
+    await sleep(150);
+    await evalJs(`document.querySelector('#roseSheet [data-rs="door"]').click()`);
+    await sleep(150);
+    await evalJs(`document.querySelector('#roseSheet [data-go="both"]').click()`);
+    await sleep(300);
+    const both = await evalJs(`document.getElementById('rsBody').textContent`);
+    check(/You both said yes · 2/.test(both), `both matches, grouped by how keen: ${both.slice(0, 160)}`);
+    await evalJs(`document.querySelector('#roseSheet [data-pick]').click()`);
+    await sleep(150);
+    check(/A massage with oil|Blindfolds/i.test(await evalJs(`document.querySelector('#roseSheet .rs-pick b').textContent`)),
+      'Pick one for us picks one of them');
     await evalJs(`document.getElementById('rsClose').click()`);
     await evalJs(`document.getElementById('spaceSettings').click()`);
     await sleep(100);

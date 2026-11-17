@@ -363,11 +363,9 @@
 <!-- the pleasure inventory: just the two of you (lib/pleasure.js) -->
 <div id="roseSheet" class="modal" hidden>
   <div class="modal-in rose">
-    <div class="modal-hd"><div class="hd-t"><b>Just us</b><span id="rsWho"></span></div><button type="button" class="x" id="rsClose" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
-    <div class="rs-tabs" role="tablist">
-      <button type="button" data-rs="body" class="on">Body</button>
-      <button type="button" data-rs="try">Things to try</button>
-    </div>
+    <!-- The header is drawn by rose.js: the title on the front door, a back pill
+         everywhere else. The X stays put, so the scrim can always close it. -->
+    <div class="modal-hd"><div class="hd-t" id="rsHead"><b class="rs-title">Just us</b></div><button type="button" class="x" id="rsClose" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
     <div id="rsBody"></div>
   </div>
 </div>
