@@ -176,7 +176,7 @@ read like a form; five tiles read like a scale.
 ### 4.1 The page
 
 - Back pill and **"Things to try"** (serif 32), with **All answers** (text, `roseInk`) on
-  the right of the pill row. It opens §4.4.
+  the right of the pill row. It opens §4.4. (The mockup still says "See the list"; use "All answers", since the list is every answer, not the matches.)
 - Progress: "14 of 27 answered" left, "13 left" right, 13.5px `--dim`, then a 4px bar in
   `--rose` over `roseTint`.
 
