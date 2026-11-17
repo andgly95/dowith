@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Do With: just us, body</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0C0A0D}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+input,textarea{font:inherit}
+input::placeholder,textarea::placeholder{color:#9A90A2;opacity:1}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 1340px; box-sizing: border-box; overflow: hidden; background: {{t.bg}}; color: {{t.text}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; padding: 14px 20px 0">
+    <div style="display: flex; justify-content: space-between; align-items: center; height: 44px; margin-left: -8px; color: {{t.text}}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg><span style="display: flex; color: {{t.rose}}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5.2c0 3.3 2.2 5.8 5 5.8s5-2.5 5-5.8c-1.4.9-2.7.9-3.6 0-.6-.6-1-1.5-1.4-2.7-.4 1.2-.8 2.1-1.4 2.7-.9.9-2.2.9-3.6 0z"/><path d="M9.8 6.9c.6.8 1.4 1.2 2.2 1.2s1.6-.4 2.2-1.2"/><path d="M12 11v10"/><path d="M12 16.2c-1.9-.2-3.5-1.3-4.1-3.2 2 0 3.5 1 4.1 3.2z"/><path d="M12 18.6c1.9-.2 3.5-1.3 4.1-3.2-2 0-3.5 1-4.1 3.2z"/></svg></span></div>
+    <div style="margin-top: 14px; font-size: 13px; color: {{t.dim}}">To do with</div>
+    <div style="font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 40px; line-height: 1.1; font-weight: 600">Sam</div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: {{t.scrim}}"></div>
+  <section role="dialog" aria-label="Body" style="position: absolute; left: 0; right: 0; top: 44px; bottom: 0; box-sizing: border-box; border-radius: 28px 28px 0 0; background: linear-gradient(180deg, {{roomTop}} 0%, {{roomSheet}} 340px); padding: 8px 16px 28px; display: flex; flex-direction: column; gap: 20px">
+    <div aria-hidden="true" style="align-self: center; width: 38px; height: 5px; border-radius: 3px; background: {{roseLine}}"></div>
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: -6px">
+      <a href="JustUs.dc.html" style="min-height: 44px; display: flex; align-items: center; gap: 2px; padding: 0 14px 0 8px; border-radius: 22px; background: {{roseTint}}; color: {{roseInk}}; font-size: 15px; font-weight: 600"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg><span style="font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-style: italic; font-size: 17px">Just us</span></a>
+      
+    </div>
+    <h1 style="margin: -6px 0 0; padding: 0 4px; font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 32px; line-height: 1.1; font-weight: 600; letter-spacing: -0.01em">Body</h1>
+    <div role="radiogroup" style="display: grid; grid-template-columns: repeat({{viewsN}}, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 16px; background: {{roomCard}}">
+        <sc-for list="{{views}}" as="s" hint-placeholder-count="3">
+          <button type="button" role="radio" aria-checked="{{s.on}}" onClick="{{s.pick}}" style="min-height: 40px; border: 0; border-radius: 12px; background: {{s.bg}}; color: {{s.fg}}; font-size: 14.5px; font-weight: 600">{{s.label}}</button>
+        </sc-for>
+      </div>
+
+    <div style="position: relative; display: flex; justify-content: center; padding: 6px 0 0">
+      <div style="transform: scale(0.9); transform-origin: top center; height: 380px"><div role="group" aria-label="{{figLabel}}" style="position: relative; width: 200px; height: 420px">
+          <svg viewBox="0 0 200 420" width="200" height="420" aria-hidden="true" style="display: block"><ellipse cx="100" cy="44" rx="24" ry="29" fill="{{fig}}"></ellipse><rect x="90" y="66" width="20" height="24" rx="7" fill="{{fig}}"></rect><path d="M62 98 Q60 88 74 86 L126 86 Q140 88 138 98 L132 150 Q127 178 134 208 L140 234 Q100 250 60 234 L66 208 Q73 178 68 150 Z" fill="{{fig}}"></path><polyline points="57,100 49,160 43,214" fill="none" stroke="{{fig}}" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"></polyline><polyline points="143,100 151,160 157,214" fill="none" stroke="{{fig}}" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"></polyline><circle cx="41" cy="226" r="9" fill="{{fig}}"></circle><circle cx="159" cy="226" r="9" fill="{{fig}}"></circle><polyline points="85,238 83,318" fill="none" stroke="{{fig}}" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"></polyline><polyline points="115,238 117,318" fill="none" stroke="{{fig}}" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"></polyline><polyline points="83,318 83,394" fill="none" stroke="{{fig}}" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"></polyline><polyline points="117,318 117,394" fill="none" stroke="{{fig}}" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"></polyline><ellipse cx="82" cy="404" rx="13" ry="7" fill="{{fig}}"></ellipse><ellipse cx="118" cy="404" rx="13" ry="7" fill="{{fig}}"></ellipse></svg>
+          <sc-for list="{{pts}}" as="p" hint-placeholder-count="14">
+            <button type="button" aria-label="{{p.label}}" aria-pressed="{{p.on}}" onClick="{{p.pick}}" style="position: absolute; left: {{p.l}}; top: {{p.tp}}; width: 44px; height: 44px; margin: -22px 0 0 -22px; border: 0; background: transparent; padding: 0">
+              <span aria-hidden="true" style="position: absolute; left: 50%; top: 50%; width: {{p.gs}}; height: {{p.gs}}; transform: translate(-50%, -50%); border-radius: 50%; background: {{p.color}}; opacity: {{p.glow}}; filter: blur(7px)"></span>
+              <span aria-hidden="true" style="position: absolute; left: 50%; top: 50%; width: {{p.rs}}; height: {{p.rs}}; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: 0 0 0 2px {{p.ringColor}}; opacity: {{p.ring}}"></span>
+              <span aria-hidden="true" style="position: absolute; left: 50%; top: 50%; width: 9px; height: 9px; box-sizing: border-box; transform: translate(-50%, -50%); border-radius: 50%; background: {{p.core}}; border: 1.5px solid {{p.coreStroke}}"></span>
+            </button>
+          </sc-for>
+        </div></div>
+      <div role="radiogroup" aria-label="Side" style="position: absolute; right: 0; top: 4px; display: flex; flex-direction: column; gap: 4px; padding: 4px; border-radius: 14px; background: {{roomCard}}">
+        <sc-for list="{{sides}}" as="s" hint-placeholder-count="2">
+          <button type="button" role="radio" aria-checked="{{s.on}}" onClick="{{s.pick}}" style="min-width: 64px; min-height: 36px; border: 0; border-radius: 10px; background: {{s.bg}}; color: {{s.fg}}; font-size: 13px; font-weight: 600">{{s.label}}</button>
+        </sc-for>
+      </div>
+      <div aria-hidden="true" style="position: absolute; left: 0; bottom: 6px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: {{t.dim}}">
+        <span style="width: 74px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, {{cool}}, {{t.rose}})"></span>
+        <span style="display: flex; justify-content: space-between; width: 74px"><span>No</span><span>Yes</span></span>
+      </div>
+    </div>
+
+    <section aria-label="{{partLabel}}" style="display: flex; flex-direction: column; gap: 12px; padding: 16px 14px 8px; border-radius: 24px; background: {{roomCard}}">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 0 2px">
+        <h2 style="margin: 0; font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 25px; font-weight: 600">{{partLabel}}</h2>
+        <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: {{t.dim}}"><span aria-hidden="true" style="width: 18px; height: 18px; box-sizing: border-box; border-radius: 9px; border: 2px solid {{t.text}}; background: {{roomCard}}; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800">S</span>Sam’s answer</span>
+      </div>
+      <div aria-hidden="true" style="display: flex; justify-content: space-between; margin: -4px 2px 0; font-size: 12px; color: {{t.dim}}"><span>← No</span><span>Yes, please →</span></div>
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+        <div role="group" aria-label="{{r.label}}" style="display: flex; flex-direction: column; gap: 13px; padding: 6px 2px 8px">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px">
+            <span style="font-size: 16px; font-weight: 600">{{r.label}}</span>
+            <span style="font-size: 13.5px; font-weight: 600; color: {{r.mineColor}}">{{r.mineText}}</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px">
+            <sc-for list="{{r.steps}}" as="s" hint-placeholder-count="5">
+              <button type="button" aria-label="{{s.aria}}" aria-pressed="{{s.on}}" onClick="{{s.pick}}" style="position: relative; height: 40px; border: 0; border-radius: 12px; background: {{s.bg}}; padding: 0; box-shadow: {{s.shadow}}">
+                <sc-if value="{{s.theirs}}" hint-placeholder-val="{{ false }}">
+                  <span aria-hidden="true" style="position: absolute; left: 50%; top: -7px; margin-left: -9px; width: 18px; height: 18px; box-sizing: border-box; border-radius: 9px; border: 2px solid {{t.text}}; background: {{roomCard}}; color: {{t.text}}; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800">S</span>
+                </sc-if>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </section>
+    <p style="margin: 0; padding: 0 6px; font-size: 13px; line-height: 1.5; color: {{t.dim}}">Sam sees your answers here, and you see Sam’s. That’s the point of this half: “this, not that.” Tap your answer again to take it back.</p>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme": {"editor": "enum", "default": "dusk", "options": ["dusk", "forest"]}, "$preview": {"width": 390, "height": 1340}}'>
+class Component extends DCLogic {
+  theme(key) {
+    var P = {
+      dusk: { bg: '#17131A', card: '#211C26', card2: '#2B2430', line: '#332B3A', ink: '#F4EEE9', ink2: '#CBBFC6', dim: '#948A9C', faint: '#6B6274', accent: '#F2845C', sage: '#8FB9A8', warn: '#E0714F', onAccent: '#2A1206', onSage: '#10251D', rose: '#E0708A' },
+      forest: { bg: '#111A15', card: '#18241D', card2: '#213027', line: '#2D3F34', ink: '#EDF1E7', ink2: '#C6D1C4', dim: '#93A69A', faint: '#627569', accent: '#E8A658', sage: '#93CFA0', warn: '#E07A5F', onAccent: '#2A1705', onSage: '#0D2416', rose: '#E08A92' }
+    };
+    var p = P[key] || P.dusk;
+    function hex(h) { var n = parseInt(String(h).replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+    function toHex(c) { return '#' + c.map(function (v) { var s = Math.round(Math.max(0, Math.min(255, v))).toString(16); return s.length < 2 ? '0' + s : s; }).join('').toUpperCase(); }
+    function mix(a, b, w) { return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w, a[2] + (b[2] - a[2]) * w]; }
+    function lum(c) { var r = c.map(function (v) { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r[0] + 0.7152 * r[1] + 0.0722 * r[2]; }
+    function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    function ensure(c, ref, min, toward) { var x = c; for (var i = 0; i < 20 && ratio(x, ref) < min; i++) x = mix(x, toward, 0.06); return x; }
+    function rgba(c, a) { return 'rgba(' + Math.round(c[0]) + ', ' + Math.round(c[1]) + ', ' + Math.round(c[2]) + ', ' + a + ')'; }
+    var bg = hex(p.bg), card = hex(p.card), card2 = hex(p.card2), ink = hex(p.ink), acc = hex(p.accent), sage = hex(p.sage);
+    var dim = ensure(hex(p.dim), card2, 4.5, ink);
+    return {
+      key: p === P.forest ? 'forest' : 'dusk',
+      bg: p.bg, surface: p.card, raised: p.card2, line: p.line,
+      sheet: toHex(mix(bg, card, 0.5)),
+      text: p.ink, text2: p.ink2, dim: toHex(dim), faint: p.faint,
+      accent: p.accent, accentTint: rgba(acc, 0.16), onAccent: p.onAccent,
+      sage: p.sage, sageTint: rgba(sage, 0.16), onSage: p.onSage,
+      warn: p.warn, rose: p.rose,
+      scrim: rgba(mix(bg, [0, 0, 0], 0.5), 0.7),
+      glass: rgba(mix(bg, card, 0.5), 0.86),
+      mapLand: toHex(mix(bg, card, 0.6)),
+      mapWater: toHex(mix(bg, [70, 118, 160], 0.3)),
+      mapPark: toHex(mix(mix(bg, card, 0.6), sage, 0.13)),
+      mapRoad: toHex(mix(bg, ink, 0.1)),
+      mapMajor: toHex(mix(bg, ink, 0.18)),
+      mapLabel: toHex(mix(bg, ink, 0.5))
+    };
+  }
+  lead(title) {
+    var m = /^((?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:️|⃣|\p{Emoji_Modifier}|\p{Regional_Indicator}|‍\p{Extended_Pictographic})*)\s*/u.exec(title);
+    if (!m) return { emoji: '', rest: title };
+    return { emoji: m[1], rest: title.slice(m[0].length) };
+  }
+
+  hx(h) { h = String(h).replace('#', ''); var n = parseInt(h, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+  hex(c) { return '#' + c.map(function (v) { v = Math.round(Math.max(0, Math.min(255, v))).toString(16); return v.length < 2 ? '0' + v : v; }).join('').toUpperCase(); }
+  mixc(a, b, w) { var x = this.hx(a), y = this.hx(b); return this.hex([x[0] + (y[0] - x[0]) * w, x[1] + (y[1] - x[1]) * w, x[2] + (y[2] - x[2]) * w]); }
+  rgba(h, a) { var c = this.hx(h); return 'rgba(' + c[0] + ', ' + c[1] + ', ' + c[2] + ', ' + a + ')'; }
+  room() {
+    var t = this.theme(this.props.theme ?? 'dusk');
+    var cool = this.mixc(t.faint, '#8C9AD0', 0.45);
+    var self = this;
+    var W = { no: 0, soft: 0.2, maybe: 0.5, yes: 0.78, love: 1 };
+    return {
+      t: t, cool: cool,
+      roseTint: this.rgba(t.rose, 0.16), roseLine: this.rgba(t.rose, 0.4), roseInk: this.mixc(t.rose, t.text, 0.25),
+      roomTop: this.mixc(t.sheet, t.rose, 0.12), roomSheet: this.mixc(t.sheet, t.rose, 0.04),
+      roomCard: this.mixc(t.surface, t.rose, 0.07), onRose: this.mixc(t.bg, '#000000', 0.35),
+      W: W,
+      warm: function (w) { return self.mixc(cool, t.rose, Math.max(0, Math.min(1, w))); }
+    };
+  }
+  levels() {
+    return [['no', 'No'], ['soft', 'Soft no'], ['maybe', 'Maybe'], ['yes', 'Yes'], ['love', 'Yes, please']];
+  }
+
+  bodyData() {
+    // Made-up answers for a stand-in partner. Keyed part → act → level.
+    var mine = {
+      lips: { touch: 'love', kiss: 'love', lick: 'yes', bite: 'maybe' },
+      neck: { touch: 'love', kiss: 'love', lick: 'yes', bite: 'maybe', massage: 'yes', scratch: 'soft' },
+      ears: { kiss: 'yes', bite: 'soft', touch: 'maybe' },
+      hair: { touch: 'love', massage: 'love', scratch: 'yes' },
+      shoulders: { massage: 'love', kiss: 'yes', touch: 'yes' },
+      back: { massage: 'love', scratch: 'yes', touch: 'yes' },
+      chest: { touch: 'yes', kiss: 'yes' },
+      stomach: { touch: 'maybe', kiss: 'yes' },
+      hips: { touch: 'yes' },
+      hands: { touch: 'yes', kiss: 'maybe' },
+      feet: { massage: 'yes', touch: 'no' }
+    };
+    var theirs = {
+      lips: { touch: 'yes', kiss: 'love', lick: 'maybe', bite: 'soft' },
+      neck: { touch: 'yes', kiss: 'love', lick: 'maybe', bite: 'soft', massage: 'love', scratch: 'no' },
+      ears: { kiss: 'maybe', touch: 'yes' },
+      hair: { touch: 'love', massage: 'love' },
+      shoulders: { massage: 'love', kiss: 'love' },
+      back: { massage: 'love', scratch: 'love', touch: 'yes' },
+      chest: { touch: 'yes' },
+      thighs: { touch: 'yes', kiss: 'yes' },
+      hands: { touch: 'love' },
+      feet: { massage: 'love', touch: 'soft' }
+    };
+    var parts = [['lips', 'Lips'], ['ears', 'Ears'], ['neck', 'Neck'], ['hair', 'Hair and scalp'], ['shoulders', 'Shoulders'], ['back', 'Back'],
+      ['chest', 'Chest'], ['nipples', 'Nipples'], ['stomach', 'Stomach'], ['hips', 'Hips'], ['butt', 'Butt'], ['genitals', 'Genitals'],
+      ['thighs', 'Inner thighs'], ['hands', 'Hands'], ['feet', 'Feet']];
+    var acts = [['touch', 'Touching'], ['kiss', 'Kissing'], ['lick', 'Licking'], ['bite', 'Biting'], ['massage', 'Massage'], ['scratch', 'Scratching']];
+    var front = [['hair', 100, 18], ['ears', 76, 44], ['ears', 124, 44], ['lips', 100, 58], ['neck', 100, 80], ['shoulders', 68, 96], ['shoulders', 132, 96],
+      ['chest', 100, 106], ['nipples', 85, 124], ['nipples', 115, 124], ['stomach', 100, 172], ['hips', 70, 214], ['hips', 130, 214],
+      ['genitals', 100, 238], ['thighs', 91, 274], ['thighs', 109, 274], ['hands', 41, 226], ['hands', 159, 226], ['feet', 82, 404], ['feet', 118, 404]];
+    var back = [['hair', 100, 30], ['ears', 76, 46], ['ears', 124, 46], ['neck', 100, 80], ['shoulders', 68, 96], ['shoulders', 132, 96],
+      ['back', 100, 150], ['butt', 86, 240], ['butt', 114, 240], ['hands', 41, 226], ['hands', 159, 226], ['feet', 82, 404], ['feet', 118, 404]];
+    return { mine: mine, theirs: theirs, parts: parts, acts: acts, front: front, back: back };
+  }
+
+  renderVals() {
+    var self = this;
+    var r = this.room();
+    var t = r.t;
+    var st = this.state || {};
+    var D = this.bodyData();
+    var view = st.view || 'together', side = st.side || 'front', part = st.part || 'neck';
+    var mine = st.mine || D.mine;
+    var W = r.W;
+    function avg(o) { var k = Object.keys(o || {}); if (!k.length) return null; return k.reduce(function (s, a) { return s + W[o[a]]; }, 0) / k.length; }
+    function both(p) { var a = mine[p] || {}, b = D.theirs[p] || {}; return Object.keys(a).some(function (k) { return W[a[k]] >= 0.78 && W[b[k]] >= 0.78; }); }
+    function heat(p) {
+      var a = avg(mine[p]), b = avg(D.theirs[p]);
+      if (view === 'mine') return a;
+      if (view === 'theirs') return b;
+      if (a == null || b == null) return a == null && b == null ? null : (a == null ? b : a) * 0.6;
+      return (a + b) / 2;
+    }
+    var labels = {};
+    D.parts.forEach(function (p) { labels[p[0]] = p[1]; });
+    var pts = (side === 'front' ? D.front : D.back).map(function (q) {
+      var h = heat(q[0]), sel = q[0] === part, hot = view === 'together' && both(q[0]);
+      return {
+        l: q[1] + 'px', tp: q[2] + 'px', label: labels[q[0]] + (h == null ? ', not answered yet' : ''), on: sel ? 'true' : 'false',
+        glow: h == null ? 0 : 0.3 + 0.6 * h, gs: h == null ? '0px' : Math.round(24 + 22 * h) + 'px',
+        color: h == null ? r.cool : r.warm(h),
+        core: h == null ? 'transparent' : r.warm(h), coreStroke: h == null ? t.dim : r.warm(h),
+        ring: sel || hot ? 1 : 0, rs: sel ? '24px' : '19px', ringColor: sel ? t.text : t.rose,
+        pick: function () { self.setState({ part: q[0] }); }
+      };
+    });
+    function seg(id, label, cur, key) {
+      var on = cur === id;
+      return { label: label, on: on ? 'true' : 'false', bg: on ? t.rose : 'transparent', fg: on ? r.onRose : t.text2,
+        pick: function () { var o = {}; o[key] = id; self.setState(o); } };
+    }
+    var L = this.levels();
+    var mp = mine[part] || {}, tp = D.theirs[part] || {};
+    var name = {}; L.forEach(function (l) { name[l[0]] = l[1]; });
+    var rows = D.acts.map(function (a) {
+      var m = mp[a[0]], th = tp[a[0]];
+      return {
+        label: a[1],
+        mineText: m ? 'You: ' + name[m] : 'Not answered', mineColor: m ? r.warm(W[m]) : t.dim,
+        steps: L.map(function (l, i) {
+          var on = m === l[0];
+          return {
+            on: on ? 'true' : 'false', theirs: th === l[0],
+            aria: l[1] + (th === l[0] ? ' (Sam’s answer)' : ''),
+            bg: on ? r.warm(W[l[0]]) : self.rgba(r.warm(W[l[0]]), 0.2),
+            shadow: on ? '0 0 0 2px ' + t.text + ' inset' : 'none',
+            pick: function () {
+              var n = JSON.parse(JSON.stringify(mine)); n[part] = n[part] || {};
+              if (on) delete n[part][a[0]]; else n[part][a[0]] = l[0];
+              self.setState({ mine: n });
+            }
+          };
+        })
+      };
+    });
+    var views = [seg('together', 'Together', view, 'view'), seg('mine', 'Yours', view, 'view'), seg('theirs', 'Sam’s', view, 'view')];
+    return Object.assign(r, {
+      fig: this.mixc(r.roomSheet, t.text, 0.12),
+      figLabel: 'A figure, ' + side + '. Tap a place to answer.',
+      pts: pts, views: views, viewsN: 3,
+      sides: [seg('front', 'Front', side, 'side'), seg('back', 'Back', side, 'side')],
+      partLabel: labels[part], rows: rows
+    });
+  }
+}
+</script>
+</body>
+</html>

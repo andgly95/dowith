@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Do With: just us, things to try</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0C0A0D}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+input,textarea{font:inherit}
+input::placeholder,textarea::placeholder{color:#9A90A2;opacity:1}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; background: {{t.bg}}; color: {{t.text}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; padding: 14px 20px 0">
+    <div style="display: flex; justify-content: space-between; align-items: center; height: 44px; margin-left: -8px; color: {{t.text}}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg><span style="display: flex; color: {{t.rose}}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5.2c0 3.3 2.2 5.8 5 5.8s5-2.5 5-5.8c-1.4.9-2.7.9-3.6 0-.6-.6-1-1.5-1.4-2.7-.4 1.2-.8 2.1-1.4 2.7-.9.9-2.2.9-3.6 0z"/><path d="M9.8 6.9c.6.8 1.4 1.2 2.2 1.2s1.6-.4 2.2-1.2"/><path d="M12 11v10"/><path d="M12 16.2c-1.9-.2-3.5-1.3-4.1-3.2 2 0 3.5 1 4.1 3.2z"/><path d="M12 18.6c1.9-.2 3.5-1.3 4.1-3.2-2 0-3.5 1-4.1 3.2z"/></svg></span></div>
+    <div style="margin-top: 14px; font-size: 13px; color: {{t.dim}}">To do with</div>
+    <div style="font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 40px; line-height: 1.1; font-weight: 600">Sam</div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: {{t.scrim}}"></div>
+  <section role="dialog" aria-label="Things to try" style="position: absolute; left: 0; right: 0; top: 44px; bottom: 0; box-sizing: border-box; border-radius: 28px 28px 0 0; background: linear-gradient(180deg, {{roomTop}} 0%, {{roomSheet}} 340px); padding: 8px 16px 28px; display: flex; flex-direction: column; gap: 20px">
+    <div aria-hidden="true" style="align-self: center; width: 38px; height: 5px; border-radius: 3px; background: {{roseLine}}"></div>
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: -6px">
+      <a href="JustUs.dc.html" style="min-height: 44px; display: flex; align-items: center; gap: 2px; padding: 0 14px 0 8px; border-radius: 22px; background: {{roseTint}}; color: {{roseInk}}; font-size: 15px; font-weight: 600"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg><span style="font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-style: italic; font-size: 17px">Just us</span></a>
+      <a href="JustUs-Matches.dc.html" style="min-height: 44px; display: flex; align-items: center; padding: 0 6px; color: {{roseInk}}; font-size: 15px; font-weight: 600">See the list</a>
+    </div>
+    <h1 style="margin: -6px 0 0; padding: 0 4px; font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 32px; line-height: 1.1; font-weight: 600; letter-spacing: -0.01em">Things to try</h1>
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 0 4px">
+      <div style="display: flex; justify-content: space-between; font-size: 13.5px; color: {{t.dim}}"><span>{{progress}}</span><span>{{left}}</span></div>
+      <div aria-hidden="true" style="height: 4px; border-radius: 2px; background: {{roseTint}}; overflow: hidden"><div style="width: {{pct}}; height: 4px; border-radius: 2px; background: {{t.rose}}"></div></div>
+    </div>
+
+    <sc-if value="{{hasCard}}" hint-placeholder-val="{{ true }}">
+      <div style="position: relative; height: 330px">
+        <div aria-hidden="true" style="position: absolute; left: 22px; right: 22px; top: 18px; bottom: -14px; border-radius: 28px; background: {{roomCard}}; opacity: 0.6"></div>
+        <div aria-hidden="true" style="position: absolute; left: 11px; right: 11px; top: 9px; bottom: -7px; border-radius: 28px; background: {{roomCard}}; opacity: 0.85"></div>
+        <article aria-live="polite" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; box-sizing: border-box; border-radius: 28px; padding: 22px; background: linear-gradient(165deg, {{cardTop}} 0%, {{roomCard}} 75%); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35); display: flex; flex-direction: column">
+          <span style="align-self: flex-start; padding: 5px 11px; border-radius: 12px; background: {{roseTint}}; color: {{roseInk}}; font-size: 13px; font-weight: 650">{{group}}</span>
+          <h2 style="margin: auto 0; font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 38px; line-height: 1.12; font-weight: 600; letter-spacing: -0.01em">{{title}}</h2>
+          <span style="font-size: 13.5px; line-height: 1.45; color: {{t.dim}}">Sam only finds out if you both lean yes.</span>
+        </article>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px">
+        <div role="group" aria-label="Your answer" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px">
+          <sc-for list="{{answers}}" as="a" hint-placeholder-count="5">
+            <button type="button" onClick="{{a.pick}}" style="display: flex; flex-direction: column; align-items: center; gap: 6px; border: 0; background: transparent; color: {{t.text2}}; padding: 0; font-size: 12px; font-weight: 600; white-space: nowrap">
+              <span aria-hidden="true" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center"><span style="width: {{a.size}}; height: {{a.size}}; border-radius: 50%; background: {{a.bg}}; box-shadow: 0 0 0 1.5px {{a.ring}} inset"></span></span>
+              {{a.label}}
+            </button>
+          </sc-for>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 0 2px; font-size: 12px; color: {{t.dim}}"><span>← swipe for no</span><span>↑ maybe</span><span>yes →</span></div>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-top: auto">
+        <button type="button" onClick="{{back}}" style="min-height: 44px; display: flex; align-items: center; gap: 8px; border: 0; background: transparent; color: {{t.text2}}; padding: 0 8px; font-size: 15px; font-weight: 600"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>Back</button>
+        <button type="button" onClick="{{skip}}" style="min-height: 44px; border: 0; background: transparent; color: {{t.text2}}; padding: 0 8px; font-size: 15px; font-weight: 600">Not now</button>
+      </div>
+    </sc-if>
+    <sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 20px 0; text-align: center">
+        <span aria-hidden="true" style="display: flex; color: {{t.rose}}"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5.2c0 3.3 2.2 5.8 5 5.8s5-2.5 5-5.8c-1.4.9-2.7.9-3.6 0-.6-.6-1-1.5-1.4-2.7-.4 1.2-.8 2.1-1.4 2.7-.9.9-2.2.9-3.6 0z"/><path d="M9.8 6.9c.6.8 1.4 1.2 2.2 1.2s1.6-.4 2.2-1.2"/><path d="M12 11v10"/><path d="M12 16.2c-1.9-.2-3.5-1.3-4.1-3.2 2 0 3.5 1 4.1 3.2z"/><path d="M12 18.6c1.9-.2 3.5-1.3 4.1-3.2-2 0-3.5 1-4.1 3.2z"/></svg></span>
+        <h2 style="margin: 0; font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 30px; font-weight: 600">That’s all of them</h2>
+        <p style="margin: 0; font-size: 15px; line-height: 1.5; color: {{t.text2}}">You can change any answer from the list, or ask something of your own.</p>
+        <a href="JustUs-Matches.dc.html" style="margin-top: 10px; min-height: 52px; display: flex; align-items: center; padding: 0 26px; border-radius: 26px; background: {{t.rose}}; color: {{onRose}}; font-size: 16px; font-weight: 700">See what you both want</a>
+      </div>
+    </sc-if>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme": {"editor": "enum", "default": "dusk", "options": ["dusk", "forest"]}, "$preview": {"width": 390, "height": 844}}'>
+class Component extends DCLogic {
+  theme(key) {
+    var P = {
+      dusk: { bg: '#17131A', card: '#211C26', card2: '#2B2430', line: '#332B3A', ink: '#F4EEE9', ink2: '#CBBFC6', dim: '#948A9C', faint: '#6B6274', accent: '#F2845C', sage: '#8FB9A8', warn: '#E0714F', onAccent: '#2A1206', onSage: '#10251D', rose: '#E0708A' },
+      forest: { bg: '#111A15', card: '#18241D', card2: '#213027', line: '#2D3F34', ink: '#EDF1E7', ink2: '#C6D1C4', dim: '#93A69A', faint: '#627569', accent: '#E8A658', sage: '#93CFA0', warn: '#E07A5F', onAccent: '#2A1705', onSage: '#0D2416', rose: '#E08A92' }
+    };
+    var p = P[key] || P.dusk;
+    function hex(h) { var n = parseInt(String(h).replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+    function toHex(c) { return '#' + c.map(function (v) { var s = Math.round(Math.max(0, Math.min(255, v))).toString(16); return s.length < 2 ? '0' + s : s; }).join('').toUpperCase(); }
+    function mix(a, b, w) { return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w, a[2] + (b[2] - a[2]) * w]; }
+    function lum(c) { var r = c.map(function (v) { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r[0] + 0.7152 * r[1] + 0.0722 * r[2]; }
+    function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    function ensure(c, ref, min, toward) { var x = c; for (var i = 0; i < 20 && ratio(x, ref) < min; i++) x = mix(x, toward, 0.06); return x; }
+    function rgba(c, a) { return 'rgba(' + Math.round(c[0]) + ', ' + Math.round(c[1]) + ', ' + Math.round(c[2]) + ', ' + a + ')'; }
+    var bg = hex(p.bg), card = hex(p.card), card2 = hex(p.card2), ink = hex(p.ink), acc = hex(p.accent), sage = hex(p.sage);
+    var dim = ensure(hex(p.dim), card2, 4.5, ink);
+    return {
+      key: p === P.forest ? 'forest' : 'dusk',
+      bg: p.bg, surface: p.card, raised: p.card2, line: p.line,
+      sheet: toHex(mix(bg, card, 0.5)),
+      text: p.ink, text2: p.ink2, dim: toHex(dim), faint: p.faint,
+      accent: p.accent, accentTint: rgba(acc, 0.16), onAccent: p.onAccent,
+      sage: p.sage, sageTint: rgba(sage, 0.16), onSage: p.onSage,
+      warn: p.warn, rose: p.rose,
+      scrim: rgba(mix(bg, [0, 0, 0], 0.5), 0.7),
+      glass: rgba(mix(bg, card, 0.5), 0.86),
+      mapLand: toHex(mix(bg, card, 0.6)),
+      mapWater: toHex(mix(bg, [70, 118, 160], 0.3)),
+      mapPark: toHex(mix(mix(bg, card, 0.6), sage, 0.13)),
+      mapRoad: toHex(mix(bg, ink, 0.1)),
+      mapMajor: toHex(mix(bg, ink, 0.18)),
+      mapLabel: toHex(mix(bg, ink, 0.5))
+    };
+  }
+  lead(title) {
+    var m = /^((?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:️|⃣|\p{Emoji_Modifier}|\p{Regional_Indicator}|‍\p{Extended_Pictographic})*)\s*/u.exec(title);
+    if (!m) return { emoji: '', rest: title };
+    return { emoji: m[1], rest: title.slice(m[0].length) };
+  }
+
+  hx(h) { h = String(h).replace('#', ''); var n = parseInt(h, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+  hex(c) { return '#' + c.map(function (v) { v = Math.round(Math.max(0, Math.min(255, v))).toString(16); return v.length < 2 ? '0' + v : v; }).join('').toUpperCase(); }
+  mixc(a, b, w) { var x = this.hx(a), y = this.hx(b); return this.hex([x[0] + (y[0] - x[0]) * w, x[1] + (y[1] - x[1]) * w, x[2] + (y[2] - x[2]) * w]); }
+  rgba(h, a) { var c = this.hx(h); return 'rgba(' + c[0] + ', ' + c[1] + ', ' + c[2] + ', ' + a + ')'; }
+  room() {
+    var t = this.theme(this.props.theme ?? 'dusk');
+    var cool = this.mixc(t.faint, '#8C9AD0', 0.45);
+    var self = this;
+    var W = { no: 0, soft: 0.2, maybe: 0.5, yes: 0.78, love: 1 };
+    return {
+      t: t, cool: cool,
+      roseTint: this.rgba(t.rose, 0.16), roseLine: this.rgba(t.rose, 0.4), roseInk: this.mixc(t.rose, t.text, 0.25),
+      roomTop: this.mixc(t.sheet, t.rose, 0.12), roomSheet: this.mixc(t.sheet, t.rose, 0.04),
+      roomCard: this.mixc(t.surface, t.rose, 0.07), onRose: this.mixc(t.bg, '#000000', 0.35),
+      W: W,
+      warm: function (w) { return self.mixc(cool, t.rose, Math.max(0, Math.min(1, w))); }
+    };
+  }
+  levels() {
+    return [['no', 'No'], ['soft', 'Soft no'], ['maybe', 'Maybe'], ['yes', 'Yes'], ['love', 'Yes, please']];
+  }
+
+  renderVals() {
+    var self = this;
+    var r = this.room();
+    var t = r.t;
+    var st = this.state || {};
+    var Q = [['Blindfolds', 'Playful'], ['Dirty talk', 'Playful'], ['Role play', 'Playful']];
+    var i = st.i || 0, base = 14, total = 27;
+    var c = Q[i];
+    var L = this.levels();
+    var picked = st.picked;
+    return Object.assign(r, {
+      cardTop: this.mixc(r.roomCard, t.rose, 0.22),
+      hasCard: !!c, done: !c,
+      title: c ? c[0] : '', group: c ? c[1] + ' · ' + (4 + i) + ' of 13' : '',
+      progress: (base + i) + ' of ' + total + ' answered', left: (total - base - i) + ' left',
+      pct: Math.round(100 * (base + i) / total) + '%',
+      answers: L.map(function (l) {
+        var w = r.W[l[0]], col = r.warm(w);
+        return { label: l[1], size: (34 + 14 * w) + 'px', bg: self.rgba(col, 0.35 + 0.5 * w), ring: col,
+          pick: function () { self.setState({ i: i < Q.length ? i + 1 : i }); } };
+      }),
+      back: function () { self.setState({ i: Math.max(0, i - 1) }); },
+      skip: function () { self.setState({ i: i + 1 }); }
+    });
+  }
+}
+</script>
+</body>
+</html>
