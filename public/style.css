@@ -35,22 +35,43 @@
    Scoped by ATTRIBUTE, not just on :root, so a swatch in the picker can carry
    data-theme itself and paint from the very same values — no second copy of
    the palette in JavaScript to drift out of step. */
-[data-theme="olive"]{
-  --bg:#1f1a12;          /* bark — brown first, olive underneath */
-  --card:#2a2418;
-  --card2:#342d1f;
-  --line:#463c2a;
-  --ink:#f0ebdf;
-  --ink2:#cdc4ae;
-  --dim:#9c927a;
-  --faint:#736a56;
-  --accent:#c8b45a;      /* brass — the warm thing against the wood */
-  --accent2:#9dbb84;     /* leaf, for something already done */
-  --warn:#d9824e;
-  --on-accent:#221c05;
-  --on-accent2:#13200d;
-  --scrim:rgba(12,9,5,.86);
-  --rose:#c97b63;        /* terracotta rose, for the wood */
+/* Forest replaced Olive. Every text pairing clears WCAG AA, including --dim on
+   --card2, which Olive missed (4.4:1). --faint is 3.6:1 here: decoration only.
+   A phone that saved "olive" is moved across in BOTH places that read the
+   setting — the <head> script and app.js — or it would quietly fall back to
+   Dusk with no way to tell why. */
+[data-theme="forest"]{
+  --bg:#111a15;          /* deep pine */
+  --card:#18241d;
+  --card2:#213027;
+  --line:#2d3f34;
+  --ink:#edf1e7;         /* birch */
+  --ink2:#c6d1c4;
+  --dim:#93a69a;
+  --faint:#627569;
+  --accent:#e8a658;      /* lantern amber: the one warm thing among the trees */
+  --accent2:#93cfa0;     /* fern, for something already done */
+  --warn:#e07a5f;
+  --on-accent:#2a1705;
+  --on-accent2:#0d2416;
+  --scrim:rgba(5,10,7,.86);
+  --rose:#e08a92;        /* wild rose, for the rose screen */
+}
+
+/* Derived from the palette, so no theme needs new values. Declared on :root AND
+   [data-theme] on purpose: a custom property that reads var(--bg) resolves
+   where it is DECLARED, so on :root alone it would freeze to the page's theme
+   and a picker swatch carrying its own data-theme would paint the wrong one. */
+:root,[data-theme]{
+  --sheet:color-mix(in srgb, var(--bg) 50%, var(--card));           /* bottom sheets */
+  --accent-tint:color-mix(in srgb, var(--accent) 16%, transparent);  /* selected, the nav marker */
+  --sage-tint:color-mix(in srgb, var(--accent2) 16%, transparent);   /* been, done together */
+  --glass:color-mix(in srgb, var(--sheet) 86%, transparent);         /* floating over a map */
+  --r-card:20px;         /* grouped rows; the list card on the shelf */
+  --r-sheet:26px;        /* top corners of a bottom sheet */
+  --r-field:14px;        /* inputs, segmented controls */
+  --r-tile:13px;         /* the emoji tile */
+  --tap:44px;            /* the smallest thing a thumb is asked to hit */
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -82,9 +103,11 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior-y:none}
 body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 input,textarea{font:inherit;color:var(--ink)}
-/* The UA placeholder is a light grey that reads as text somebody typed. It is
-   a hint, so it sits at the faintest step of the scale. */
-::placeholder{color:var(--faint);opacity:1}
+/* The UA placeholder is a light grey that reads as text somebody typed, so it
+   is dimmed — but to --dim, not --faint. It sat at --faint once, 3.2:1 on the
+   page and 2.9:1 on a card: a hint you have to squint at is not a hint.
+   --faint is for decoration, never for anything that has to be read. */
+::placeholder{color:var(--dim);opacity:1}
 
 /* inset:0 — the shell ends where iOS stops DRAWING, which is not the screen.
    MEASURED on an iPhone 16 Pro Max, standalone, iOS 26, via the readout:
@@ -104,42 +127,52 @@ input,textarea{font:inherit;color:var(--ink)}
 .screen.active{display:flex}
 
 /* ─── chrome ────────────────────────────────────────────────────────────── */
+/* One rule for the trap this app has fallen into three times: an author
+   `display` beats the UA `[hidden]{display:none}`, so a hidden flex row stays
+   on screen while every `.hidden` check says it has gone. Settled globally.
+   The tests still assert visibility by LAYOUT, because that is what a person
+   sees and a rule can always be beaten by a more specific one. */
+[hidden]{display:none !important}
+
+/* Back on the left, the rose on the right, nothing between them: the title is
+   the line under, left-aligned and large, because the name of the person IS
+   the page — a caption in the middle of a bar was most of what read as dated. */
 .topbar{
-  display:flex;align-items:flex-start;gap:12px;
-  padding:calc(var(--safe-t) + 16px) 18px 12px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:calc(var(--safe-t) + 6px) 8px 0;
   max-width:var(--page);margin:0 auto;width:100%;
 }
-.topbar h1{font:600 21px/1.15 var(--serif);letter-spacing:-.01em;margin:0}
-/* The first block takes the slack so the trailing button sits on the edge. On
-   the space screen that block is `.ttl`, which is centred instead. */
-.topbar>div:first-of-type{flex:1;min-width:0}
-.topbar .ttl{flex:1;min-width:0;text-align:center;padding:0;border-radius:12px}
-.topbar .ttl:active{opacity:.7}
-.topbar .ttl h1 .chev{width:13px;height:13px;margin-left:4px;vertical-align:1px;
-  fill:none;stroke:var(--faint);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.rose-btn{position:relative}
-.icon-btn.rose-btn svg{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
-.rose-btn[hidden]{visibility:hidden;display:grid}   /* keeps the title centred */
-/* A match you have not seen yet. On screen only — never a notification. */
-.rose-btn.fresh::after{content:'';position:absolute;top:6px;right:6px;width:7px;height:7px;
-  border-radius:50%;background:var(--rose);box-shadow:0 0 0 2px var(--bg)}
-.topbar .with{
-  /* --dim, not --faint, and a weight: 11px at --faint on the dark ground read
-     as out of focus on a phone, not as quiet. */
-  font:600 11px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;
-  color:var(--dim);margin-bottom:5px;
+.ttl{
+  display:block;width:100%;max-width:var(--page);margin:0 auto;
+  padding:4px 20px 0;text-align:left;border-radius:0;
 }
+.ttl:active{opacity:.7}
+.ttl .with{display:block;font:500 13px/1.3 var(--sans);color:var(--dim);margin-bottom:1px}
+.ttl h1{
+  display:flex;align-items:center;gap:6px;margin:0;min-width:0;
+  font:600 34px/1.12 var(--serif);letter-spacing:-.02em;
+}
+.ttl h1>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ttl .chev{width:20px;height:20px;flex:none;margin-top:4px;
+  fill:none;stroke:var(--dim);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.rose-btn{position:relative}
+.rose-btn svg{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+/* A match you have not seen yet. On screen only — never a notification. */
+.rose-btn.fresh::after{content:'';position:absolute;top:8px;right:8px;width:7px;height:7px;
+  border-radius:50%;background:var(--rose);box-shadow:0 0 0 2px var(--bg)}
 .sub{color:var(--dim);font:italic 400 14px/1.4 var(--serif);margin-top:3px}
+/* 44px: the smallest thing a thumb is asked to hit (--tap). The old 36 was
+   under, and on the back arrow it was the most-tapped thing in the app. */
 .icon-btn{
-  width:36px;height:36px;border-radius:50%;display:grid;place-items:center;
+  width:var(--tap);height:var(--tap);border-radius:50%;display:grid;place-items:center;
   color:var(--dim);flex:none;
 }
 .icon-btn:active{color:var(--ink);background:var(--card)}
-.icon-btn svg{fill:currentColor}
+.icon-btn svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .avatar-btn{
-  width:34px;height:34px;border-radius:50%;flex:none;
-  background:var(--card2);border:1px solid var(--line);color:var(--ink2);
-  font:600 14px/1 var(--sans);display:grid;place-items:center;
+  width:var(--tap);height:var(--tap);border-radius:50%;flex:none;
+  background:var(--card2);color:var(--ink2);
+  font:600 16px/1 var(--sans);display:grid;place-items:center;
 }
 .scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .scroll>*{max-width:var(--page);margin:0 auto;width:100%}
@@ -156,142 +189,159 @@ input,textarea{font:inherit;color:var(--ink)}
 .gbtn{display:flex;justify-content:center;min-height:44px}
 .note{color:var(--warn);font-size:13.5px;line-height:1.55;margin-top:22px}
 
-/* ─── the shelf ─────────────────────────────────────────────────────────── */
-.shelf{padding:6px 18px 0;display:flex;flex-direction:column;gap:10px}
+/* ─── the shelf of lists ────────────────────────────────────────────────── */
+.home-bar{padding:calc(var(--safe-t) + 14px) 16px 8px 20px}
+.big{font:600 34px/1.12 var(--serif);letter-spacing:-.02em;margin:0}
+#scr-shelf .scroll{display:flex;flex-direction:column}
+.shelf{padding:8px 16px 0;display:flex;flex-direction:column;gap:12px}
+/* One card per list: who, how much is waiting, how much you have done — and,
+   under a hairline, what is waiting by kind, so the card says where to go
+   next rather than only who it is with. */
 .sp-card{
-  display:flex;align-items:center;gap:14px;width:100%;text-align:left;
-  background:var(--card);border:1px solid var(--line);border-radius:16px;
-  padding:15px 16px;
+  display:block;width:100%;text-align:left;
+  background:var(--card);border-radius:var(--r-card);padding:16px;
 }
 .sp-card:active{background:var(--card2)}
+.sp-top{display:flex;align-items:center;gap:14px}
+.avatar{
+  width:52px;height:52px;border-radius:50%;flex:none;display:grid;place-items:center;
+  background:var(--card2);color:var(--ink);font:600 19px/1 var(--sans);
+}
 .sp-faces{display:flex;flex:none}
-.sp-faces i{
-  width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
-  background:var(--card2);border:1.5px solid var(--card);color:var(--ink2);
-  font:600 13px/1 var(--sans);font-style:normal;margin-left:-10px;
-}
-.sp-faces i:first-child{margin-left:0}
+.sp-faces .avatar{border:2px solid var(--card);margin-left:-16px}
+.sp-faces .avatar:first-child{margin-left:0}
 .sp-bd{flex:1;min-width:0}
-.sp-bd b{display:block;font:600 17.5px/1.25 var(--serif);letter-spacing:-.01em}
-.sp-bd small{display:block;color:var(--dim);font-size:12.5px;margin-top:3px}
-.sp-count{
-  flex:none;font:600 15px/1 var(--sans);color:var(--accent);
-  min-width:26px;text-align:right;font-variant-numeric:tabular-nums;
+.sp-bd b{display:block;font:600 23px/1.15 var(--serif);letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-bd small{display:block;color:var(--dim);font-size:14px;margin-top:3px}
+.sp-bd small em{font-style:normal;font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums}
+.sp-bd small em.d{color:var(--accent2)}
+.sp-top>svg{flex:none;color:var(--dim)}
+.sp-kinds{
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));
+  margin-top:14px;padding-top:12px;border-top:1px solid var(--line);
 }
-.sp-count.none{color:var(--faint);font-weight:400}
+.sp-kinds span{display:flex;align-items:center;justify-content:center;gap:6px;
+  color:var(--dim);font:600 14.5px/1 var(--sans);font-variant-numeric:tabular-nums}
+.sp-kinds span.none{opacity:.45}
+.sp-kinds svg{width:19px;height:19px}
 .add-space{
-  display:block;width:calc(100% - 36px);margin:12px 18px 0;padding:15px;
-  border:1px dashed var(--line);border-radius:16px;color:var(--dim);font-size:14.5px;
+  display:flex;align-items:center;gap:14px;text-align:left;
+  width:calc(100% - 32px);max-width:calc(var(--page) - 32px);margin:12px auto 0;padding:14px 16px;
+  border-radius:var(--r-card);box-shadow:inset 0 0 0 1.5px var(--line);
 }
-.add-space:active{color:var(--ink);border-color:var(--faint)}
+.add-space:active{background:var(--card)}
+.add-space .plus{width:44px;height:44px;border-radius:50%;flex:none;display:grid;place-items:center;
+  background:var(--accent-tint);color:var(--accent)}
+.as-bd b{display:block;font:600 16px/1.3 var(--sans)}
+.as-bd small{display:block;color:var(--dim);font-size:13.5px;margin-top:1px}
+/* The lede at the bottom, so an almost-empty screen still says something. */
+.home-lede{text-align:center;padding:0 34px;margin:auto auto 0;padding-top:40px}
 .empty{
   text-align:center;color:var(--dim);padding:52px 26px;
   font:italic 400 15.5px/1.7 var(--serif);
 }
 
 /* ─── to do / done ──────────────────────────────────────────────────────── */
-/* One small toggle, over on the right.
-   It inherited the size and weight of a three-up segmented row it is no longer
-   part of: full-width-ish, bold, card-backed, sitting where the primary action
-   would be. It is not the primary action — the list below it is — so it reads
-   as a quiet switch at the end of the row instead. */
-.seg{
-  display:flex;justify-content:flex-end;gap:6px;
-  padding:0 18px 10px;max-width:var(--page);margin:0 auto;width:100%;
+/* How many on the left; the views you switch INTO on the right, as quiet
+   chips — 40px, no border. Done together is its icon and its count: the word
+   is the aria-label, because on a narrow phone it was the word that wrapped. */
+.ctl{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:14px 20px 4px;max-width:var(--page);margin:0 auto;width:100%;
 }
+.ctl-n{font:500 14px/1.2 var(--sans);color:var(--dim);white-space:nowrap;min-width:0;
+  overflow:hidden;text-overflow:ellipsis}
+.seg{display:flex;gap:8px;flex:none}
 .seg button{
-  flex:0 0 auto;padding:6px 11px;border-radius:13px;background:none;
-  border:1px solid var(--line);color:var(--dim);font-size:12px;font-weight:500;
+  height:40px;padding:0 14px;border-radius:20px;background:var(--card2);color:var(--ink2);
+  display:inline-flex;align-items:center;gap:7px;font:500 14.5px/1 var(--sans);
 }
-.seg button.on{background:var(--card2);border-color:var(--faint);color:var(--ink)}
-.seg button .n{color:var(--faint);font-weight:400;margin-left:5px}
-.seg button.on .n{color:var(--dim)}
+.seg button.on{background:var(--accent-tint);color:var(--accent)}
+.seg button svg{flex:none}
+#tabDone{padding:0 13px 0 11px}
+#tabDone .ok{color:var(--accent2)}
+#tabDone .n{font-weight:600;font-variant-numeric:tabular-nums}
+#tabDone.on .ok{color:var(--accent)}
+@media (max-width:370px){ .seg button>span{display:none} .seg button{padding:0 12px} }
 
 /* A month is a heading in a record, not a container — the same reasoning as the
-   group headings in trips. */
-.month{
-  font:11px/1 var(--sans);letter-spacing:.15em;text-transform:uppercase;
-  color:var(--faint);margin:22px 0 2px;padding-bottom:8px;
-  border-bottom:1px solid var(--line);
-}
-.month:first-child{margin-top:6px}
+   group headings in trips. Sentence case: it is a name, not a label. */
+.month{font:600 13.5px/1.2 var(--sans);color:var(--ink2);margin:20px 4px 10px}
+.month:first-child{margin-top:8px}
+/* Whose idea: one section per person, theirs first. An initial in a circle,
+   the name, the count — the split the screen is about, said plainly. */
+.whose{display:flex;align-items:center;gap:10px;margin:20px 4px 10px;
+  font:600 15px/1.2 var(--sans);color:var(--ink)}
+.whose:first-child{margin-top:8px}
+.whose .av{width:24px;height:24px;border-radius:50%;flex:none;display:grid;place-items:center;
+  background:var(--card2);color:var(--ink2);font:700 11px/1 var(--sans)}
+.whose b{font-weight:600}
+.whose .n{color:var(--dim);font-weight:500;font-variant-numeric:tabular-nums}
+.shelf .whose{margin-left:20px;margin-right:20px}
 /* In the record, the tick is a statement rather than a control — filled, quiet,
    and it still un-ticks if something was marked off by mistake. */
-.items.record .it{align-items:baseline}
 .items.record .it-bd b{text-decoration:none;color:var(--ink2)}
 .record-empty{
   text-align:center;color:var(--dim);padding:46px 26px;
   font:italic 400 15.5px/1.7 var(--serif);
 }
 
-/* ─── groups ────────────────────────────────────────────────────────────────
-   Rows you tap into, not folders you file into: a group is the set of items
-   carrying a tag, so there is nothing to drag anything into. */
-.groups{padding:4px 18px 0;display:flex;flex-direction:column;gap:8px}
-.groups[hidden]{display:none}
-.g-row{
-  display:flex;align-items:center;gap:13px;width:100%;text-align:left;
-  background:var(--card);border:1px solid var(--line);border-radius:14px;
-  padding:14px 16px;
-}
-.g-row:active{background:var(--card2)}
-.g-row .g-bd{flex:1;min-width:0}
-.g-row .g-bd b{display:block;font:600 16.5px/1.3 var(--serif);letter-spacing:-.005em}
-.g-row .g-bd small{display:block;color:var(--dim);font-size:12px;margin-top:2px}
-.g-row .g-n{
-  flex:none;font:600 15px/1 var(--sans);color:var(--accent);
-  min-width:22px;text-align:right;font-variant-numeric:tabular-nums;
-}
-.g-row .chev{color:var(--faint);flex:none;font-size:16px;line-height:1}
-.g-row.loose .g-bd b{font-style:italic;font-weight:400;color:var(--ink2)}
-
-/* Loose items sit directly under the group cards. A hairline rather than a
-   heading, because they are not a category — they are just the rest of the list. */
-.items.after-groups{margin-top:16px;padding-top:2px}
-.items.after-groups::before{
-  content:'';display:block;height:1px;background:var(--line);
-  margin:0 2px 4px;
-}
-
-.crumb{
-  display:flex;align-items:center;gap:6px;
-  padding:2px 18px 10px;max-width:var(--page);margin:0 auto;width:100%;
-  color:var(--accent);font:12px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;
-}
-.crumb[hidden]{display:none}
-.crumb svg{fill:none}
-
-/* tags on an item, and the ones already in use offered as shortcuts */
-.it-meta .tag-chip{
-  padding:3px 7px;border-radius:6px;background:var(--card2);color:var(--ink2);
-  font-size:10.5px;letter-spacing:.05em;
-}
-
 /* ─── the list ──────────────────────────────────────────────────────────── */
-.items{padding:4px 18px 0;display:flex;flex-direction:column}
-/* An author `display` beats the UA `[hidden]` rule, so switching to the map left
-   the whole list sitting above it. This is the same trap the other apps document
-   — and the reason the tests assert visibility by LAYOUT, not by the property. */
-.items[hidden]{display:none}
+.items{padding:2px 16px 0;display:flex;flex-direction:column}
+/* Each section's rows are one card, with hairlines INSET to start after the
+   emoji tile — a list of things in a box, not a ruled page. */
+.group{background:var(--card);border-radius:var(--r-card);overflow:hidden}
 .it{
-  display:flex;align-items:flex-start;gap:13px;padding:14px 2px;
-  border-bottom:1px solid var(--line);
+  position:relative;display:flex;align-items:center;gap:12px;
+  min-height:68px;padding:8px 11px 8px 12px;
 }
-.it:last-child{border-bottom:0}
+.it+.it::before{content:'';position:absolute;left:68px;right:0;top:0;height:1px;background:var(--line)}
+/* The leading emoji, in a tile. Presentation only — the stored title is never
+   touched, the edit field shows the whole string, and a title typed with no
+   space after the emoji lines up like the rest. No emoji: the kind's icon. */
+.etile{
+  position:relative;width:44px;height:44px;flex:none;border-radius:var(--r-tile);
+  background:var(--card2);display:grid;place-items:center;color:var(--dim);
+  font:23px/1 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;
+}
+.etile svg{width:22px;height:22px}
+.etile.big{width:56px;height:56px;border-radius:16px;font-size:29px}
+.etile.big svg{width:27px;height:27px}
+/* Whose idea it was, on the tile's corner, where a list has no sections. */
+.etile .by{
+  position:absolute;right:-5px;bottom:-5px;width:19px;height:19px;border-radius:10px;
+  background:var(--card2);border:2px solid var(--card);color:var(--ink2);
+  display:grid;place-items:center;font:700 9.5px/1 var(--sans);
+}
+.it.done .etile{opacity:.6}
+.it-bd{flex:1;min-width:0;padding:4px 0;cursor:pointer}
+.it-bd b{
+  display:block;font:500 16.5px/1.3 var(--sans);letter-spacing:-.005em;
+  word-break:break-word;color:var(--ink);
+}
+.it.done .it-bd b{color:var(--dim);text-decoration:line-through;text-decoration-thickness:1px}
+.it-bd p{margin:2px 0 0;color:var(--ink2);font-size:13.5px;line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.it.sel{background:color-mix(in srgb, var(--accent) 9%, transparent)}
 /* The tick is a ring, not a checkbox — this is a list of things you want, and a
-   grid of empty squares reads as chores. */
+   grid of empty squares reads as chores. On the RIGHT, the thumb's side, so the
+   emoji and the words lead the row. 26px to look at, 48px to hit: the ::after
+   is the hit area, and it is part of the button. --dim, never --faint — it is
+   the one control on every row, and at --faint it was 2.9:1 against a card. */
 .tick{
-  width:23px;height:23px;border-radius:50%;flex:none;margin-top:2px;
-  border:1.5px solid var(--faint);display:grid;place-items:center;
+  width:26px;height:26px;border-radius:50%;flex:none;
+  border:1.75px solid var(--dim);display:grid;place-items:center;
   position:relative;padding:0;
   transition:border-color .15s ease, background .15s ease;
 }
+.tick::after{content:'';position:absolute;inset:-11px;border-radius:50%}
 .tick:active{transform:scale(.9)}
 .it.done .tick{border-color:var(--accent2);background:var(--accent2)}
 
 /* The tick is drawn, not typed — a stroked path can be animated on, and a text
    glyph cannot. */
-.tick svg{width:13px;height:13px;display:block;overflow:visible}
+.tick svg{width:14px;height:14px;display:block;overflow:visible}
 .tick svg path{
   fill:none;stroke:var(--bg);stroke-width:3.2;
   stroke-linecap:round;stroke-linejoin:round;
@@ -378,31 +428,22 @@ input,textarea{font:inherit;color:var(--ink)}
   .it.celebrating .tick svg path{stroke-dashoffset:0}
   .it.celebrating .it-bd b{animation:none;color:var(--faint);text-decoration-color:var(--faint)}
 }
-.it-bd{flex:1;min-width:0}
-.it-bd b{
-  display:block;font:400 17px/1.4 var(--serif);letter-spacing:-.005em;
-  word-break:break-word;
-}
-.it.done .it-bd b{color:var(--faint);text-decoration:line-through;text-decoration-thickness:1px}
-.it-bd p{color:var(--ink2);font-size:13.5px;line-height:1.5;margin:4px 0 0}
+/* One line under the title, everything the row has to say: who it is for when
+   that is not the default, where, the link, who ticked it off. Words separated
+   by a dot, not a row of pills — the pills were most of the noise. */
 .it-meta{
-  display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px;
-  font:11.5px/1 var(--sans);color:var(--faint);
+  display:flex;flex-wrap:wrap;gap:2px 0;align-items:center;margin-top:2px;
+  font:13px/1.35 var(--sans);color:var(--dim);
 }
+.it-meta>*+*::before{content:'·';margin:0 6px;color:var(--faint);text-decoration:none;display:inline-block}
 .it-meta .who{color:var(--dim)}
 .it-meta a{color:var(--accent);text-decoration:none}
-.chip{
-  padding:3px 7px;border-radius:6px;background:var(--card2);color:var(--dim);
-  font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
-}
-.chip.private{color:var(--accent);background:color-mix(in srgb, var(--accent) 13%, transparent)}
-.chip.public{color:var(--accent2);background:color-mix(in srgb, var(--accent2) 13%, transparent)}
-.chip.elsewhere{font-style:italic;text-transform:none;letter-spacing:0;font-size:11px}
-.chip.place::before{content:'⌖ ';opacity:.8}
+.chip{color:var(--dim)}
+.chip.private{color:var(--accent)}
+.chip.public{color:var(--accent2)}
+.chip.elsewhere{font-style:italic}
 
 /* ─── the map ───────────────────────────────────────────────────────────── */
-#mapWrap{position:relative;padding:0 18px}
-#mapWrap[hidden]{display:none}
 .map-canvas{
   position:relative;overflow:hidden;touch-action:none;cursor:grab;
   height:min(66vh,520px);border-radius:14px;background:var(--card2);
@@ -412,8 +453,10 @@ input,textarea{font:inherit;color:var(--ink)}
 .map-canvas .pan{position:absolute;inset:0}
 /* Tiles are dimmed and desaturated so the pins are the brightest thing on the
    map — this is a list with locations, not a map with annotations. */
+/* Sized inline: zoom is continuous, so a tile is 256px times whatever is left
+   over after the nearest whole zoom level. */
 .map-canvas .tile{
-  position:absolute;width:256px;height:256px;
+  position:absolute;max-width:none;
   opacity:.55;filter:saturate(.5) invert(.92) hue-rotate(180deg);
   user-select:none;-webkit-user-drag:none;
 }
@@ -421,210 +464,223 @@ input,textarea{font:inherit;color:var(--ink)}
   position:absolute;inset:0;display:grid;place-items:center;padding:30px;
   text-align:center;color:var(--dim);font:italic 400 15px/1.65 var(--serif);
 }
-.pin{
-  position:absolute;transform:translate(-50%,-100%);
-  display:flex;flex-direction:column;align-items:center;gap:3px;
-  padding:0;max-width:130px;
-}
-.pin i{
-  width:13px;height:13px;border-radius:50%;background:var(--accent);
-  border:2px solid var(--bg);box-shadow:0 1px 5px rgba(0,0,0,.6);order:2;
-}
-.pin span{
-  order:1;font:11px/1.25 var(--sans);color:var(--ink);
-  background:color-mix(in srgb, var(--bg) 86%, transparent);padding:3px 6px;border-radius:5px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;
-}
-.pin.done i{background:var(--accent2)}
-.pin.done span{color:var(--dim)}
-.pin.private i{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent)}
-.zoomers{position:absolute;right:26px;top:8px;display:flex;flex-direction:column;gap:5px;z-index:3}
-.zoomers button{
-  width:32px;height:32px;border-radius:50%;background:var(--card);color:var(--ink2);
-  border:1px solid var(--line);font:16px/1 var(--sans);display:grid;place-items:center;
-  box-shadow:0 1px 5px rgba(0,0,0,.4);
-}
-.zoomers button:active{background:var(--card2);color:var(--ink)}
 .map-canvas .attrib{
   position:absolute;right:6px;bottom:5px;font:9.5px/1 var(--sans);
   color:var(--ink2);background:color-mix(in srgb, var(--bg) 70%, transparent);padding:2px 5px;border-radius:3px;
 }
 
 /* ─── composer ──────────────────────────────────────────────────────────── */
-.composer{
-  border-top:1px solid var(--line);
-  padding:10px 18px;
-}
+/* One pill with the + inside it. No hairline above: it sits on the page like
+   the nav does, and nothing passes under either. */
+.composer{padding:8px 16px 6px}
 .composer>*{max-width:var(--page);margin:0 auto;width:100%}
-/* Hidden until there is something being written for it to describe. An author
-   `display` rule beats the UA [hidden] rule, so the second line is what makes
-   the first one true. */
-.vis-row{display:flex;gap:6px;margin-bottom:9px}
-.vis-row[hidden]{display:none}
+/* Hidden until there is something being written for it to describe. Three
+   equal segments, each saying what it means ("Us · you and Linnea"). */
+.vis-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:8px}
 .vis-row button{
-  flex:1;padding:7px 4px;border-radius:9px;background:var(--card);
-  border:1px solid var(--line);color:var(--dim);
-  font:11px/1.35 var(--sans);letter-spacing:.04em;
+  min-height:48px;border-radius:var(--r-field);background:var(--card2);color:var(--dim);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  padding:4px;font:500 11.5px/1.25 var(--sans);text-align:center;min-width:0;
 }
-.vis-row button b{display:block;font-size:12.5px;font-weight:600;letter-spacing:0}
-.vis-row button.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
-.vis-row button.on b{color:var(--on-accent)}
-.comp-in{display:flex;gap:10px;align-items:center}
+.vis-row button b{font:600 14px/1.2 var(--sans);color:var(--ink)}
+.vis-row button.on{background:var(--accent-tint);color:var(--accent)}
+.vis-row button.on b{color:var(--accent)}
+.vis-row button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* In a sheet, the segments carry an icon too — there is room, and the icon is
+   what you recognise at a glance next time. */
+.vis-row.big{margin:0}
+.vis-row.big button{min-height:64px;background:var(--card);gap:3px}
+.vis-row.big button svg{color:var(--dim)}
+.vis-row.big button.on svg{color:var(--accent)}
+.comp-in{position:relative}
 .comp-in input{
-  flex:1;min-width:0;background:var(--card);border:1px solid var(--line);
-  border-radius:13px;padding:13px 14px;outline:none;font-size:16px;
+  width:100%;height:52px;border-radius:26px;background:var(--card);
+  border:1.5px solid transparent;padding:0 58px 0 20px;outline:none;font-size:16px;
 }
 .comp-in input:focus{border-color:var(--accent)}
 .comp-in button{
-  width:46px;height:46px;flex:none;border-radius:13px;
-  background:var(--accent);color:var(--on-accent);font-size:24px;font-weight:600;
-  display:grid;place-items:center;
+  position:absolute;right:6px;top:6px;width:40px;height:40px;border-radius:20px;
+  background:var(--accent-tint);color:var(--accent);display:grid;place-items:center;
+  transition:background .15s ease,color .15s ease;
 }
-.comp-in button:active{opacity:.8}
+.comp-in.has button{background:var(--accent);color:var(--on-accent)}
+.comp-in button svg{fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
+.comp-in button:active{transform:scale(.94)}
 
 /* ─── sheets ────────────────────────────────────────────────────────────── */
+/* Bottom sheets, not centred modals: they rise from where your thumb is, carry
+   a grabber, and close with the X or a tap on the scrim. The stacked Cancel /
+   Close / Not now buttons are gone — three ways to say no was two too many. */
 .modal{
-  position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(7px);
-  display:grid;place-items:center;z-index:70;padding:20px;
+  position:fixed;inset:0;background:var(--scrim);
+  display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
+  z-index:70;padding-top:calc(var(--safe-t) + 28px);
 }
-/* an author `display` beats the UA rule for [hidden] — restore it explicitly */
-.modal[hidden]{display:none}
 .modal-in{
-  width:min(400px,100%);max-height:88dvh;overflow-y:auto;
-  background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;
+  position:relative;width:100%;max-width:var(--page);max-height:100%;
+  overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  background:var(--sheet);border-radius:var(--r-sheet) var(--r-sheet) 0 0;
+  padding:8px 20px calc(var(--safe-b) + 22px);
+  box-shadow:0 -12px 32px rgba(0,0,0,.35);
+  animation:sheet-up .34s cubic-bezier(.2,.8,.2,1);
 }
-.modal-hd{margin-bottom:18px}
-.modal-hd b{display:block;font:600 21px/1.25 var(--serif)}
-.modal-hd span{display:block;color:var(--dim);font-size:12.5px;margin-top:4px}
-.fld{display:block;margin-bottom:14px}
-/* An author `display` rule BEATS the UA `[hidden]{display:none}` rule, so a
-   field hidden by script stays on screen unless this line exists. The kind
-   picker folds away the fields a kind has no use for, and without this it
-   folded away nothing at all. */
-.fld[hidden]{display:none}
-.fld>span{
-  display:block;font:11px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;
-  color:var(--faint);margin-bottom:6px;
+.modal-in::before{content:'';display:block;width:38px;height:5px;border-radius:3px;
+  background:var(--faint);margin:0 auto 10px}
+@keyframes sheet-up{from{transform:translateY(56px);opacity:.3}}
+@media (prefers-reduced-motion: reduce){ .modal-in{animation:none} }
+.modal-hd{display:flex;align-items:flex-start;gap:14px;margin:0 -8px 18px 0}
+.modal-hd .hd-t{flex:1;min-width:0;padding-top:6px}
+.modal-hd .hd-t b{display:block;font:600 25px/1.18 var(--serif);letter-spacing:-.015em;word-break:break-word}
+.modal-hd .hd-t span{display:block;color:var(--dim);font-size:14px;margin-top:3px}
+.modal-hd.is-hd,.modal-hd.me-hd{align-items:center}
+.modal-hd.is-hd .hd-t,.modal-hd.me-hd .hd-t{padding-top:0}
+.is-meta{display:block;color:var(--dim);font-size:13px;margin:-8px 2px 18px}
+.is-meta:empty{display:none}
+.x{
+  width:var(--tap);height:var(--tap);border-radius:50%;flex:none;display:grid;place-items:center;
+  background:var(--card2);color:var(--ink2);
 }
-.fld>span em{font-style:normal;text-transform:none;letter-spacing:0;opacity:.7}
-.fld input,.fld textarea{
-  width:100%;background:var(--card2);border:1px solid var(--line);border-radius:11px;
-  padding:11px 12px;outline:none;font-size:16px;resize:vertical;
+.x svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.x:active{color:var(--ink);background:var(--line)}
+.x.small{width:40px;height:40px;background:none;color:var(--dim)}
+
+/* Fields: a sentence-case label, "optional" said quietly, and a 50px field. */
+.fld{display:block;margin-bottom:18px}
+.fld>span:first-child{display:block;font:600 13.5px/1.2 var(--sans);color:var(--ink2);margin:0 2px 8px}
+.fld>span:first-child em{font-style:normal;font-weight:500;color:var(--dim);margin-left:4px}
+.fld>input,.fld>textarea{
+  width:100%;min-height:50px;background:var(--card);border:1.5px solid transparent;
+  border-radius:var(--r-field);padding:12px 14px;outline:none;font-size:16px;resize:vertical;
 }
-.fld input:focus,.fld textarea:focus{border-color:var(--accent)}
+.fld>textarea{line-height:1.45}
+.fld>input:focus,.fld>textarea:focus{border-color:var(--accent)}
+.fld>input:disabled,.fld>textarea:disabled,.ifield input:disabled{color:var(--ink2);opacity:1;-webkit-text-fill-color:var(--ink2)}
+/* A field with an icon inside it. */
+.ifield{
+  display:flex;align-items:center;gap:10px;height:50px;padding:0 14px;
+  background:var(--card);border-radius:var(--r-field);border:1.5px solid transparent;color:var(--dim);
+}
+.ifield:focus-within{border-color:var(--accent)}
+.ifield svg{flex:none}
+.ifield input{flex:1;min-width:0;height:100%;background:none;border:0;padding:0;outline:none;font-size:16px;color:var(--ink)}
+.hint{display:block;color:var(--dim);font-size:13px;margin:7px 2px 0}
+.hint:empty{display:none}
 .primary{
-  width:100%;padding:14px;border-radius:13px;background:var(--accent);color:var(--on-accent);
-  font-size:15.5px;font-weight:600;margin-top:4px;
+  width:100%;height:52px;border-radius:26px;background:var(--accent);color:var(--on-accent);
+  font:600 16px/1 var(--sans);margin-top:6px;
 }
 .primary:active{opacity:.85}
-.ghost{width:100%;color:var(--dim);padding:12px;font-size:14px;margin-top:8px}
+.ghost{width:100%;color:var(--dim);padding:12px;font-size:14.5px;margin-top:8px;min-height:var(--tap)}
 .ghost:active{color:var(--ink)}
 .danger{
-  width:100%;margin-top:10px;padding:12px;color:var(--warn);font-size:13.5px;
-  border:1px solid var(--line);border-radius:12px;
+  width:100%;min-height:var(--tap);margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;
+  color:var(--warn);font:600 15px/1 var(--sans);
 }
-.danger[hidden]{display:none}
-.rows{display:flex;flex-direction:column;gap:1px;margin-bottom:14px}
-.row{
-  display:flex;align-items:center;justify-content:space-between;gap:12px;
-  background:var(--card2);padding:12px 14px;font-size:14px;color:var(--dim);
+.danger:active{opacity:.7}
+
+/* Grouped rows in a box — account, a place's details, its plan. `.box`, not
+   `.card`: `.card` is a poster on the shelf, and class names here are global. */
+.box{background:var(--card);border-radius:var(--r-card);margin-bottom:14px}
+.box.rows{overflow:hidden}
+.crow{
+  position:relative;display:flex;align-items:center;gap:14px;width:100%;min-height:58px;
+  padding:8px 16px;text-align:left;color:var(--ink);
 }
-.row:first-child{border-radius:11px 11px 0 0}
-.row:last-child{border-radius:0 0 11px 11px}
-.row b{color:var(--ink);font-weight:600}
+.crow+.crow::before{content:'';position:absolute;left:52px;right:0;top:0;height:1px;background:var(--line)}
+.crow>i{color:var(--dim);line-height:0;flex:none}
+.crow .cb{flex:1;min-width:0}
+.crow .cb b{display:block;font:500 15.5px/1.3 var(--sans)}
+.crow .cb small{display:block;color:var(--dim);font-size:13px;line-height:1.35;margin-top:1px}
+.crow .val{flex:none;color:var(--dim);font-size:15px;text-align:right;max-width:50%}
+.crow a{color:var(--accent);text-decoration:none;word-break:break-all}
+.crow.warn,.crow.warn>i{color:var(--warn)}
+button.crow:active{background:var(--card2)}
+.sec{font:600 15px/1.2 var(--sans);margin:22px 2px 10px;color:var(--ink)}
+.sec em{font-style:normal;font-weight:500;color:var(--dim);margin-left:6px}
 
 .pick{display:flex;flex-direction:column;gap:6px}
 .pick button{
-  text-align:left;background:var(--card2);border:1px solid var(--line);
-  border-radius:11px;padding:11px 13px;font-size:15px;color:var(--ink2);
+  text-align:left;background:var(--card);border:1.5px solid transparent;
+  border-radius:var(--r-field);padding:12px 14px;font-size:15px;color:var(--ink2);
 }
-.pick button.on{border-color:var(--accent);color:var(--ink);background:var(--card)}
-.pick button small{display:block;color:var(--dim);font-size:12px;margin-top:2px}
+.pick button.on{border-color:var(--accent);color:var(--ink)}
+.pick button small{display:block;color:var(--dim);font-size:12.5px;margin-top:2px}
 
-.opt-row{
-  display:flex;align-items:center;justify-content:space-between;gap:14px;
-  background:var(--card2);border-radius:11px;padding:12px 14px;margin:14px 0 0;
-}
-.opt-row span{display:block;min-width:0}
-.opt-row b{display:block;font-size:14.5px}
-.opt-row small{display:block;color:var(--dim);font-size:12px;margin-top:2px}
 .switch{
-  appearance:none;-webkit-appearance:none;flex:none;width:44px;height:26px;
-  border-radius:99px;background:var(--line);position:relative;transition:background .18s;
+  appearance:none;-webkit-appearance:none;flex:none;width:51px;height:31px;
+  border-radius:99px;background:var(--line);position:relative;transition:background .18s;cursor:pointer;
 }
 .switch::after{
-  content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;
+  content:'';position:absolute;top:3px;left:3px;width:25px;height:25px;
   border-radius:50%;background:var(--ink2);transition:transform .18s,background .18s;
 }
 .switch:checked{background:var(--accent)}
-.switch:checked::after{transform:translateX(18px);background:var(--on-accent)}
+.switch:checked::after{transform:translateX(20px);background:var(--on-accent)}
 .switch:disabled{opacity:.45}
 
-.invite-box{background:var(--card2);border-radius:13px;padding:14px;margin:16px 0}
-.ib-hd{font:600 14px/1 var(--sans);margin-bottom:7px}
-.ib-note{color:var(--dim);font-size:12.5px;line-height:1.55;margin:0 0 12px}
+.invite-box{background:var(--card);border-radius:var(--r-card);padding:16px;margin:0 0 14px}
+.ib-hd{font:600 15.5px/1 var(--sans);margin-bottom:7px}
+.ib-note{color:var(--dim);font-size:13.5px;line-height:1.55;margin:0 0 12px}
 .ib-link{
-  margin-top:12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;
+  margin-top:12px;background:var(--bg);border-radius:var(--r-field);
   padding:11px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
   color:var(--accent);word-break:break-all;
 }
 
 .toast{
   position:fixed;left:50%;bottom:calc(var(--safe-b) + 96px);transform:translateX(-50%);
-  background:var(--card2);border:1px solid var(--line);color:var(--ink);
+  background:var(--card2);color:var(--ink);
   padding:11px 17px;border-radius:99px;font-size:13.5px;z-index:90;
   max-width:88vw;text-align:center;box-shadow:0 8px 26px rgba(0,0,0,.5);
 }
-.toast[hidden]{display:none}
 
 
 /* ─── kinds ──────────────────────────────────────────────────────────────
-   What a thing IS — a film, a show, a place, a recipe, or just a thing.
-   Separate from tags on purpose: a tag is an opinion you typed and makes a
-   group; a kind is a fact about the item and decides which fields are worth
-   showing. See lib/kinds.js. */
+   What a thing IS — a film, a show, a place, a recipe, or an activity. A kind
+   is a fact about the item and decides which fields are worth showing. See
+   lib/kinds.js. */
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chips button{
+  height:40px;padding:0 14px;border-radius:20px;background:var(--card);color:var(--ink2);
+  display:inline-flex;align-items:center;gap:7px;font:500 14.5px/1 var(--sans);
+}
+.chips button svg{width:18px;height:18px}
+.chips button.on{background:var(--accent-tint);color:var(--accent)}
+/* A two-or-more-way choice that is one thing: whose idea it was. */
+.segs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px;padding:4px;
+  background:var(--card);border-radius:var(--r-field)}
+.segs button{height:42px;border-radius:11px;color:var(--ink2);font:600 14.5px/1 var(--sans);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 6px}
+.segs button.on{background:var(--accent-tint);color:var(--accent)}
 
-/* The picker, in the composer and in the item sheet. Deliberately the same
-   shape as .vis-row directly above it — two controls doing the same job on the
-   same screen should look like it. */
-.kind-row{display:flex;gap:6px;flex-wrap:wrap}
-/* The theme picker: each button IS the theme (data-theme on it), so its own
-   background and dot are drawn from the palette it would switch to. */
-.theme-row{display:flex;gap:8px;margin-top:9px}
+/* The theme picker: each card IS the theme (data-theme on it), so the tiny list
+   it draws is painted from the palette it would switch to. */
+.theme-box{margin-bottom:14px}
+.theme-box .sec{margin-top:6px}
+.theme-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .theme-row button{
-  display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:10px;
-  background:var(--bg);color:var(--ink2);border:1px solid var(--line);
-  font:13px/1 var(--sans);
+  position:relative;display:flex;flex-direction:column;gap:10px;padding:12px;text-align:left;
+  background:var(--bg);color:var(--ink);border-radius:18px;
+  box-shadow:inset 0 0 0 1.5px var(--line);font:600 14.5px/1 var(--sans);
 }
-.theme-row button i{width:11px;height:11px;border-radius:50%;background:var(--accent);
-  box-shadow:5px 0 0 -1px var(--accent2)}
-.theme-row button i{margin-right:5px}
-.theme-row button.on{border-color:var(--accent);color:var(--ink)}
-.kind-row[hidden]{display:none}
-.kind-row button{
-  padding:7px 11px;border-radius:9px;background:var(--card);
-  border:1px solid var(--line);color:var(--dim);
-  font:12px/1 var(--sans);letter-spacing:.03em;
-}
-.kind-row button.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
-
-/* The badge on a row. A plain thing gets none: the badge exists to tell a film
-   from a recipe at a glance, and when everything is a thing there is nothing
-   to tell apart. Tinted rather than filled, so it reads as a label and not as
-   another status chip beside "just you". */
-.chip.kind{background:none;border:1px solid currentColor;opacity:.85}
-.chip.k-movie{color:#b79ae6}
-.chip.k-show{color:#82b7d2}
-.chip.k-place{color:var(--accent2)}
-.chip.k-recipe{color:var(--accent)}
+.theme-row button.on{box-shadow:inset 0 0 0 2px var(--accent)}
+.theme-row .mini{display:flex;flex-direction:column;gap:5px;background:var(--card);border-radius:11px;padding:7px}
+.theme-row .mini i{display:flex;align-items:center;gap:6px}
+.theme-row .mini u{width:14px;height:14px;border-radius:4px;background:var(--card2);flex:none}
+.theme-row .mini s{flex:1;height:5px;border-radius:3px;background:var(--ink2);opacity:.75}
+.theme-row .mini s.short{flex:.6}
+.theme-row .mini em{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--dim);flex:none}
+.theme-row .mini em.d{background:var(--accent2);border-color:var(--accent2)}
+.theme-row .mini b{display:block;height:8px;border-radius:4px;background:var(--accent);width:44%;margin-top:2px}
+.theme-row .ck{position:absolute;bottom:11px;right:12px;width:22px;height:22px;border-radius:50%;
+  background:var(--accent);color:var(--on-accent);display:none;place-items:center}
+.theme-row button.on .ck{display:grid}
+.theme-row .ck svg{fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.avatar.big{width:56px;height:56px;font-size:21px}
 
 /* A recipe's link is the point of the recipe — you do not cook from a title —
    so for the kinds that lead with one it reads as something to tap. */
-.it-meta a.go{
-  font:11px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;
-  color:var(--accent);text-decoration:none;
-  border:1px solid currentColor;border-radius:6px;padding:3px 7px;
-}
+.it-meta a.go{font-weight:600;color:var(--accent)}
 
 
 /* ─── the bottom nav ─────────────────────────────────────────────────────
@@ -641,14 +697,14 @@ input,textarea{font:inherit;color:var(--ink)}
    it, and an active state you can find without reading. */
 .kindnav[hidden]{display:none}
 .kindnav{
-  display:flex;border-top:1px solid var(--line);
-  padding:7px 6px calc(var(--safe-b) + 7px);
+  display:flex;
+  padding:2px 6px calc(var(--safe-b) + 8px);
   max-width:var(--page);margin:0 auto;width:100%;
 }
 .kindnav button{
-  flex:1 1 0;min-width:0;background:none;border:0;cursor:pointer;
-  display:flex;flex-direction:column;align-items:center;gap:4px;
-  padding:4px 2px 2px;color:var(--faint);
+  flex:1 1 0;min-width:0;min-height:56px;background:none;border:0;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  padding:4px 0;color:var(--dim);
   -webkit-tap-highlight-color:transparent;
 }
 
@@ -657,7 +713,7 @@ input,textarea{font:inherit;color:var(--ink)}
    of the icon makes one of them look chosen. */
 .kindnav .ic{
   display:grid;place-items:center;
-  width:46px;height:28px;border-radius:14px;
+  width:54px;height:30px;border-radius:15px;
   transition:background .16s ease,color .16s ease;
 }
 .kindnav .gl{display:block;line-height:0}
@@ -665,15 +721,15 @@ input,textarea{font:inherit;color:var(--ink)}
    background on the active tab — so it can move between them. */
 .kindnav{position:relative}
 .kindnav .pill{
-  position:absolute;left:0;top:0;border-radius:14px;pointer-events:none;
-  background:color-mix(in srgb, var(--accent) 16%, transparent);transform-origin:center;z-index:0;
+  position:absolute;left:0;top:0;border-radius:15px;pointer-events:none;
+  background:var(--accent-tint);transform-origin:center;z-index:0;
 }
 .kindnav button{position:relative;z-index:1;transition:color .22s ease}
 .kindnav button.on{color:var(--accent)}
 .kindnav button:not(.on):active .ic{background:var(--card)}
 
 .kindnav b{
-  font:600 10.5px/1.1 var(--sans);letter-spacing:.015em;
+  font:600 11.5px/1.1 var(--sans);letter-spacing:.01em;
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 
@@ -691,9 +747,8 @@ input,textarea{font:inherit;color:var(--ink)}
    anything. */
 .kindnav .n{
   font:inherit;font-style:normal;font-weight:500;margin-right:4px;
-  color:var(--faint);
+  color:inherit;opacity:.7;font-variant-numeric:tabular-nums;
 }
-.kindnav button.on .n{color:var(--accent);opacity:.75}
 
 @media (prefers-reduced-motion: reduce){
   .kindnav .ic{transition:none}
@@ -707,14 +762,18 @@ input,textarea{font:inherit;color:var(--ink)}
    whether you are in the mood for it tonight. */
 .items.shelf{display:block;padding:0}
 .shelf .grid{
-  display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));
-  gap:16px 11px;padding:6px 18px 0;
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:18px 12px;padding:4px 16px 0;
 }
 
 .card .art{
-  position:relative;aspect-ratio:2/3;border-radius:11px;overflow:hidden;
-  background:var(--card2);border:1px solid var(--line);cursor:pointer;
+  position:relative;aspect-ratio:2/3;border-radius:12px;overflow:hidden;
+  background:var(--card2);cursor:pointer;
 }
+/* An inset hairline OVER the art, so a light poster does not bleed into the
+   page. On the art, not the image, so it holds for the typographic card too. */
+.card .art::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--ink) 13%, transparent)}
 .card .art img{width:100%;height:100%;object-fit:cover;display:block}
 
 /* No art is not a hole where a poster should be. It is the title set in the
@@ -732,42 +791,50 @@ input,textarea{font:inherit;color:var(--ink)}
 
 /* Seen: the poster steps back rather than disappearing. A finished film is
    still part of the shelf — that is the point of "done together". */
-.card.done .art img,.card.done .noart{filter:grayscale(.75);opacity:.45}
+.card.done .art img,.card.done .noart{filter:grayscale(1) brightness(.5)}
 .card.done .cap b{color:var(--dim)}
 .card .seen{
-  position:absolute;top:7px;left:7px;padding:2px 7px;border-radius:7px;
+  position:absolute;top:7px;left:7px;padding:2px 7px;border-radius:7px;z-index:2;
   font:600 9.5px/1.5 var(--sans);letter-spacing:.07em;text-transform:uppercase;
   background:color-mix(in srgb, var(--accent2) 18%, transparent);color:var(--accent2);
   backdrop-filter:blur(3px);
 }
 
+/* 30px to look at, 48 to hit (the ::after from .tick, a little smaller here so
+   it stays inside the poster). Dark glass with a white rim reads on any art. */
 .card .tick{
-  position:absolute;right:6px;bottom:6px;width:28px;height:28px;border-radius:50%;
+  position:absolute;right:7px;bottom:7px;width:30px;height:30px;border-radius:50%;z-index:2;
   display:grid;place-items:center;cursor:pointer;
-  background:color-mix(in srgb, var(--bg) 62%, transparent);border:1px solid color-mix(in srgb, var(--ink) 22%, transparent);
-  backdrop-filter:blur(4px);color:var(--ink);
+  background:rgba(0,0,0,.38);border:1.75px solid rgba(255,255,255,.9);
+  backdrop-filter:blur(4px);color:#fff;
 }
+.card .tick::after{inset:-9px}
 .card .tick svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.6;
   stroke-linecap:round;stroke-linejoin:round;opacity:.5}
 .card.done .tick{background:var(--accent2);border-color:var(--accent2);color:var(--on-accent2)}
 .card.done .tick svg{opacity:1}
 .card .tick:active{transform:scale(.92)}
 
-.card .cap{margin-top:7px;cursor:pointer}
+.card .cap{margin-top:8px;cursor:pointer}
 .card .cap b{
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
-  font:600 12.5px/1.3 var(--sans);letter-spacing:-.005em;color:var(--ink);
+  font:600 14px/1.3 var(--sans);letter-spacing:-.005em;color:var(--ink);
 }
-.card .cap small{display:block;color:var(--faint);font-size:11px;margin-top:1px}
+.card .cap small{display:block;color:var(--dim);font-size:12.5px;margin-top:2px}
 
 /* Where it is streaming. Logos if TMDB gave us one, the name if not — and only
    subscription services, because a card that says "on Amazon" when it means
    "$3.99 on Amazon" is lying quietly. */
-.card .prov{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
-.card .prov img{width:18px;height:18px;border-radius:5px;display:block}
+/* 22px tiles with a hairline ring. The ring is the fix for the "gap" in a row
+   of logos: it was never a missing image — Apple TV's logo is a black tile,
+   and on a dark card a black tile with no edge is indistinguishable from a
+   hole. A logo that genuinely fails to load still becomes its name. */
+.card .prov{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.card .prov img{width:22px;height:22px;border-radius:6px;display:block;
+  box-shadow:0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent)}
 .card .prov span{
-  font:600 9px/1.6 var(--sans);letter-spacing:.04em;text-transform:uppercase;
-  color:var(--dim);background:var(--card2);border-radius:5px;padding:0 5px;
+  height:22px;font:600 9.5px/22px var(--sans);letter-spacing:.04em;text-transform:uppercase;
+  color:var(--dim);background:var(--card2);border-radius:6px;padding:0 6px;
 }
 
 
@@ -785,7 +852,7 @@ input,textarea{font:inherit;color:var(--ink)}
 .cands-note{color:var(--dim);font-size:13px;padding:10px 2px}
 .cand{
   display:flex;align-items:center;gap:11px;width:100%;text-align:left;cursor:pointer;
-  background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 11px 8px 8px;
+  background:var(--card);border:1.5px solid transparent;border-radius:14px;padding:8px 11px 8px 8px;
 }
 .cand.on{border-color:var(--accent);background:color-mix(in srgb, var(--accent) 10%, transparent)}
 .cand:active{background:var(--card2)}
@@ -803,7 +870,7 @@ input,textarea{font:inherit;color:var(--ink)}
 /* The row in the item sheet: what it is pinned to, and the way to change it. */
 .matchrow{
   display:flex;align-items:center;gap:11px;width:100%;text-align:left;cursor:pointer;
-  background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:8px 11px 8px 8px;
+  background:var(--card);border-radius:var(--r-field);padding:8px 14px 8px 8px;
 }
 .matchrow:active{background:var(--card)}
 .matchrow .mb{flex:1;min-width:0}
@@ -813,11 +880,158 @@ input,textarea{font:inherit;color:var(--ink)}
 .matchrow .ch{flex:none;color:var(--accent);font:600 12px/1 var(--sans);letter-spacing:.02em}
 
 
+/* ─── places ──────────────────────────────────────────────────────────────
+   The Places tab is a map with the list under it, as a sheet. Their emojis are
+   the pins. The header, the title and the control row give way to three
+   things floating over the map: back, To go / Been, and the rose. */
+#scr-space.places>.topbar,#scr-space.places>.ttl,#scr-space.places>.ctl{display:none}
+.pl-top{position:relative;flex:0 0 44%;min-height:220px;overflow:hidden;background:var(--card2)}
+.map-canvas.pl-canvas{position:absolute;inset:0;height:auto;border:0;border-radius:0}
+/* Near the top edge, which is exactly what Safari 26 samples for the status-
+   bar tint. --glass is 86% opaque on its own; there is deliberately no
+   backdrop blur until it has been measured on a phone. */
+.pl-float{
+  position:absolute;left:8px;right:8px;top:calc(var(--safe-t) + 8px);z-index:6;
+  display:flex;align-items:center;justify-content:space-between;pointer-events:none;
+}
+.pl-float>*{pointer-events:auto}
+.glass-btn{width:var(--tap);height:var(--tap);border-radius:22px;background:var(--glass);color:var(--ink);
+  display:grid;place-items:center}
+.glass-btn svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.glass-btn.rose-btn{color:var(--dim)}
+.glass-btn.rose-btn svg{stroke-width:1.6}
+.pl-seg{display:flex;gap:2px;padding:4px;border-radius:24px;background:var(--glass)}
+.pl-seg button{min-height:38px;border-radius:19px;padding:0 14px;color:var(--ink2);
+  display:flex;align-items:center;gap:6px;font:600 14px/1 var(--sans)}
+.pl-seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.pl-seg button#plBeen[aria-pressed="true"]{background:var(--accent2);color:var(--on-accent2)}
+.pl-seg .n{font-weight:500;opacity:.75;font-variant-numeric:tabular-nums}
+/* The list, as a sheet over the bottom of the map. */
+#scr-space.places>.scroll{
+  position:relative;z-index:3;margin-top:-26px;background:var(--bg);
+  border-radius:26px 26px 0 0;box-shadow:0 -12px 32px rgba(0,0,0,.35);
+}
+.pl-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 10px 4px}
+.pl-hd .grab{position:absolute;left:50%;top:8px;width:38px;height:5px;margin-left:-19px;border-radius:3px;background:var(--faint)}
+.items.pl-list{padding-top:22px}
+.pl-hd b{display:block;font:600 23px/1.15 var(--serif);letter-spacing:-.01em}
+.pl-hd small{display:block;font-size:13.5px;color:var(--dim);margin-top:2px}
+.round{width:var(--tap);height:var(--tap);border-radius:22px;background:var(--card2);color:var(--ink2);
+  display:grid;place-items:center;flex:none}
+.round svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pl-empty{color:var(--dim);font:italic 400 15px/1.6 var(--serif);padding:18px 8px 6px;text-align:center}
+.pl-note{color:var(--dim);font-size:13.5px;line-height:1.45;margin:10px 4px 0}
+
+/* The pins. A bubble holding the emoji, a ring in the colour that means to-go
+   or been, and a small tail. The set you are not looking at stays on the map
+   as dots, so switching To go / Been never empties it. */
+.epin{position:absolute;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;
+  padding:0;z-index:2}
+.epin .bub{
+  position:relative;z-index:1;width:40px;height:40px;border-radius:50%;
+  background:var(--sheet);border:2.5px solid var(--accent);box-shadow:0 6px 16px rgba(0,0,0,.45);
+  display:grid;place-items:center;color:var(--dim);
+  font:19px/1 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;
+  transition:width .18s ease,height .18s ease,font-size .18s ease;
+}
+.epin .bub svg{width:19px;height:19px}
+.epin .tip{width:10px;height:10px;margin-top:-7px;background:var(--accent);transform:rotate(45deg);border-radius:2px}
+.epin.been .bub{border-color:var(--accent2)}
+.epin.been .tip{background:var(--accent2)}
+.epin.sel{z-index:5}
+.epin.sel .bub{width:52px;height:52px;font-size:25px}
+.epin .lab{
+  position:absolute;top:100%;margin-top:3px;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;
+  padding:4px 10px;border-radius:11px;background:var(--sheet);color:var(--ink);
+  font:600 12.5px/1.2 var(--sans);box-shadow:0 4px 12px rgba(0,0,0,.4);
+}
+.mdot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:6px;
+  background:var(--accent);box-shadow:0 0 0 2px var(--card2);opacity:.85;pointer-events:none;z-index:1}
+.mdot.been{background:var(--accent2)}
+.npin{position:absolute;transform:translate(-50%,-50%);z-index:4;width:30px;height:30px;border-radius:50%;
+  background:var(--accent);color:var(--on-accent);display:grid;place-items:center;
+  font:700 14px/1 var(--sans);box-shadow:0 4px 10px rgba(0,0,0,.4)}
+.you{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;z-index:1;
+  background:#60a5ff;border:2px solid #fff;box-shadow:0 0 0 6px rgba(96,165,255,.22);pointer-events:none}
+
+/* Which one? — predictions while you type a place, numbered, the same numbers
+   on the map. One tap pins it; the + still adds it as words. */
+.preds{background:var(--card);border-radius:var(--r-card);overflow:hidden;margin-top:12px}
+.pred{position:relative;display:flex;align-items:center;gap:12px;width:100%;min-height:66px;
+  padding:8px 16px 8px 12px;text-align:left}
+.pred+.pred::before{content:'';position:absolute;left:68px;right:0;top:0;height:1px;background:var(--line)}
+.pred:active{background:var(--card2)}
+.pred .num{width:44px;height:44px;border-radius:var(--r-tile);flex:none;display:grid;place-items:center;
+  background:var(--accent-tint);color:var(--accent);font:700 17px/1 var(--sans)}
+.pred .pb{flex:1;min-width:0}
+.pred .pb b{display:block;font:600 16px/1.3 var(--sans);color:var(--ink)}
+.pred .pb small{display:block;font-size:13px;color:var(--dim);margin-top:1px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pred .mi{flex:none;color:var(--dim);font-size:13.5px;font-variant-numeric:tabular-nums}
+.preds-hd{display:flex;justify-content:space-between;align-items:baseline;margin:2px 4px 0}
+.preds-hd b{font:600 16px/1.2 var(--sans)}
+.preds-hd small{color:var(--dim);font-size:12.5px}
+.preds-note{color:var(--dim);font-size:13.5px;line-height:1.45;margin:10px 4px 0}
+.pinned-card{display:flex;align-items:center;gap:12px;background:var(--sage-tint);
+  border-radius:var(--r-card);padding:10px 8px 10px 14px;margin:0 0 12px}
+.pinned-card>svg{color:var(--accent2);flex:none}
+.pinned-card .pb{flex:1;min-width:0}
+.pinned-card .pb b{display:block;font:600 15px/1.3 var(--sans);color:var(--accent2)}
+.pinned-card .pb small{display:block;color:var(--ink2);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pinned-card button{min-height:var(--tap);padding:0 10px;color:var(--accent2);font:600 14.5px/1 var(--sans)}
+
+/* ─── one place, opened ───────────────────────────────────────────────────
+   Its own page rather than the generic form: a map, the actions you actually
+   take on the way out of the door, and the plan. */
+.place-in{padding-top:8px}
+.pl-snip{position:relative;height:180px;border-radius:20px;overflow:hidden;background:var(--card2);margin-bottom:16px}
+.pl-snip .map-canvas{position:absolute;inset:0;height:auto;border:0;border-radius:0;cursor:default}
+.pl-snip .x{position:absolute;top:10px;right:10px;z-index:7;background:var(--glass)}
+.pl-find{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:12px;
+  color:var(--accent);text-align:left;padding:0 64px 0 24px;
+  background:color-mix(in srgb, var(--accent) 7%, var(--card))}
+.pl-find b{display:block;font:600 16px/1.3 var(--sans)}
+.pl-find small{display:block;color:var(--dim);font-size:13px;margin-top:2px}
+.pl-head{display:flex;align-items:center;gap:12px}
+.pl-head h2{flex:1;min-width:0;margin:0;font:600 28px/1.15 var(--serif);letter-spacing:-.015em;word-break:break-word}
+.pl-head input{flex:1;min-width:0;height:50px;background:var(--card);border:1.5px solid var(--accent);
+  border-radius:var(--r-field);padding:0 14px;font-size:17px;outline:none}
+.pl-where{display:flex;align-items:center;gap:8px;margin-top:10px;font:600 16px/1.3 var(--sans)}
+.pl-where svg{color:var(--accent);flex:none}
+.pl-where:empty{display:none}
+.pl-sub{color:var(--dim);font-size:14.5px;margin-top:4px}
+.pl-sub:empty{display:none}
+.pl-acts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:22px 0 18px}
+.act{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--ink2);text-decoration:none;
+  font:600 13.5px/1.2 var(--sans);min-width:0}
+.act i{width:54px;height:54px;border-radius:50%;background:var(--card2);color:var(--ink);display:grid;place-items:center}
+.act.go i{background:var(--accent);color:var(--on-accent)}
+.act[aria-disabled="true"]{opacity:.38;pointer-events:none}
+.act:active i{transform:scale(.94)}
+.info .crow{min-height:52px}
+.info .open{color:var(--accent2);font-weight:600}
+.info .shut{color:var(--warn);font-weight:600}
+.pl-src{color:var(--dim);font-size:13px;line-height:1.45;margin:-4px 4px 4px}
+.pickday{position:relative;flex:none;color:var(--accent);font:600 15px/1 var(--sans);padding:12px 0 12px 8px}
+.pickday input{position:absolute;inset:0;width:100%;opacity:0;cursor:pointer}
+.timein{flex:none;background:var(--card2);border:0;border-radius:10px;padding:8px 10px;font-size:15px;color:var(--ink)}
+.box.been{background:var(--sage-tint);padding:16px 16px 14px}
+.box.been>b{display:block;font:600 17px/1.2 var(--sans);color:var(--accent2)}
+.box.been>small{display:block;color:var(--ink2);font-size:14px;margin-top:4px}
+.box.been .q{display:block;font:600 13.5px/1.2 var(--sans);color:var(--ink2);margin:16px 0 8px}
+.box.been .chips button{background:color-mix(in srgb, var(--accent2) 10%, var(--card))}
+.box.been .chips button.on{background:var(--accent2);color:var(--on-accent2)}
+.went{width:100%;height:52px;border-radius:26px;margin:16px 0;background:var(--sage-tint);color:var(--accent2);
+  display:flex;align-items:center;justify-content:center;gap:9px;font:600 16px/1 var(--sans)}
+.went.quiet{background:none;height:var(--tap);color:var(--dim);font-weight:500;font-size:14.5px}
+.went.quiet svg{display:none}
+.chips.mover{padding:4px 16px 14px 52px}
+
+
 /* ─── the calendar ──────────────────────────────────────────────────────────
    A renderer over items (calendar.js). Coral dots are plans, sage dots are
    things already done — the same two colours that mean "to do" and "done"
    everywhere else in the app, so the grid needs no legend. */
-.seg button svg{vertical-align:-2px;margin-right:5px}
 .cal{padding:4px 0 0}
 .cal-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .cal-hd b{font:600 19px/1 var(--serif)}
@@ -870,13 +1084,32 @@ input,textarea{font:inherit;color:var(--ink)}
 .plan-btn:active{color:var(--ink);border-color:var(--faint)}
 .ps-list{max-height:46dvh;overflow-y:auto;margin:0 -2px 4px}
 
-/* When, in the item sheet. */
+/* Where, in the item sheet: suggestions as you type, inline rather than a
+   floating dropdown, because the sheet scrolls and a dropdown would be clipped
+   by it. `.sug`, not `.cand` or `.pick` — class names here are global, and both
+   of those already belong to somebody. */
+.where-at{display:block;color:var(--dim);font-size:13px;margin:7px 2px 0}
+.where-at:empty{display:none}
+.where-at.pinned{color:var(--ink2)}
+.where-at.pinned::before{content:'⌖ ';color:var(--accent)}
+.sugs{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.sugs[hidden]{display:none}
+.sug{
+  display:block;width:100%;text-align:left;cursor:pointer;
+  background:var(--card);border:1.5px solid transparent;border-radius:var(--r-field);padding:10px 14px;
+}
+.sug:active{border-color:var(--accent);background:color-mix(in srgb, var(--accent) 10%, transparent)}
+.sug b{display:block;font:600 14px/1.3 var(--sans);color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sug small{display:block;color:var(--dim);font-size:12px;margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sugs-by,.sugs-note{color:var(--faint);font-size:11px;padding:2px 2px 0}
+.sugs-note{color:var(--dim);font-size:12.5px}
+
+/* When, in the item sheet: two field-shaped controls side by side. */
 .when-row{display:flex;gap:8px;align-items:center}
-.fld .when-row input{flex:1 1 0;min-width:0}
-.when-row .ghost{width:auto;margin:0;padding:10px 6px;flex:none}
-.when-row .ghost[hidden]{display:none}
-.when-by{display:block;color:var(--dim);font-size:12px;margin-top:6px}
-.when-by:empty{display:none}
+.when-row .ifield{flex:1 1 0;min-width:0;padding:0 12px}
+.when-row .ifield input{font-size:15.5px}
 
 
 
@@ -884,11 +1117,10 @@ input,textarea{font:inherit;color:var(--ink)}
    Its own room: the same sheet, tinted wine-rose from the top down, so stepping
    in feels like going somewhere else without leaving the app's palette. */
 #roseSheet{background:color-mix(in srgb, var(--rose) 7%, var(--scrim))}
-.modal-in.rose{width:min(460px,100%);max-height:92dvh;position:relative;
-  background:linear-gradient(180deg, color-mix(in srgb, var(--rose) 15%, var(--card)) 0,
-    color-mix(in srgb, var(--rose) 5%, var(--card)) 260px);
-  border-color:color-mix(in srgb, var(--rose) 28%, var(--line))}
-.modal-in.rose .modal-hd b{font-style:italic;font-weight:500;font-size:24px}
+.modal-in.rose{
+  background:linear-gradient(180deg, color-mix(in srgb, var(--rose) 15%, var(--sheet)) 0,
+    color-mix(in srgb, var(--rose) 5%, var(--sheet)) 260px)}
+.modal-in.rose .modal-hd .hd-t b{font-style:italic;font-weight:500;font-size:25px}
 .modal-in.rose .month{color:color-mix(in srgb, var(--rose) 55%, var(--dim))}
 .rs-tabs,.rs-mode{display:flex;gap:6px;margin-bottom:14px}
 .rs-tabs button,.rs-mode button{flex:1;padding:9px 10px;border-radius:12px;font-size:13.5px;font-weight:500;

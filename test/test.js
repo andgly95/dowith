@@ -105,6 +105,120 @@ async function visibility() {
     assert.strictEqual(SP.canComplete(priv, 'andrew', spaces), true);
   });
 
+  await t('an admin may correct what they can SEE — and nothing more', () => {
+    const hers = item('shared', 'linnea');
+    assert.strictEqual(SP.canEdit(hers, 'andrew', spaces), false, 'not without the flag');
+    assert.strictEqual(SP.canEdit(hers, 'andrew', spaces, { admin: true }), true, 'a typo of hers he can fix');
+    assert.strictEqual(SP.canEdit(item('private', 'linnea'), 'andrew', spaces, { admin: true }), false,
+      'her private things are as invisible to an admin as to anyone');
+    assert.strictEqual(SP.canEdit(hers, 'andrew', spaces, { admin: 'yes' }), false, 'only a real true');
+    assert.strictEqual(SP.canEdit(hers, 'sam', spaces, { admin: true }), false,
+      'a list you are not in is not yours to correct');
+  });
+
+  await t('PROPERTY: being able to edit as an admin implies being able to see it', () => {
+    // Admin is a right to fix what is on your screen, never a key to anybody's
+    // private things. Every visibility, every author, every person.
+    const people = ['andrew', 'linnea', 'sam', 'mum', 'nobody'];
+    for (const v of ['private', 'shared', 'public', 'Public', '', null, undefined]) {
+      for (const author of people) {
+        for (const sp of ['sp1', 'sp2', 'sp3', 'gone']) {
+          for (const who of people) {
+            const it = item(v, author, sp);
+            const at = `${author}'s ${v} item in ${sp}`;
+            if (SP.canEdit(it, who, spaces, { admin: true })) {
+              assert.ok(SP.canSee(it, who, spaces), `${who} could edit ${at} without seeing it`);
+            }
+            if (SP.canSetVisibility(it, who, spaces, { admin: true })) {
+              assert.ok(SP.canSee(it, who, spaces), `${who} could re-aim ${at} without seeing it`);
+            }
+            for (const to of people) {
+              if (SP.canCredit(it, who, to, spaces, { admin: true })) {
+                assert.ok(SP.canSee(it, who, spaces), `${who} could credit ${at} to ${to} without seeing it`);
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  await t('who an item is for is its author\'s call — and an admin\'s, on what they can see', () => {
+    assert.strictEqual(SP.canSetVisibility(item('shared', 'linnea'), 'linnea', spaces), true);
+    assert.strictEqual(SP.canSetVisibility(item('shared', 'linnea'), 'andrew', spaces), false, 'not without the flag');
+    assert.strictEqual(SP.canSetVisibility(item('shared', 'linnea'), 'andrew', spaces, { admin: true }), true);
+    assert.strictEqual(SP.canSetVisibility(item('private', 'linnea'), 'andrew', spaces, { admin: true }), false,
+      'not on something he cannot see');
+    assert.strictEqual(SP.canSetVisibility(item('shared', 'linnea'), 'andrew', spaces, { admin: 'yes' }), false);
+    assert.strictEqual(SP.canSetVisibility(null, 'andrew', spaces), false);
+  });
+
+  await t('whose idea is the author\'s to give (or an admin\'s), to someone in that list', () => {
+    const his = item('shared', 'andrew', 'sp1');
+    assert.strictEqual(SP.canCredit(his, 'andrew', 'linnea', spaces), true, 'her idea, his typing');
+    assert.strictEqual(SP.canCredit(his, 'andrew', 'andrew', spaces), true, 'and back to himself');
+    assert.strictEqual(SP.canCredit(his, 'andrew', 'sam', spaces), false, 'not someone from another list');
+    assert.strictEqual(SP.canCredit(his, 'andrew', 'nobody', spaces), false);
+    assert.strictEqual(SP.canCredit(his, 'andrew', null, spaces), false);
+    assert.strictEqual(SP.canCredit(his, 'linnea', 'linnea', spaces), false, 'she cannot claim it');
+    assert.strictEqual(SP.canCredit(item('shared', 'linnea'), 'andrew', 'andrew', spaces), false,
+      'nor he hers, without the flag');
+    assert.strictEqual(SP.canCredit(item('shared', 'linnea'), 'andrew', 'andrew', spaces, { admin: true }), true,
+      'with it, the same right as editing');
+    assert.strictEqual(SP.canCredit(item('private', 'linnea'), 'andrew', 'andrew', spaces, { admin: true }), false,
+      'but never on something he cannot see');
+    assert.strictEqual(SP.canCredit(item('shared', 'linnea'), 'andrew', 'sam', spaces, { admin: true }), false,
+      'and never to someone outside the list');
+    assert.strictEqual(SP.canCredit(item('shared', 'andrew', 'sp3'), 'andrew', 'linnea', spaces), false,
+      'not in a list he is not in');
+    assert.strictEqual(SP.canCredit(item('shared', 'andrew', 'gone'), 'andrew', 'linnea', spaces), false);
+  });
+
+  await t('PROPERTY: credit changes nothing about who may see, change or tick off anything', () => {
+    // A credit is a label. Every visibility, author, list, viewer and credited
+    // person: every right reads the same with it as without it.
+    const people = ['andrew', 'linnea', 'sam', 'mum', 'nobody'];
+    for (const v of ['private', 'shared', 'public', 'nonsense']) {
+      for (const author of people) {
+        for (const sp of ['sp1', 'sp2', 'sp3', 'gone']) {
+          for (const who of people) {
+            for (const to of people) {
+              const plain = item(v, author, sp);
+              const credited = { ...plain, ideaBy: to };
+              const at = `${author}'s ${v} item in ${sp}, credited to ${to}, as seen by ${who}`;
+              assert.strictEqual(SP.canSee(credited, who, spaces), SP.canSee(plain, who, spaces), `see: ${at}`);
+              assert.strictEqual(SP.canComplete(credited, who, spaces), SP.canComplete(plain, who, spaces), `tick: ${at}`);
+              for (const admin of [false, true]) {
+                assert.strictEqual(SP.canSetVisibility(credited, who, spaces, { admin }),
+                  SP.canSetVisibility(plain, who, spaces, { admin }), `vis (admin ${admin}): ${at}`);
+                assert.strictEqual(SP.canEdit(credited, who, spaces, { admin }), SP.canEdit(plain, who, spaces, { admin }),
+                  `edit (admin ${admin}): ${at}`);
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  await t('a credit only ever names somebody the viewer already knows', () => {
+    // Andrew's standing wish, written in his list with Linnea and credited to
+    // her. Sam sees it — he shares a list with Andrew — but has never met her,
+    // and who Andrew keeps lists with is Andrew's business.
+    const wish = { ...item('public', 'andrew', 'sp1'), ideaBy: 'linnea' };
+    assert.strictEqual(SP.canSee(wish, 'sam', spaces), true, 'premise: Sam sees the wish');
+    assert.strictEqual(SP.ideaOf(wish, 'andrew', spaces), 'linnea');
+    assert.strictEqual(SP.ideaOf(wish, 'linnea', spaces), 'linnea');
+    assert.strictEqual(SP.ideaOf(wish, 'sam', spaces), 'andrew', 'to Sam it is simply Andrew\'s');
+    assert.strictEqual(SP.ideaOf(item('shared'), 'linnea', spaces), 'andrew', 'uncredited is the author\'s');
+    assert.strictEqual(SP.ideaOf({ ...item('shared'), ideaBy: 'andrew' }, 'linnea', spaces), 'andrew');
+    // The same rule decides whether "edited by" may name an admin.
+    assert.strictEqual(SP.nameable(spaces, 'mum', 'linnea'), true);
+    assert.strictEqual(SP.nameable(spaces, 'mum', 'andrew'), false, 'Mum has never met Andrew');
+    assert.strictEqual(SP.nameable(spaces, 'mum', 'mum'), true);
+    assert.strictEqual(SP.nameable(spaces, 'mum', null), false);
+  });
+
   await t('your circle is the union of your lists, minus you', () => {
     assert.deepStrictEqual([...SP.circleOf(spaces, 'andrew')].sort(), ['linnea', 'sam']);
     assert.deepStrictEqual([...SP.circleOf(spaces, 'linnea')].sort(), ['andrew', 'mum']);
@@ -1278,7 +1392,34 @@ async function server() {
     ],
     items: [], invites: [], seq: 100,
   }));
-  fs.writeFileSync(cfgFile, JSON.stringify({ sessionSecret: SECRET }), { mode: 0o600 });
+  // A stand-in for Photon, so the suite never needs the internet and can see
+  // exactly what the server asked it.
+  const photonHits = [];
+  const photon = require('http').createServer((req, res) => {
+    photonHits.push(new URL(req.url, 'http://x'));
+    res.setHeader('content-type', 'application/json');
+    // And for Nominatim's lookup, which the place page asks for hours.
+    if (req.url.startsWith('/lookup')) {
+      return res.end(JSON.stringify([{
+        extratags: { opening_hours: 'Mo-Fr 08:00-17:00; Sa 10:00-14:00', website: 'https://toki.example' },
+        address: { house_number: '1234', road: 'H Street Northeast', suburb: 'Atlas District' },
+      }]));
+    }
+    res.end(JSON.stringify({ type: 'FeatureCollection', features: [TOKI] }));
+  }).listen(0, '127.0.0.1');
+  await new Promise(r => photon.once('listening', r));
+  fs.writeFileSync(cfgFile, JSON.stringify({
+    sessionSecret: SECRET,
+    placesEndpoint: `http://127.0.0.1:${photon.address().port}/api/`,
+    geoLookupEndpoint: `http://127.0.0.1:${photon.address().port}/lookup`,
+  }), { mode: 0o600 });
+  // Admin is read from config LIVE, so the suite can grant and revoke it
+  // mid-run — which is also the property worth having: no restart either way.
+  const setAdmins = (ids) => {
+    const c = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+    c.admins = ids;
+    fs.writeFileSync(cfgFile, JSON.stringify(c), { mode: 0o600 });
+  };
 
   let child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
     env: { ...process.env, PORT: String(PORT), DATA_FILE: dataFile, CONFIG_FILE: cfgFile },
@@ -1687,7 +1828,7 @@ async function server() {
     assert.ok(/--safe-b:env\(safe-area-inset-bottom,0px\)/.test(css), 'otherwise the inset is honoured, unclamped');
     assert.ok(/--safe-t:env\(safe-area-inset-top,0px\)/.test(css), 'top inset unclamped');
     assert.ok(/padding:calc\(var\(--safe-t\)/.test(css), 'the masthead clears the notch');
-    assert.ok(/calc\(var\(--safe-b\) \+ 7px\)/.test(css), 'the nav clears the indicator');
+    assert.ok(/\.kindnav\{[^}]*calc\(var\(--safe-b\) \+ \d+px\)/.test(css), 'the nav clears the indicator');
   });
 
   await t('every client module parses and its imports resolve', async () => {
@@ -1704,6 +1845,233 @@ async function server() {
     };
     await walk('/js/app.js');
     assert.ok(seen.size >= 6, `expected the module graph, saw ${seen.size}`);
+  });
+
+  await t('an admin can correct somebody else\'s item — the words, never the audience', async () => {
+    const hers = (await api('POST', '/api/space/sp1/item', { title: 'Go swing dancng' }, L)).body.item;
+    const secret = (await api('POST', '/api/space/sp1/item', { title: 'a secret', visibility: 'private' }, L)).body.item;
+    assert.strictEqual((await api('PATCH', `/api/item/${hers.id}`, { title: 'Go swing dancing' }, A)).status, 403,
+      'not without the config');
+    setAdmins([A]);
+    try {
+      const seen = (await api('GET', '/api/space/sp1/items', null, A)).body.items.find(i => i.id === hers.id);
+      assert.strictEqual(seen.canEdit, true, 'the wire says so');
+      assert.strictEqual(seen.canSetVisibility, true, 'full edit: who it is for too');
+      assert.strictEqual(seen.canCredit, true, 'and whose idea it was');
+      const r = await api('PATCH', `/api/item/${hers.id}`, { title: 'Go swing dancing', visibility: 'public' }, A);
+      assert.strictEqual(r.status, 200);
+      assert.strictEqual(r.body.item.title, 'Go swing dancing');
+      assert.strictEqual(r.body.item.visibility, 'public', 'who it is for is his to fix as well');
+      await api('PATCH', `/api/item/${hers.id}`, { visibility: 'shared' }, A);
+      assert.strictEqual(r.body.item.author.name, 'Linnea', 'and it is still her sentence');
+      const asHer = (await api('GET', '/api/space/sp1/items', null, L)).body.items.find(i => i.id === hers.id);
+      assert.strictEqual(asHer.editedByName, 'Andrew', 'she can see whose hand was last on it');
+      // Her private thing does not exist, admin or not — same 404 as anyone.
+      for (const [m, p, b] of [
+        ['PATCH', `/api/item/${secret.id}`, { title: 'x' }],
+        ['DELETE', `/api/item/${secret.id}`, null],
+        ['POST', `/api/item/${secret.id}/watch`, { clear: true }],
+      ]) assert.strictEqual((await api(m, p, b, A)).status, 404, `${m} ${p}`);
+      assert.ok(!(await api('GET', '/api/space/sp1/items', null, A)).body.items.some(i => i.id === secret.id),
+        'and it is not on his screen');
+      // A list he is not in is a list he cannot correct. Sam starts one of his
+      // own; to the admin, everything in it is a 404 like any stranger's.
+      const samsList = (await api('POST', '/api/space', { name: 'Sam alone' }, S)).body.space;
+      const sams = (await api('POST', `/api/space/${samsList.id}/item`, { title: 'Sam\'s thing' }, S)).body.item;
+      assert.strictEqual((await api('PATCH', `/api/item/${sams.id}`, { title: 'x' }, A)).status, 404);
+      assert.strictEqual((await api('DELETE', `/api/item/${sams.id}`, null, A)).status, 404);
+      // Being an admin does not make anybody else one.
+      const his = (await api('POST', '/api/space/sp1/item', { title: 'his' }, A)).body.item;
+      assert.strictEqual((await api('PATCH', `/api/item/${his.id}`, { title: 'no' }, L)).status, 403);
+      // A duplicate can go.
+      assert.strictEqual((await api('DELETE', `/api/item/${hers.id}`, null, A)).status, 200);
+      const after = (await api('GET', '/api/space/sp1/items', null, L)).body.items;
+      assert.ok(!after.some(i => i.id === hers.id));
+    } finally { setAdmins([]); }
+    const again = (await api('POST', '/api/space/sp1/item', { title: 'hers again' }, L)).body.item;
+    assert.strictEqual((await api('PATCH', `/api/item/${again.id}`, { title: 'x' }, A)).status, 403,
+      'and taking it away needs no restart');
+  });
+
+  await t('whose idea: his to hand to her, an admin\'s to fix, never hers to claim on his', async () => {
+    const his = (await api('POST', '/api/space/sp1/item', { title: 'Watch Obsession', kind: 'movie' }, A)).body.item;
+    assert.strictEqual(his.ideaBy, A, 'his own idea until he says otherwise');
+    assert.strictEqual(his.ideaMine, true);
+    const smuggled = (await api('POST', '/api/space/sp1/item', { title: 'x', ideaBy: L }, A)).body.item;
+    assert.strictEqual(smuggled.ideaBy, A, 'creating cannot set it — only the sheet, through the check');
+
+    const r = await api('PATCH', `/api/item/${his.id}`, { ideaBy: L }, A);
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.body.item.ideaBy, L);
+    assert.strictEqual(r.body.item.ideaByName, 'Linnea');
+    assert.strictEqual(r.body.item.ideaMine, false);
+    assert.strictEqual(r.body.item.author.name, 'Andrew', 'still his sentence');
+    const asHer = (await api('GET', '/api/space/sp1/items', null, L)).body.items.find(i => i.id === his.id);
+    assert.strictEqual(asHer.ideaMine, true, 'on her side it is under her ideas');
+    assert.strictEqual(asHer.canEdit, false, 'and credit is not a key to his wording');
+    assert.strictEqual((await api('PATCH', `/api/item/${his.id}`, { ideaBy: L }, L)).status, 403);
+
+    const notes = await api('PATCH', `/api/item/${his.id}`, { notes: 'the 1976 one' }, A);
+    assert.strictEqual(notes.body.item.ideaBy, L, 'saving a note leaves the credit alone');
+
+    // Somebody outside the list is refused, and nothing else in that patch lands.
+    for (const who of [S, 'u-nobody']) {
+      const bad = await api('PATCH', `/api/item/${his.id}`, { title: 'Renamed', ideaBy: who }, A);
+      assert.strictEqual(bad.status, 400, `crediting ${who}`);
+    }
+    const still = (await api('GET', '/api/space/sp1/items', null, A)).body.items.find(i => i.id === his.id);
+    assert.strictEqual(still.title, 'Watch Obsession', 'a refused credit changed nothing');
+    assert.strictEqual(still.ideaBy, L);
+
+    // Back to himself, by id or by null, is one state, not two.
+    assert.strictEqual((await api('PATCH', `/api/item/${his.id}`, { ideaBy: A }, A)).body.item.ideaBy, A);
+    await api('PATCH', `/api/item/${his.id}`, { ideaBy: L }, A);
+    assert.strictEqual((await api('PATCH', `/api/item/${his.id}`, { ideaBy: null }, A)).body.item.ideaMine, true);
+
+    // Hers, and really his idea: without admin it is not his to touch, with it
+    // it is — the same right as fixing her words.
+    const hers = (await api('POST', '/api/space/sp1/item', { title: 'Swing dancng' }, L)).body.item;
+    assert.strictEqual((await api('PATCH', `/api/item/${hers.id}`, { ideaBy: A }, A)).status, 403, 'not without admin');
+    setAdmins([A]);
+    try {
+      const fix = await api('PATCH', `/api/item/${hers.id}`, { title: 'Swing dancing', ideaBy: A }, A);
+      assert.strictEqual(fix.status, 200);
+      assert.strictEqual(fix.body.item.title, 'Swing dancing');
+      assert.strictEqual(fix.body.item.ideaBy, A, 'his idea now');
+      assert.strictEqual(fix.body.item.ideaMine, true);
+      assert.strictEqual(fix.body.item.author.name, 'Linnea', 'still the sentence she wrote');
+      const toHer = (await api('GET', '/api/space/sp1/items', null, L)).body.items.find(i => i.id === hers.id);
+      assert.strictEqual(toHer.ideaByName, 'Andrew', 'and she sees it as his');
+      assert.strictEqual((await api('PATCH', `/api/item/${hers.id}`, { ideaBy: S }, A)).status, 400,
+        'still only someone in the list');
+      // Exactly what the sheet sends for a film with a poster: the credit moves,
+      // the poster stays. The report that started this was a film losing it.
+      const w = { tmdbId: 88, mediaType: 'movie', title: 'Paper Moon', year: 1973, poster: '/pm.jpg', providers: [] };
+      const film = (await api('POST', '/api/space/sp1/item', { title: 'Paper Moon', kind: 'movie', mod: { watch: w } }, L)).body.item;
+      const sheet = await api('PATCH', `/api/item/${film.id}`,
+        { title: 'Paper Moon', kind: 'movie', notes: '', visibility: 'shared', ideaBy: A, mod: {} }, A);
+      assert.strictEqual(sheet.status, 200);
+      assert.strictEqual(sheet.body.item.ideaBy, A);
+      assert.strictEqual(sheet.body.item.kind, 'movie', 'still a film');
+      assert.strictEqual(sheet.body.item.mod.watch && sheet.body.item.mod.watch.poster, '/pm.jpg', 'with its poster');
+    } finally { setAdmins([]); }
+
+    // Crediting her with a private thing does not show it to her.
+    const priv = (await api('POST', '/api/space/sp1/item', { title: 'a surprise', visibility: 'private' }, A)).body.item;
+    assert.strictEqual((await api('PATCH', `/api/item/${priv.id}`, { ideaBy: L }, A)).status, 200);
+    assert.ok(!(await api('GET', '/api/space/sp1/items', null, L)).body.items.some(i => i.id === priv.id),
+      'credit is a label, not an audience');
+    assert.strictEqual((await api('POST', `/api/item/${priv.id}/done`, {}, L)).status, 404);
+  });
+
+  await t('editing a film in the sheet does not cost it its poster', async () => {
+    const w = { tmdbId: 11, mediaType: 'movie', title: 'Past Lives', year: 2023, poster: '/abc.jpg', providers: [] };
+    const made = (await api('POST', '/api/space/sp1/item', { title: 'Past Lives', kind: 'movie', mod: { watch: w } }, A)).body.item;
+    assert.ok(made.mod.watch, 'seeded');
+    // Exactly what the sheet sends: the slices a person types, and no poster.
+    const r = await api('PATCH', `/api/item/${made.id}`, { title: 'Past Lives', kind: 'movie', notes: 'with Linnea', mod: {} }, A);
+    assert.strictEqual(r.body.item.mod.watch && r.body.item.mod.watch.poster, '/abc.jpg',
+      'a note is not a reason to lose the poster');
+    const forged = await api('PATCH', `/api/item/${made.id}`,
+      { title: 'Past Lives', kind: 'movie', mod: { watch: { ...w, poster: '/forged.jpg' } } }, A);
+    assert.strictEqual(forged.body.item.mod.watch.poster, '/abc.jpg', 'and a patch cannot set one — /watch does that');
+    const renamed = await api('PATCH', `/api/item/${made.id}`, { title: 'Past Lives (2023)', mod: {} }, A);
+    assert.strictEqual(renamed.body.item.mod.watch, undefined, 'a rename still lets go of it');
+  });
+
+  await t('place suggestions need a session, and come back with pins', async () => {
+    assert.strictEqual((await api('GET', '/api/place/suggest?q=toki', null, null)).status, 401);
+    const r = await api('GET', '/api/place/suggest?q=toki%20u&lat=38.9&lon=-77.03', null, A);
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.body.ok, true);
+    assert.strictEqual(r.body.results[0].name, 'Toki Underground');
+    assert.strictEqual(r.body.results[0].lat, 38.900482);
+    const hit = photonHits[photonHits.length - 1];
+    assert.strictEqual(hit.searchParams.get('q'), 'toki u');
+    assert.strictEqual(hit.searchParams.get('lat'), '38.9', 'biased toward the list');
+    const junk = await api('GET', '/api/place/suggest?q=toki%20v&lat=abc&lon=', null, A);
+    assert.strictEqual(junk.status, 200, 'a junk bias is no bias, not an error');
+    assert.strictEqual(photonHits[photonHits.length - 1].searchParams.get('lat'), null);
+  });
+
+  await t('a picked place keeps its pin through a save; a pin in the sea is refused', async () => {
+    const made = (await api('POST', '/api/space/sp1/item', { title: 'Toki', kind: 'place' }, A)).body.item;
+    const place = { name: 'Toki Underground', address: '1234 H Street Northeast, Washington', lat: 38.900482, lon: -76.989033 };
+    const r = await api('PATCH', `/api/item/${made.id}`, { title: 'Toki', mod: { place } }, A);
+    assert.deepStrictEqual(r.body.item.mod.place, { ...place, area: null, what: null, osm: null });
+    const bad = await api('PATCH', `/api/item/${made.id}`, { title: 'Toki', mod: { place: { name: 'Nowhere', lat: 123, lon: 5 } } }, A);
+    assert.strictEqual(bad.body.item.mod.place.lat, null, 'half a coordinate pair is nothing at all');
+    assert.strictEqual(bad.body.item.mod.place.lon, null);
+  });
+
+  await t('a film stored with two tiers of one service shows it once', async () => {
+    const w = { tmdbId: 489, mediaType: 'movie', title: 'A film with tiers', year: 2001, poster: null,
+      providers: [{ name: 'Amazon Prime Video', logo: null }, { name: 'Apple TV', logo: null },
+        { name: 'Paramount Plus Premium', logo: null }, { name: 'Paramount Plus Essential', logo: null }] };
+    const made = (await api('POST', '/api/space/sp1/item', { title: 'A film with tiers', kind: 'movie', mod: { watch: w } }, A)).body.item;
+    assert.deepStrictEqual(made.mod.watch.providers.map(p => p.name),
+      ['Amazon Prime Video', 'Apple TV', 'Paramount Plus Premium'], 'folded on the way out, the store untouched');
+  });
+
+  await t('a place carries which OSM object it is, and only with a pin', async () => {
+    const place = { name: 'Toki Underground', lat: 38.900482, lon: -76.989033, area: 'Atlas District', what: 'restaurant', osm: 'N2193' };
+    const made = (await api('POST', '/api/space/sp1/item', { title: '🍜 Toki', kind: 'place', mod: { place } }, A)).body.item;
+    assert.deepStrictEqual(made.mod.place, { ...place, address: null }, 'creating can pin it in one go');
+    const words = (await api('POST', '/api/space/sp1/item',
+      { title: 'Somewhere', kind: 'place', mod: { place: { name: 'Somewhere', area: 'X', what: 'y', osm: 'N1' } } }, A)).body.item;
+    assert.deepStrictEqual([words.mod.place.area, words.mod.place.what, words.mod.place.osm], [null, null, null],
+      "OSM's facts about a place come with OSM's pin, not on their own");
+    const bad = (await api('PATCH', `/api/item/${made.id}`,
+      { title: '🍜 Toki', mod: { place: { ...place, osm: 'N1; DROP' } } }, A)).body.item;
+    assert.strictEqual(bad.mod.place.osm, null, 'an id that is not an OSM id never reaches a lookup URL');
+  });
+
+  await t("a place's details are fetched live, read into a week, and 404 to anyone who cannot see it", async () => {
+    const place = { name: 'Toki Underground', lat: 38.900482, lon: -76.989033, osm: 'W77' };
+    const mine = (await api('POST', '/api/space/sp1/item', { title: 'Toki', kind: 'place', visibility: 'private', mod: { place } }, A)).body.item;
+    const r = await api('GET', `/api/item/${mine.id}/place`, null, A);
+    assert.strictEqual(r.body.ok, true);
+    assert.strictEqual(r.body.details.website, 'https://toki.example');
+    assert.strictEqual(r.body.details.address, '1234 H Street Northeast, Atlas District');
+    assert.deepStrictEqual(r.body.details.week[5], [['10:00', '14:00']], 'Saturday');
+    assert.deepStrictEqual(r.body.details.week[6], [], 'and Sunday, which no rule mentions, is closed');
+    const asked = photonHits.filter(u => u.pathname === '/lookup');
+    assert.strictEqual(asked[asked.length - 1].searchParams.get('osm_ids'), 'W77');
+    assert.strictEqual((await api('GET', `/api/item/${mine.id}/place`, null, L)).status, 404,
+      'a private place is the same 404 to her as anything else');
+    const unpinned = (await api('POST', '/api/space/sp1/item', { title: 'Botanic garden', kind: 'place' }, A)).body.item;
+    assert.deepStrictEqual((await api('GET', `/api/item/${unpinned.id}/place`, null, A)).body, { ok: true, details: null });
+  });
+
+  await t('the visit: book ahead is planning, the rest waits until you have been', async () => {
+    const it = (await api('POST', '/api/space/sp1/item', { title: 'Blues Alley', kind: 'place', visit: { book: true } }, A)).body.item;
+    assert.strictEqual(it.visit, null, 'creating cannot smuggle one in');
+    const booked = await api('POST', `/api/item/${it.id}/visit`, { book: true }, L);
+    assert.strictEqual(booked.status, 200, 'she can mark his place book-ahead — it is planning');
+    assert.strictEqual(booked.body.item.visit.book, true);
+    assert.strictEqual((await api('POST', `/api/item/${it.id}/visit`, { again: 'soon' }, L)).status, 409,
+      '"would you go back" before going is a guess');
+    assert.strictEqual((await api('POST', `/api/item/${it.id}/visit`, { book: 'yes' }, L)).status, 400);
+    await api('POST', `/api/item/${it.id}/done`, { done: true }, L);
+    const been = await api('POST', `/api/item/${it.id}/visit`, { again: 'soon', memory: '  the trio was great ' }, L);
+    assert.deepStrictEqual(been.body.item.visit, { book: true, again: 'soon', memory: 'the trio was great' });
+    assert.strictEqual((await api('POST', `/api/item/${it.id}/visit`, { again: 'forever' }, A)).status, 400);
+    const patched = await api('PATCH', `/api/item/${it.id}`, { title: 'Blues Alley', visit: null, mod: {} }, A);
+    assert.deepStrictEqual(patched.body.item.visit, been.body.item.visit, 'a PATCH can neither set it nor lose it');
+    const cleared = await api('POST', `/api/item/${it.id}/visit`, { book: false, again: null, memory: null }, A);
+    assert.strictEqual(cleared.body.item.visit, null, 'nothing left is one state, not three falses');
+    const secret = (await api('POST', '/api/space/sp1/item', { title: 'Mine alone', kind: 'place', visibility: 'private' }, A)).body.item;
+    assert.strictEqual((await api('POST', `/api/item/${secret.id}/visit`, { book: true }, L)).status, 404);
+  });
+
+  await t("the shelf of lists counts what is waiting per kind, from the viewer's side", async () => {
+    const recipes = async (uid) => ((await api('GET', '/api/state', null, uid)).body.spaces
+      .find(x => x.id === 'sp1').counts.byKind.recipe || 0);
+    const [his, hers] = [await recipes(A), await recipes(L)];
+    const made = await api('POST', '/api/space/sp1/item', { title: 'Secret ragu', kind: 'recipe', visibility: 'private' }, L);
+    assert.strictEqual(made.status, 200, JSON.stringify(made.body));
+    assert.strictEqual(await recipes(L), hers + 1, 'her private recipe raises her number');
+    assert.strictEqual(await recipes(A), his, 'and not his');
   });
 
   await t('data survives a restart', async () => {
@@ -1723,7 +2091,122 @@ async function server() {
   });
 
   child.kill('SIGTERM');
+  photon.close();
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
+}
+
+/* ── place suggestions ───────────────────────────────────────────────────── */
+
+const photonFeature = (props, coords) =>
+  ({ type: 'Feature', properties: props, geometry: { type: 'Point', coordinates: coords } });
+const TOKI = photonFeature({
+  osm_key: 'amenity', osm_value: 'restaurant', name: 'Toki Underground', housenumber: '1234',
+  street: 'H Street Northeast', city: 'Washington', state: 'District of Columbia', country: 'United States',
+}, [-76.9890327, 38.9004823]);
+
+async function placeSuggestions() {
+  console.log('\nplace suggestions');
+  const P = require('../lib/places');
+
+  await t('a Photon feature becomes a name, an address line and a pin', () => {
+    assert.deepStrictEqual(P.shapeOne(TOKI), {
+      name: 'Toki Underground',
+      address: '1234 H Street Northeast, Washington, District of Columbia',
+      lat: 38.900482, lon: -76.989033, what: 'restaurant', area: 'Washington', osm: null,
+    });
+  });
+
+  await t('and which OSM object it is, and the neighbourhood rather than the city', () => {
+    const blues = P.shapeOne(photonFeature({ osm_type: 'N', osm_id: 368154, osm_key: 'amenity', osm_value: 'bar',
+      name: 'Blues Alley', district: 'Georgetown', city: 'Washington' }, [-77.06, 38.904]));
+    assert.strictEqual(blues.osm, 'N368154');
+    assert.strictEqual(blues.area, 'Georgetown');
+    for (const [type, id] of [['X', 1], ['N', 0], ['W', '12a'], ['R', -4]]) {
+      assert.strictEqual(P.shapeOne(photonFeature({ osm_type: type, osm_id: id, name: 'A' }, [-77, 38.9])).osm, null, `${type}${id}`);
+    }
+  });
+
+  await t('opening hours: the common shapes become a week, anything else becomes nothing', () => {
+    const H = require('../lib/hours');
+    const w = H.parse('Mo-Fr 08:00-17:00; Sa 10:00-14:00');
+    assert.deepStrictEqual(w[0], [['08:00', '17:00']]);
+    assert.deepStrictEqual(w[6], [], 'a day no rule mentions is closed');
+    assert.deepStrictEqual(H.parse('24/7')[3], [['00:00', '24:00']]);
+    assert.deepStrictEqual(H.parse('Tu-Su 11:00-14:30,17:00-22:00; Mo off')[0], []);
+    assert.deepStrictEqual(H.parse('Fr-Mo 18:00-02:00')[0], [['18:00', '02:00']], 'Fr-Mo wraps the weekend');
+    assert.deepStrictEqual(H.parse('Mo-Su 09:00-17:00; PH off')[2], [['09:00', '17:00']], 'holidays skipped, not guessed');
+    for (const x of ['sunrise-sunset', 'by appointment', 'Mo-Fr', '', null, 'Mo 25:00-26:00']) {
+      assert.strictEqual(H.parse(x), null, String(x));
+    }
+  });
+
+  await t("a place's details keep only safe links and say nothing they were not told", () => {
+    const G = require('../lib/geo');
+    const d = G.shapeDetails({ extratags: { website: 'javascript:alert(1)', 'contact:phone': '+1 202 555 0100' },
+      address: { road: 'M Street', city: 'Washington' } });
+    assert.strictEqual(d.website, null, 'this ends up in an href on somebody else\'s phone');
+    assert.strictEqual(d.phone, '+1 202 555 0100');
+    assert.strictEqual(d.address, 'M Street, Washington');
+    assert.deepStrictEqual(G.shapeDetails(null), { hours: null, website: null, phone: null, address: null });
+  });
+
+  await t('the visit gate takes only what it knows, and nothing left is null', () => {
+    const I = require('../lib/items');
+    const it = { done: false, visit: null };
+    assert.ok(I.setVisit(it, { book: true }));
+    assert.deepStrictEqual(it.visit, { book: true, again: null, memory: null });
+    assert.strictEqual(I.setVisit(it, { again: 'always' }), null);
+    assert.strictEqual(I.setVisit(it, { book: 1 }), null, 'a switch is a boolean, not a truthy thing');
+    assert.strictEqual(I.setVisit(it, { memory: { x: 1 } }), null);
+    assert.ok(I.setVisit(it, { book: false }));
+    assert.strictEqual(it.visit, null);
+  });
+
+  await t('a pin that is not on Earth is refused — the Gulf of Guinea included', () => {
+    for (const c of [[0, 0], [200, 10], [10, 95], ['x', 1], []]) {
+      assert.strictEqual(P.shapeOne(photonFeature({ name: 'Somewhere' }, c)), null, JSON.stringify(c));
+    }
+    assert.strictEqual(P.shapeOne({ properties: { name: 'No geometry' } }), null);
+    assert.strictEqual(P.shapeOne(photonFeature({}, [-77, 38.9])), null, 'and a place needs a name');
+  });
+
+  await t('one place appears once, and a street says nothing about what it is', () => {
+    const footway = photonFeature({ osm_key: 'highway', osm_value: 'footway', name: 'Toki Passage', city: 'Tokyo', country: 'Japan' }, [139.77, 35.68]);
+    const got = P.shape({ features: [TOKI, TOKI, footway] });
+    assert.deepStrictEqual(got.map(s => s.name), ['Toki Underground', 'Toki Passage']);
+    assert.strictEqual(got[1].what, null, '"footway" is not how anybody describes a place');
+    assert.strictEqual(got[1].address, 'Tokyo, Japan', 'no street, so the country earns its place');
+    assert.deepStrictEqual(P.shape(null), []);
+    assert.deepStrictEqual(P.shape({ features: 'nope' }), []);
+  });
+
+  await t('a city is not described as itself', () => {
+    const dc = P.shapeOne(photonFeature({ name: 'Washington', city: 'Washington', state: 'District of Columbia', country: 'United States' }, [-77.03, 38.9]));
+    assert.strictEqual(dc.address, 'District of Columbia, United States');
+  });
+
+  await t('suggest never throws, and a failure is not remembered', async () => {
+    let calls = 0;
+    const boom = async () => { calls++; throw new Error('offline'); };
+    assert.deepStrictEqual(await P.suggest('anywhere at all', null, { fetchImpl: boom }), { ok: false, results: [] });
+    await P.suggest('anywhere at all', null, { fetchImpl: boom });
+    assert.strictEqual(calls, 2, 'a blip is not "there is nowhere by that name"');
+  });
+
+  await t('a short query costs nothing, a repeat is cached, and the bias goes with it', async () => {
+    const urls = [];
+    const ok = async (u) => { urls.push(new URL(u)); return { ok: true, json: async () => ({ features: [TOKI] }) }; };
+    assert.deepStrictEqual((await P.suggest('t', null, { fetchImpl: ok })).results, []);
+    assert.strictEqual(urls.length, 0, 'one letter is not a search');
+    const first = await P.suggest('toki u', { lat: 38.9, lon: -77.03 }, { fetchImpl: ok });
+    assert.strictEqual(first.results[0].name, 'Toki Underground');
+    await P.suggest('Toki U', { lat: 38.901, lon: -77.031 }, { fetchImpl: ok });
+    assert.strictEqual(urls.length, 1, 'same words, same neighbourhood: one request');
+    assert.strictEqual(urls[0].searchParams.get('lat'), '38.9');
+    assert.strictEqual(urls[0].searchParams.get('lon'), '-77.03');
+    await P.suggest('toki u', { lat: 0, lon: 0 }, { fetchImpl: ok });
+    assert.strictEqual(urls[1].searchParams.get('lat'), null, '0,0 is a parse failure, not a bias');
+  });
 }
 
 /* ── run ─────────────────────────────────────────────────────────────────── */
@@ -1740,6 +2223,7 @@ async function server() {
   await magicLinks();
   await nudges();
   await geocoding();
+  await placeSuggestions();
   await server();
 
   console.log(`\n${pass} passed, ${fails.length} failed`);

@@ -74,8 +74,8 @@ const VIS = [
 ];
 
 function paintVis() {
-  $('shVis').innerHTML = VIS.map(v => `<button data-v="${v.id}" class="${v.id === vis ? 'on' : ''}">
-    <b>${esc(v.label)}</b>${esc(v.hint)}</button>`).join('');
+  $('shVis').innerHTML = VIS.map(v => `<button type="button" data-v="${v.id}" class="${v.id === vis ? 'on' : ''}"
+    aria-pressed="${v.id === vis}"><b>${esc(v.label)}</b><span>${esc(v.hint)}</span></button>`).join('');
   $('shVis').querySelectorAll('[data-v]').forEach(b =>
     b.addEventListener('click', () => { vis = b.dataset.v; paintVis(); }));
 }

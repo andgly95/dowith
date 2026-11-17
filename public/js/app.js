@@ -19,9 +19,17 @@ function toShelf() {
 // paint so the app never flashes the wrong colours on launch.
 const THEMES = [
   { id: 'dusk', label: 'Dusk' },
-  { id: 'olive', label: 'Olive' },
+  { id: 'forest', label: 'Forest' },
 ];
-const currentTheme = () => document.documentElement.dataset.theme || THEMES[0].id;
+// A theme that was renamed, and what it is called now. Phones remember the old
+// name, and without this they would fall back to Dusk with no way to tell why.
+// The <head> script carries the same map, because it paints before this runs.
+const RENAMED = { olive: 'forest' };
+const currentTheme = () => {
+  const t = document.documentElement.dataset.theme;
+  const id = RENAMED[t] || t;
+  return THEMES.some(x => x.id === id) ? id : THEMES[0].id;
+};
 
 function applyTheme(id) {
   document.documentElement.dataset.theme = id;
@@ -36,8 +44,18 @@ function applyTheme(id) {
 function paintThemes() {
   const cur = currentTheme();
   const el = $('themePick');
+  // Each card carries data-theme itself, so the tiny list it draws is painted
+  // from the very palette it would switch to — the attribute scoping in
+  // style.css exists for exactly this.
   el.innerHTML = THEMES.map(t => `<button type="button" data-theme="${t.id}"
-    class="${t.id === cur ? 'on' : ''}" aria-pressed="${t.id === cur}"><i></i>${t.label}</button>`).join('');
+    class="${t.id === cur ? 'on' : ''}" aria-pressed="${t.id === cur}">
+      <span class="mini" aria-hidden="true">
+        <i><u></u><s></s><em></em></i>
+        <i><u></u><s class="short"></s><em class="d"></em></i>
+        <b></b>
+      </span>${t.label}
+      <span class="ck" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"/></svg></span>
+    </button>`).join('');
   el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     applyTheme(b.dataset.theme);
     paintThemes();
@@ -48,6 +66,7 @@ async function openAccount() {
   const me = S.wire && S.wire.me;
   if (!me) return;
   $('meName').textContent = me.name || me.email;
+  $('meAvatar').textContent = initialOf(me.name || me.email);
   $('meEmail').textContent = me.email;
   $('meCircle').textContent = S.wire.circle || 0;
   // The Square bridge, said plainly. It is plumbing today and the screen should
@@ -89,6 +108,14 @@ async function start() {
   $('meSignOut').addEventListener('click', signOut);
   $('meCancel').addEventListener('click', () => closeSheet('meSheet'));
   $('meSheet').addEventListener('click', (e) => { if (e.target === $('meSheet')) closeSheet('meSheet'); });
+  // Every sheet closes on a tap on the scrim, through its own X — so whatever
+  // closing that sheet has to do (forget a share, repaint the rose's dot)
+  // happens whichever way you leave it.
+  document.querySelectorAll('.modal').forEach((m) => m.addEventListener('click', (e) => {
+    if (e.target !== m) return;
+    const x = m.querySelector('.modal-hd .x, .pl-snip .x');
+    if (x) x.click();
+  }));
   // Land in the list, not on the shelf of lists.
   //
   // Almost everybody has one list and will have one list for a long time, so

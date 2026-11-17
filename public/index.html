@@ -16,6 +16,9 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
+<!-- The saved theme, before first paint. Olive became Forest: a phone that saved
+     the old name is moved across here, and app.js maps it the same way. -->
+<script>try{var t=localStorage.getItem('dw-theme');if(t==='olive'){t='forest';localStorage.setItem('dw-theme',t)}if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <!-- Synchronous, before first paint, so the bar never jumps. On iOS 26 a
      home-screen app is drawn SHORT of the screen (see .short-vp in style.css);
      with black-translucent the missing strip is at the BOTTOM — with any other
@@ -23,7 +26,6 @@
      when it is, our bottom edge is nowhere near the home indicator and the
      bottom safe-area padding is dead space. Orientation-aware, because iOS
      never swaps screen.width/height. -->
-<script>try{var t=localStorage.getItem('dw-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <script>(function(){var d=document.documentElement;function f(){var l=innerWidth>innerHeight,s=l?Math.min(screen.width,screen.height):Math.max(screen.width,screen.height);var m=document.querySelector('meta[name=apple-mobile-web-app-status-bar-style]');d.classList.toggle('short-vp',s-innerHeight>=20&&!!m&&m.content==='black-translucent')}f();addEventListener('resize',f)})()</script>
 </head>
 <body>
@@ -44,16 +46,17 @@
 
   <!-- ───────────── SHELF ───────────── -->
   <section id="scr-shelf" class="screen">
-    <header class="topbar">
-      <div>
-        <h1>Do With</h1>
-        <div class="sub" id="shelfSub">—</div>
-      </div>
+    <header class="topbar home-bar">
+      <h1 class="big">Do With</h1>
       <button class="avatar-btn" id="btnMe" aria-label="Account"><span id="meInitial">·</span></button>
     </header>
     <div class="scroll">
       <div id="shelfList" class="shelf"></div>
-      <button class="add-space" id="btnNewSpace">+ &nbsp;Start a new list</button>
+      <button class="add-space" id="btnNewSpace">
+        <span class="plus"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+        <span class="as-bd"><b>Start a new list</b><small>With one person, or a group with a name</small></span>
+      </button>
+      <p class="lede home-lede">The things you keep meaning to do with the people you keep meaning to do them with.</p>
       <div class="pad"></div>
     </div>
   </section>
@@ -61,44 +64,51 @@
   <!-- ───────────── ONE SPACE ───────────── -->
   <section id="scr-space" class="screen">
     <header class="topbar">
-      <button class="icon-btn" id="spaceBack" aria-label="Back">
-        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <!-- The title IS the way into the list's settings now; the corner is the rose. -->
-      <button type="button" class="ttl" id="spaceSettings" aria-label="List settings">
-        <div class="with">to do with</div>
-        <h1><span id="spaceTitle">—</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></h1>
-      </button>
+      <button class="icon-btn" id="spaceBack" aria-label="All lists"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
       <!-- A line rose drawn to the nav's icon spec, not the 🌹 emoji: phones get
            glanced at, and this should be findable without being conspicuous. -->
-      <button class="icon-btn rose-btn" id="spaceRose" aria-label="Just us">
-        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 5.2c0 3.3 2.2 5.8 5 5.8s5-2.5 5-5.8c-1.4.9-2.7.9-3.6 0-.6-.6-1-1.5-1.4-2.7-.4 1.2-.8 2.1-1.4 2.7-.9.9-2.2.9-3.6 0z"/><path d="M9.8 6.9c.6.8 1.4 1.2 2.2 1.2s1.6-.4 2.2-1.2"/><path d="M12 11v10"/><path d="M12 16.2c-1.9-.2-3.5-1.3-4.1-3.2 2 0 3.5 1 4.1 3.2z"/><path d="M12 18.6c1.9-.2 3.5-1.3 4.1-3.2-2 0-3.5 1-4.1 3.2z"/></svg>
-      </button>
+      <button class="icon-btn rose-btn" id="spaceRose" aria-label="Just us"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 5.2c0 3.3 2.2 5.8 5 5.8s5-2.5 5-5.8c-1.4.9-2.7.9-3.6 0-.6-.6-1-1.5-1.4-2.7-.4 1.2-.8 2.1-1.4 2.7-.9.9-2.2.9-3.6 0z"/><path d="M9.8 6.9c.6.8 1.4 1.2 2.2 1.2s1.6-.4 2.2-1.2"/><path d="M12 11v10"/><path d="M12 16.2c-1.9-.2-3.5-1.3-4.1-3.2 2 0 3.5 1 4.1 3.2z"/><path d="M12 18.6c1.9-.2 3.5-1.3 4.1-3.2-2 0-3.5 1-4.1 3.2z"/></svg></button>
     </header>
-    <!-- One control, not three. "To do" was the state you were already in, and
-         the map is parked until it has something to show — its renderer is
-         untouched, just unreachable. -->
-    <div class="seg" id="spaceTabs">
-      <button id="tabCal" data-tab="cal" aria-pressed="false"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg>Calendar</button>
-      <button id="tabDone" data-tab="done" aria-pressed="false">Done together</button>
+    <!-- The title IS the way into the list's settings. Left-aligned and large:
+         the name of the person is the page title, not a caption in the middle. -->
+    <button type="button" class="ttl" id="spaceSettings" aria-label="List settings">
+      <span class="with">To do with</span>
+      <h1><span id="spaceTitle">—</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></h1>
+    </button>
+    <!-- How many, on the left; the views you switch INTO on the right. Done
+         together is its icon and its count — the label is the aria-label,
+         because on a narrow phone the word was what wrapped. There is no Map
+         chip: the Places tab IS the map. -->
+    <div class="ctl">
+      <span class="ctl-n" id="spaceCount"></span>
+      <div class="seg" id="spaceTabs">
+        <button id="tabCal" data-tab="cal" aria-pressed="false"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg><span>Calendar</span></button>
+        <button id="tabDone" data-tab="done" aria-pressed="false" aria-label="Done together"><svg class="ok" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M8.2 12.3l2.6 2.6 5-5.2"/></svg></button>
+      </div>
+    </div>
+    <!-- Places, when the Places tab is open: a map over the top half with the
+         list as a sheet under it. A child of the screen, never position:fixed —
+         Safari 26 samples fixed layers for the status-bar tint. -->
+    <div class="pl-top" id="placesTop" hidden>
+      <div class="map-canvas pl-canvas" id="plCanvas"></div>
+      <div class="pl-float">
+        <button class="glass-btn" id="plBack" aria-label="All lists"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <div class="pl-seg glass" role="group" aria-label="Show places">
+          <button type="button" id="plGo" aria-pressed="true">To go<span class="n"></span></button>
+          <button type="button" id="plBeen" aria-pressed="false">Been<span class="n"></span></button>
+        </div>
+        <button class="glass-btn rose-btn" id="plRose" aria-label="Just us"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 5.2c0 3.3 2.2 5.8 5 5.8s5-2.5 5-5.8c-1.4.9-2.7.9-3.6 0-.6-.6-1-1.5-1.4-2.7-.4 1.2-.8 2.1-1.4 2.7-.9.9-2.2.9-3.6 0z"/><path d="M9.8 6.9c.6.8 1.4 1.2 2.2 1.2s1.6-.4 2.2-1.2"/><path d="M12 11v10"/><path d="M12 16.2c-1.9-.2-3.5-1.3-4.1-3.2 2 0 3.5 1 4.1 3.2z"/><path d="M12 18.6c1.9-.2 3.5-1.3 4.1-3.2-2 0-3.5 1-4.1 3.2z"/></svg></button>
+      </div>
     </div>
     <div class="scroll" id="spaceScroll">
       <div id="itemList" class="items"></div>
-      <div id="mapWrap" hidden>
-        <div class="map-canvas" id="mapCanvas"></div>
-        <div class="zoomers">
-          <button id="mapIn" aria-label="Zoom in">+</button>
-          <button id="mapOut" aria-label="Zoom out">−</button>
-          <button id="mapFit" aria-label="Fit everything">⤢</button>
-        </div>
-      </div>
       <div class="pad-lg"></div>
     </div>
     <div class="composer">
       <div class="vis-row" id="visRow"></div>
       <div class="comp-in">
-        <input id="newItem" type="text" placeholder="Something to do together…" autocapitalize="sentences">
-        <button id="btnAdd" aria-label="Add">+</button>
+        <input id="newItem" type="text" placeholder="Something to do together…" autocapitalize="sentences" autocomplete="off">
+        <button id="btnAdd" aria-label="Add"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       </div>
     </div>
     <!-- One tab per kind, built from the table on the server, so adding a kind
@@ -113,72 +123,159 @@
 <!-- something shared in from elsewhere -->
 <div id="shareSheet" class="modal" hidden>
   <div class="modal-in">
-    <div class="modal-hd"><b>Add this</b><span id="shShared"></span></div>
+    <div class="modal-hd"><div class="hd-t"><b>Add this</b><span id="shShared"></span></div><button type="button" class="x" id="shCancel" aria-label="Not now"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
     <label class="fld"><span>What</span><input id="shTitle" type="text" maxlength="200"></label>
     <label class="fld"><span>Which list</span><div class="pick" id="shWhere"></div></label>
-    <div class="vis-row" id="shVis"></div>
+    <div class="fld"><span>Who sees it</span><div class="vis-row" id="shVis"></div></div>
     <button class="primary" id="shSave">Add it</button>
-    <button class="ghost" id="shCancel">Not now</button>
   </div>
 </div>
 
 <!-- one item, opened -->
 <div id="itemSheet" class="modal" hidden>
   <div class="modal-in">
-    <div class="modal-hd"><b id="isTitle">—</b><span id="isMeta"></span></div>
+    <div class="modal-hd is-hd">
+      <span class="etile big" id="isEmoji" aria-hidden="true"></span>
+      <div class="hd-t"><b id="isTitle">—</b><span id="isSub"></span></div>
+      <button type="button" class="x" id="isCancel" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+    </div>
+    <small class="is-meta" id="isMeta"></small>
     <label class="fld"><span>What</span><input id="isName" type="text" maxlength="200"></label>
-    <label class="fld" id="isLinkFld"><span id="isLinkLabel">Link <em>optional</em></span><input id="isLink" type="url" maxlength="500" placeholder="https://"></label>
-    <label class="fld" id="isPlaceFld"><span>Where <em>optional</em></span><input id="isPlace" type="text" maxlength="120" placeholder="that ramen bar in Adams Morgan"></label>
-    <label class="fld"><span>Notes <em>optional</em></span><textarea id="isNotes" rows="3" maxlength="2000"></textarea></label>
     <!-- Where the free-text tag field used to be, doing the job it was being
          used for. The tags in the live list were literally "Films", "Shows" and
          "Recipes" — a fixed vocabulary of what things ARE, typed by hand. -->
-    <div class="fld"><span>What kind</span><div class="kind-row" id="isKind"></div></div>
+    <div class="fld"><span>What kind</span><div class="chips" id="isKind"></div></div>
+    <!-- Whose idea it was, for the sections. Offered when the server says you
+         may (canCredit): the author, or an admin. -->
+    <div class="fld" id="isIdeaFld" hidden><span>Whose idea</span><div class="segs" id="isIdea"></div></div>
     <!-- Only for the kinds that have art. Shows what it is pinned to, and lets
          you pin it to something else. -->
+    <div class="fld" id="isWatchFld" hidden><span>Which one</span>
+      <button class="matchrow" id="isWatch"></button></div>
     <!-- Anyone who can see it can put it on a day, so this saves on change and
          stays live when the rest of the sheet is somebody else's. -->
     <div class="fld" id="isWhenFld"><span>When <em>optional</em></span>
       <div class="when-row">
-        <input id="isDate" type="date"><input id="isTime" type="time">
-        <button type="button" class="ghost" id="isWhenClear">Clear</button>
+        <label class="ifield"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg><input id="isDate" type="date" aria-label="Day"></label>
+        <label class="ifield"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.6V12l3 2"/></svg><input id="isTime" type="time" aria-label="Time"></label>
+        <button type="button" class="x small" id="isWhenClear" aria-label="Take it off the calendar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
       </div>
-      <small class="when-by" id="isWhenBy"></small></div>
-    <div class="fld" id="isWatchFld" hidden><span>Which one</span>
-      <button class="matchrow" id="isWatch"></button></div>
-    <div class="vis-row" id="isVis"></div>
+      <small class="hint" id="isWhenBy"></small></div>
+    <!-- A div, not a label: the suggestions are buttons, and a tap on a button
+         inside a label is also a tap on the label's input. -->
+    <div class="fld" id="isPlaceFld"><span>Where <em>optional</em></span>
+      <div class="ifield"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.8s6.6-5.4 6.6-10.1a6.6 6.6 0 1 0-13.2 0C5.4 15.4 12 20.8 12 20.8z"/><circle cx="12" cy="10.5" r="2.4"/></svg><input id="isPlace" type="text" maxlength="120" placeholder="Start typing a place" autocomplete="off" autocapitalize="words"></div>
+      <small class="where-at" id="isPlaceAt"></small>
+      <div class="sugs" id="isPlaceSug" hidden></div></div>
+    <label class="fld" id="isLinkFld"><span id="isLinkLabel">Link <em>optional</em></span>
+      <span class="ifield"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.2 13.8a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.1 1.1"/><path d="M13.8 10.2a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.1-1.1"/></svg><input id="isLink" type="url" maxlength="500" placeholder="https://"></span></label>
+    <label class="fld"><span>Notes <em>optional</em></span><textarea id="isNotes" rows="3" maxlength="2000"></textarea></label>
+    <div class="fld" id="isVisFld"><span>Who sees it</span><div class="vis-row big" id="isVis"></div></div>
     <button class="primary" id="isSave">Save</button>
-    <button class="danger" id="isDelete">Delete</button>
-    <button class="ghost" id="isCancel">Cancel</button>
+    <button class="danger" id="isDelete"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.6 7l.9 12.2h9L17.4 7M10.2 10.6v5.4M13.8 10.6v5.4"/></svg>Delete</button>
+  </div>
+</div>
+
+<!-- one PLACE, opened: its own page rather than the generic form -->
+<div id="placeSheet" class="modal" hidden>
+  <div class="modal-in place-in">
+    <div class="pl-snip">
+      <div class="map-canvas" id="plSnip"></div>
+      <button type="button" class="pl-find" id="plFind" hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.8s6.6-5.4 6.6-10.1a6.6 6.6 0 1 0-13.2 0C5.4 15.4 12 20.8 12 20.8z"/><circle cx="12" cy="10.5" r="2.4"/></svg><span><b>Find it on the map</b><small>Pick the real place, and it gets a pin</small></span></button>
+      <button type="button" class="x" id="plClose" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+    </div>
+    <div class="pl-head">
+      <h2 id="plTitle">—</h2>
+      <input id="plName" type="text" maxlength="200" aria-label="What" hidden>
+      <button type="button" class="round" id="plEdit" aria-label="Change the words"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 19.5h4l10-10a2.8 2.8 0 0 0-4-4l-10 10z"/><path d="M13.2 6.8l4 4"/></svg></button>
+    </div>
+    <div class="pl-where" id="plWhere"></div>
+    <div class="pl-sub" id="plSub"></div>
+    <div class="pl-acts">
+      <a class="act go" id="plDir" target="_blank" rel="noopener noreferrer"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.8 4.2L4.2 10.9l6.6 2.3 2.3 6.6z"/></svg></i>Directions</a>
+      <button type="button" class="act" id="plPlan"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg></i><span id="plPlanLabel">Plan it</span></button>
+      <a class="act" id="plWeb" target="_blank" rel="noopener noreferrer"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.6 3.6 5.5 3.6 8.6s-1.2 6-3.6 8.6c-2.4-2.6-3.6-5.5-3.6-8.6s1.2-6 3.6-8.6z"/></svg></i>Website</a>
+      <button type="button" class="act" id="plShare"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 14.6V3.8M8.2 7.4L12 3.8l3.8 3.6"/><path d="M7 10.6H5.8v9h12.4v-9H17"/></svg></i>Share</button>
+    </div>
+    <div class="box info" id="plInfo" hidden></div>
+    <p class="pl-src" id="plSrc" hidden>Hours and address come from OpenStreetMap, fresh each time you open this.</p>
+
+    <div id="plPlanBox">
+      <h3 class="sec">Your plan</h3>
+      <div class="box rows">
+        <div class="crow"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg></i>
+          <span class="cb"><b>When</b><small id="plWhenSub">Not planned yet</small></span>
+          <label class="pickday"><span id="plDayLabel">Pick a day</span><input id="plDate" type="date" aria-label="Day"></label></div>
+        <div class="crow" id="plTimeRow" hidden><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.6V12l3 2"/></svg></i>
+          <span class="cb"><b>Time</b><small>optional</small></span>
+          <input id="plTime" class="timein" type="time" aria-label="Time"></div>
+        <label class="crow"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7.2h16v3.3a1.9 1.9 0 0 0 0 3.6v3.3H4v-3.3a1.9 1.9 0 0 0 0-3.6z"/><path d="M14.5 7.4v1.6M14.5 11.2v1.6M14.5 15v1.6"/></svg></i>
+          <span class="cb"><b>Book ahead</b><small>A nudge to reserve once it has a day</small></span>
+          <input type="checkbox" class="switch" id="plBook"></label>
+      </div>
+    </div>
+
+    <div id="plBeenBox" hidden>
+      <div class="box been">
+        <b>Been together</b>
+        <small id="plBeenWhen"></small>
+        <span class="q">Would you go back?</span>
+        <div class="chips" id="plAgain"></div>
+      </div>
+    </div>
+
+    <div class="fld" id="plIdeaFld" hidden><span>Whose idea</span><div class="segs" id="plIdea"></div></div>
+    <label class="fld" id="plWhyFld"><span id="plWhyLabel">Why go <em>optional</em></span>
+      <textarea id="plWhy" rows="3" maxlength="2000"></textarea></label>
+    <label class="fld" id="plMemFld" hidden><span>What was it like? <em>optional</em></span>
+      <textarea id="plMem" rows="3" maxlength="2000" placeholder="So you remember"></textarea></label>
+    <div class="fld" id="plVisFld"><span>Who sees it</span><div class="vis-row big" id="plVis"></div></div>
+    <button class="primary" id="plSave">Save</button>
+
+    <button type="button" class="went" id="plWent"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M8.2 12.3l2.6 2.6 5-5.2"/></svg><span>We went here</span></button>
+
+    <div class="box rows" id="plMore">
+      <button type="button" class="crow" id="plChange"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.8s6.6-5.4 6.6-10.1a6.6 6.6 0 1 0-13.2 0C5.4 15.4 12 20.8 12 20.8z"/><circle cx="12" cy="10.5" r="2.4"/></svg></i><span class="cb"><b>Change the place</b></span></button>
+      <button type="button" class="crow" id="plMove"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.6" y="4.6" width="14.8" height="14.8" rx="3.4"/><path d="M9 12h6"/></svg></i><span class="cb"><b>Move to another tab</b></span></button>
+      <div class="chips mover" id="plKinds" hidden></div>
+      <button type="button" class="crow warn" id="plDelete"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.6 7l.9 12.2h9L17.4 7M10.2 10.6v5.4M13.8 10.6v5.4"/></svg></i><span class="cb"><b>Delete</b></span></button>
+    </div>
+  </div>
+</div>
+
+<!-- which place is it, actually: for Find it on the map and Change the place -->
+<div id="whereSheet" class="modal" hidden>
+  <div class="modal-in">
+    <div class="modal-hd"><div class="hd-t"><b>Which one?</b><span id="wsSub">Results from OpenStreetMap</span></div><button type="button" class="x" id="wsClose" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
+    <div class="ifield"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.8s6.6-5.4 6.6-10.1a6.6 6.6 0 1 0-13.2 0C5.4 15.4 12 20.8 12 20.8z"/><circle cx="12" cy="10.5" r="2.4"/></svg><input id="wsQuery" type="text" maxlength="120" placeholder="Search for the place" autocomplete="off"></div>
+    <div class="preds" id="wsResults"></div>
   </div>
 </div>
 
 <!-- plan something for a day -->
 <div id="planSheet" class="modal" hidden>
   <div class="modal-in">
-    <div class="modal-hd"><b id="psTitle">Plan</b><span>pick from the list</span></div>
+    <div class="modal-hd"><div class="hd-t"><b id="psTitle">Plan</b><span>pick from the list</span></div><button type="button" class="x" id="psCancel" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
     <label class="fld"><span>Time <em>optional</em></span><input id="psTime" type="time"></label>
     <div class="ps-list" id="psList"></div>
-    <button class="ghost" id="psCancel">Cancel</button>
   </div>
 </div>
 
 <!-- which film is it, actually -->
 <div id="pickSheet" class="modal" hidden>
   <div class="modal-in">
-    <div class="modal-hd"><b id="pkTitle">Which one?</b><span id="pkSub"></span></div>
+    <div class="modal-hd"><div class="hd-t"><b id="pkTitle">Which one?</b><span id="pkSub"></span></div><button type="button" class="x" id="pkCancel" aria-label="Not now"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
     <label class="fld"><span>Search</span>
       <input id="pkQuery" type="text" maxlength="200" placeholder="Title"></label>
     <div id="pkResults" class="cands"></div>
     <button class="ghost" id="pkClear" hidden>Remove the poster</button>
-    <button class="ghost" id="pkCancel">Not now</button>
   </div>
 </div>
 
 <!-- list settings / invite -->
 <div id="spaceSheet" class="modal" hidden>
   <div class="modal-in">
-    <div class="modal-hd"><b id="ssTitle">List</b><span id="ssWho"></span></div>
+    <div class="modal-hd"><div class="hd-t"><b id="ssTitle">List</b><span id="ssWho"></span></div><button type="button" class="x" id="ssCancel" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
     <label class="fld" id="ssNameFld"><span>Name this list <em>groups only</em></span>
       <input id="ssName" type="text" maxlength="60" placeholder="Ski trip crew"></label>
     <div class="invite-box">
@@ -188,41 +285,45 @@
       <div id="ssLink" class="ib-link" hidden></div>
     </div>
     <button class="danger" id="ssLeave">Leave this list</button>
-    <button class="ghost" id="ssCancel">Close</button>
   </div>
 </div>
 
 <!-- the pleasure inventory: just the two of you (lib/pleasure.js) -->
 <div id="roseSheet" class="modal" hidden>
   <div class="modal-in rose">
-    <div class="modal-hd"><b>Just us</b><span id="rsWho"></span></div>
+    <div class="modal-hd"><div class="hd-t"><b>Just us</b><span id="rsWho"></span></div><button type="button" class="x" id="rsClose" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
     <div class="rs-tabs" role="tablist">
       <button type="button" data-rs="body" class="on">Body</button>
       <button type="button" data-rs="try">Things to try</button>
     </div>
     <div id="rsBody"></div>
-    <button class="ghost" id="rsClose">Close</button>
   </div>
 </div>
 
 <!-- account -->
 <div id="meSheet" class="modal" hidden>
   <div class="modal-in">
-    <div class="modal-hd"><b id="meName">—</b><span id="meEmail"></span></div>
-    <div class="rows">
-      <div class="row"><span>People you can share with</span><b id="meCircle">0</b></div>
-      <div class="row" id="squareRow"><span>The Square</span><b id="squareState">—</b></div>
+    <div class="modal-hd me-hd">
+      <span class="avatar big" id="meAvatar" aria-hidden="true">·</span>
+      <div class="hd-t"><b id="meName">—</b><span id="meEmail"></span></div>
+      <button type="button" class="x" id="meCancel" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
     </div>
-    <label class="opt-row" id="nudgeRow">
-      <span><b>Nudges</b><small id="nudgeSub">when someone adds, plans or ticks off something</small></span>
-      <input type="checkbox" id="optNudge" class="switch">
-    </label>
-    <div class="opt-row" id="themeRow">
-      <span><b>Theme</b><small>on this device</small>
-        <span class="theme-row" id="themePick"></span></span>
+    <div class="box rows">
+      <div class="crow"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.8" r="3.2"/><path d="M3.4 19.2c.6-3 2.9-4.7 5.6-4.7s5 1.7 5.6 4.7"/><circle cx="16.6" cy="9.4" r="2.6"/><path d="M15.6 14.4c2.5 0 4.4 1.4 5 4"/></svg></i><span class="cb"><b>People you can share with</b></span><span class="val" id="meCircle">0</span></div>
+      <div class="crow" id="squareRow"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.6" y="4.6" width="14.8" height="14.8" rx="3.4"/><path d="M9 12h6"/></svg></i><span class="cb"><b>The Square</b></span><span class="val" id="squareState">—</span></div>
     </div>
-    <button class="ghost" id="meSignOut">Sign out</button>
-    <button class="ghost" id="meCancel">Close</button>
+    <div class="box rows">
+      <label class="crow" id="nudgeRow"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.6 16.4V11a5.4 5.4 0 0 1 10.8 0v5.4l1.6 1.6H5z"/><path d="M10 20.4h4"/></svg></i>
+        <span class="cb"><b>Nudges</b><small id="nudgeSub">when someone adds, plans or ticks off something</small></span>
+        <input type="checkbox" id="optNudge" class="switch"></label>
+    </div>
+    <div class="theme-box" id="themeRow">
+      <h3 class="sec">Theme <em>on this device</em></h3>
+      <div class="theme-row" id="themePick"></div>
+    </div>
+    <div class="box rows">
+      <button type="button" class="crow warn" id="meSignOut"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.8 4.6H6.2v14.8h7.6"/><path d="M10.8 12h9.4M17 8.6l3.4 3.4-3.4 3.4"/></svg></i><span class="cb"><b>Sign out</b></span></button>
+    </div>
   </div>
 </div>
 

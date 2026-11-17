@@ -5,17 +5,18 @@
 // and because a private thing filed as shared by accident is the one mistake this
 // app must not make easy.
 import { S } from './state.js';
-import { $, esc, toast, showScreen, ago, openSheet, closeSheet } from './util.js';
+import { $, esc, toast, showScreen, ago, openSheet, closeSheet, leadEmoji, initialOf } from './util.js';
 import { get, post, patch, del, applyWire } from './api.js';
-import { initMap, renderMap, resolvePlaces } from './map.js';
 import { calendarHtml, dayKey, todayKey, dayLabel, timeLabel } from './calendar.js';
 import { initRose, openRose, peekRose } from './rose.js';
+import { iconFor, icon } from './icons.js';
+import { isPlaceKind, renderPlaces, initPlaces, openPlace, placesTyping, leavePlaces } from './pl.js';
 
 let onChange = () => {};
 let onBack = () => {};
 let editing = null;      // item id open in the sheet
 let editingVis = 'shared';
-let tab = 'open';        // 'open' | 'done' | 'cal' | 'map'
+let tab = 'open';        // 'open' | 'done' | 'cal'
 // Which month the calendar shows and which day is selected. Lives across
 // renders, so ticking something off from the agenda doesn't page you away.
 let cal = { month: null, sel: null };
@@ -29,14 +30,24 @@ const calToday = () => {
 let kindTab = null;   // resolved on first render, once the wire has the table
 
 const VIS = [
-  { id: 'private', label: 'Just me', hint: 'only you' },
-  { id: 'shared', label: 'Us', hint: 'this list' },
-  { id: 'public', label: 'Anyone', hint: 'all your people' },
+  { id: 'private', label: 'Just me', hint: 'only you', icon: 'lock' },
+  { id: 'shared', label: 'Us', hint: 'this list', icon: 'people' },
+  { id: 'public', label: 'Anyone', hint: 'all your people', icon: 'globe' },
 ];
+// "Us" means somebody in particular. In a pair it names them — "you and
+// Linnea" — because "this list" makes you work out who that is.
+function visHint(v) {
+  if (v.id !== 'shared') return v.hint;
+  const sp = S.space;
+  const me = S.wire && S.wire.me && S.wire.me.id;
+  const other = sp && sp.isPair ? (sp.members || []).find(m => m.id !== me) : null;
+  return other ? `you and ${other.name}` : v.hint;
+}
 
 export async function openSpace(id) {
   S.spaceId = id;
   S.compose = 'shared';
+  leavePlaces();
   tab = 'open';
   kindTab = null;
   pillX = null;   // a new list starts on its first tab; nothing to travel from
@@ -45,6 +56,9 @@ export async function openSpace(id) {
   await refresh();
   peekRose();   // a dot on the rose if there is a match you have not seen
 }
+
+// Somebody else's screen may need repainting too — the shelf's counts.
+export const changed = () => onChange();
 
 export async function refresh() {
   if (!S.spaceId) return;
@@ -64,31 +78,35 @@ export async function refresh() {
 // and `write` are passed in so the control never has to know which of the two it
 // is driving — and so picking a value repaints from the same source of truth it
 // just wrote to, rather than from a copy.
-function visRow(el, read, write) {
+export function visRow(el, read, write) {
+  const big = el.classList.contains('big');
   const paint = () => {
     const cur = read();
-    el.innerHTML = VIS.map(v => `<button data-v="${v.id}" class="${v.id === cur ? 'on' : ''}">
-      <b>${esc(v.label)}</b>${esc(v.hint)}</button>`).join('');
+    el.innerHTML = VIS.map(v => `<button type="button" data-v="${v.id}" class="${v.id === cur ? 'on' : ''}"
+      aria-pressed="${v.id === cur}">${big ? icon(v.icon, 19) : ''}
+      <b>${esc(v.label)}</b><span>${esc(visHint(v))}</span></button>`).join('');
     el.querySelectorAll('[data-v]').forEach(b =>
       b.addEventListener('click', () => { write(b.dataset.v); paint(); }));
   };
   paint();
 }
 
-function itemHtml(it) {
+// `sectioned` is the to-do list split by whose idea each thing was, where the
+// heading already says whose it is and a name on every row would repeat it.
+function itemHtml(it, { sectioned = false } = {}) {
   const bits = [];
   // No kind badge. It earned its place when one list held everything mixed
   // together; the bottom nav means every row on screen is already the kind the
   // tab says, so the badge had become a label repeating the page title once per
   // row. The link action still carries the identity where it is useful — COOK
   // on a recipe, WATCH on a film.
-  if (it.visibility === 'private') bits.push('<span class="chip private">just you</span>');
-  if (it.visibility === 'public') bits.push('<span class="chip public">anyone</span>');
+  if (it.visibility === 'private') bits.push('<span class="chip private">Just you</span>');
+  if (it.visibility === 'public') bits.push('<span class="chip public">Anyone</span>');
   // A wish that drifted in from one of the author's other lists. Worth saying —
   // "Andrew wants to do this with anyone" reads differently from something
   // written here for you.
   if (it.fromElsewhere) bits.push(`<span class="chip elsewhere">${esc(it.author.name)}'s standing wish</span>`);
-  for (const t of it.tags || []) bits.push(`<span class="chip tag-chip">${esc(t)}</span>`);
+  for (const t of it.tags || []) bits.push(`<span class="chip">${esc(t)}</span>`);
   const place = it.mod && it.mod.place;
   if (place) bits.push(`<span class="chip place">${esc(place.name)}</span>`);
   const link = it.mod && it.mod.link;
@@ -101,20 +119,40 @@ function itemHtml(it) {
     // second "SHOW".
     bits.push(`<a class="${lead ? 'go' : ''}" href="${esc(link.url)}"
       target="_blank" rel="noopener noreferrer">${
-      lead ? `${esc(k.go || 'Open')} ↗` : 'link'}</a>`);
+      lead ? `${esc(k.go || 'Open')} ↗` : 'Link'}</a>`);
   }
   if (it.done && it.doneByName) bits.push(`<span class="who">${esc(it.doneByName)} ticked it off ${esc(ago(it.doneAt))}</span>`);
+  // Under a heading saying it was your idea, a row you did not type says who
+  // did — the same owning-up as "edited by" in the sheet.
+  else if (sectioned) { if (!it.mine && it.ideaBy !== it.author.id) bits.push(`<span class="who">via ${esc(it.author.name)}</span>`); }
   else if (!it.mine) bits.push(`<span class="who">${esc(it.author.name)}</span>`);
 
-  return `<div class="it ${it.done ? 'done' : ''}" data-it="${esc(it.id)}">
-    <button class="tick" data-tick aria-label="${it.done ? 'Not done after all' : 'Done'}">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"/></svg>
-    </button>
+  return rowHtml(it, bits);
+}
+
+// One row: [emoji tile] [title / one line of meta] [ring]. The tile shows the
+// title's leading emoji — presentation only, the stored title is untouched —
+// or the kind's icon when there is none. `by` puts whose idea it was on the
+// tile's corner, for a list with no sections to say it.
+export function tileHtml(it, { by = null, big = false } = {}) {
+  const { emoji } = leadEmoji(it.title);
+  return `<span class="etile${big ? ' big' : ''}" aria-hidden="true">${
+    emoji ? esc(emoji) : iconFor(kindOrDefault(it), big ? 27 : 22)}${
+    by ? `<span class="by">${esc(by)}</span>` : ''}</span>`;
+}
+
+export function rowHtml(it, bits, { by = null, sel = false } = {}) {
+  const { rest } = leadEmoji(it.title);
+  return `<div class="it ${it.done ? 'done' : ''}${sel ? ' sel' : ''}" data-it="${esc(it.id)}">
+    ${tileHtml(it, { by })}
     <div class="it-bd" data-open>
-      <b>${esc(it.title)}</b>
+      <b>${esc(rest)}</b>
       ${it.notes ? `<p>${esc(it.notes)}</p>` : ''}
       ${bits.length ? `<div class="it-meta">${bits.join('')}</div>` : ''}
     </div>
+    <button class="tick" data-tick aria-label="${it.done ? 'Not done after all' : 'Done'}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"/></svg>
+    </button>
   </div>`;
 }
 
@@ -143,6 +181,34 @@ function monthLabel(ts) {
     : `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+// Whose idea each thing was, as sections — theirs first, yours last. A list you
+// keep WITH someone is two people's wishes, and "one of yours tonight, one of
+// mine next time" needs to be able to see which are which. Ordered by person,
+// not interleaved, so the split is the first thing you see; within a section the
+// order is the list's own, newest first.
+//
+// Keyed on `ideaBy`, which the server always fills — with the author when nobody
+// was credited, and with the author again when the viewer may not be told who
+// was (SP.ideaOf), so a name can never arrive here that should not.
+function byIdea(items) {
+  // "Yours" is decided against who is signed in, not only against the server's
+  // flag: the order must hold — hers above yours — even on a wire that lacks it.
+  const me = S.wire && S.wire.me && S.wire.me.id;
+  const out = new Map();
+  for (const it of items) {
+    const id = it.ideaBy || it.author.id;
+    if (!out.has(id)) {
+      out.set(id, { id, name: it.ideaByName || it.author.name, mine: id === me || !!it.ideaMine, items: [] });
+    }
+    out.get(id).items.push(it);
+  }
+  return [...out.values()].sort((a, b) => (a.mine - b.mine)
+    || (b.items.length - a.items.length) || a.name.localeCompare(b.name));
+}
+
+const whoseHd = (g) => `<div class="whose"><span class="av" aria-hidden="true">${esc(initialOf(g.name))}</span><b>${
+  g.mine ? 'Your ideas' : `${esc(g.name)}'s ideas`}</b><span class="n">${g.items.length}</span></div>`;
+
 // The record: what you actually did, newest first, under the month it happened
 // in. This is the half of the app that isn't a to-do list — a list you finish is
 // empty, and this is the thing that makes finishing worth something.
@@ -151,36 +217,49 @@ function recordHtml(done) {
     return `<div class="record-empty">Nothing ticked off yet.<br>
       This fills up on its own.</div>`;
   }
-  const rows = [];
-  let last = null;
+  // A month is a heading; its rows are one card, like a section of the list.
+  const months = [];
   for (const it of done) {
     const label = monthLabel(it.doneAt || it.updatedAt || it.createdAt);
-    if (label !== last) { rows.push(`<div class="month">${esc(label)}</div>`); last = label; }
-    rows.push(itemHtml(it));
+    if (!months.length || months[months.length - 1].label !== label) months.push({ label, items: [] });
+    months[months.length - 1].items.push(it);
   }
-  return rows.join('');
+  return months.map(m => `<div class="month">${esc(m.label)}</div><div class="group">${
+    m.items.map(it => itemHtml(it)).join('')}</div>`).join('');
 }
 
-function render() {
+// What the count in the corner says it is counting. "8 to watch" on Films
+// reads like the app knows which screen it is on; "8 to do" does not.
+const VERB = { movie: 'to watch', show: 'to watch', place: 'to go', recipe: 'to make' };
+
+export function render() {
   const sp = S.space;
   if (!sp) return;
   $('spaceTitle').textContent = sp.title;
   // The rose is for two people. A group list has no inventory, and no corner
   // button pretending it might.
   $('spaceRose').hidden = !sp.isPair;
+  $('plRose').hidden = !sp.isPair;
 
   const open = S.items.filter(i => !i.done);
   const done = S.items.filter(i => i.done)
     .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
 
-  // The counts sit on the tabs, because "12 open / 31 done together" is the one
-  // number that says how the list is going.
   // Resolved before anything reads it: every count and every filter below is
   // "of this kind", so the kind has to be settled first.
   if (!kindTab) kindTab = defaultKind();
 
+  // Places is a map with the list under it — the same two states (to go, been)
+  // as every other tab, drawn differently. The calendar spans every kind, so it
+  // is never the Places screen.
+  const placeTab = (tab === 'open' || tab === 'done') && isPlaceKind(kindOf(kindTab));
+  $('scr-space').classList.toggle('places', placeTab);
+  $('placesTop').hidden = !placeTab;
+
   // One toggle. "To do" was a tab for the state you were already in, and the
   // count that mattered was never on it — the list underneath is the count.
+  // Its icon and its number only: the words are the aria-label, because on a
+  // narrow phone the words were what wrapped.
   const doneBtn = $('tabDone');
   doneBtn.classList.toggle('on', tab === 'done');
   doneBtn.setAttribute('aria-pressed', String(tab === 'done'));
@@ -188,21 +267,23 @@ function render() {
   // the whole list's done count while the list underneath was one kind's, so
   // tapping "Done together 15" on the Recipes tab produced two.
   const doneHere = inGroup(done, kindTab).length;
-  doneBtn.innerHTML = `Done together${doneHere ? `<span class="n">${doneHere}</span>` : ''}`;
+  const openHere = inGroup(open, kindTab).length;
+  doneBtn.innerHTML = `<span class="ok">${icon('check', 19)}</span>${doneHere ? `<span class="n">${doneHere}</span>` : ''}`;
+  doneBtn.setAttribute('aria-label', `Done together${doneHere ? `, ${doneHere}` : ''}`);
   $('tabCal').classList.toggle('on', tab === 'cal');
   $('tabCal').setAttribute('aria-pressed', String(tab === 'cal'));
+  // No Map chip any more: the Places tab is the map. A chip that opened a second,
+  // lesser map of the same places was one way too many to get to it.
+  $('spaceCount').textContent = tab === 'done' ? `${doneHere} done together`
+    : tab === 'cal' ? 'Across every kind'
+      : `${openHere} ${VERB[kindTab] || 'to do'}`;
 
   const list = $('itemList');
-  // The map is parked until it has something worth showing. Its renderer and
-  // every path into it are untouched — only the way in is gone — so turning it
-  // back on is deleting this line and putting the control back.
-  if (tab === 'map') tab = 'open';
-  list.hidden = false;
   list.classList.remove('after-groups');
-  $('mapWrap').hidden = tab !== 'map';
-  list.classList.toggle('record', tab === 'done');
-  // The composer has no job in the record or on the map — you do not add things
-  // you have already done, and you do not type into a map.
+  list.classList.toggle('record', tab === 'done' && !placeTab);
+  list.classList.toggle('pl-list', placeTab);
+  // The composer has no job in the record or the calendar — you do not add
+  // things you have already done.
   $('spaceScroll').nextElementSibling.hidden = tab !== 'open';
 
   // The bottom nav. One tab per kind, straight from the table on the server, so
@@ -220,7 +301,10 @@ function render() {
   // list of film-ish kinds here to fall out of step with it.
   const art = !!(kindList().find(k => k.id === kindTab) || {}).art;
   list.classList.toggle('shelf', art && tab === 'open');
-  if (tab === 'cal') {
+  const together = (sp.members || []).length > 1;
+  if (placeTab) {
+    renderPlaces(list, { open: inGroup(open, kindTab), done: inGroup(done, kindTab), been: tab === 'done' });
+  } else if (tab === 'cal') {
     if (!cal.sel) calToday();
     list.innerHTML = calendarHtml(S.items, cal, iconFor);
     bindCalendar(list);
@@ -231,10 +315,15 @@ function render() {
       : recordHtml(seen);
   } else {
     const shown = inGroup(open, kindTab);
-    list.innerHTML = shown.length
-      ? (art ? `<div class="grid">${shown.map(cardHtml).join('')}</div>`
-        : shown.map(itemHtml).join(''))
-      : `<div class="empty">${esc(emptyLine())}</div>`;
+    // Each section's rows are one card; a shelf's are a grid of posters.
+    const rows = (xs) => (art ? `<div class="grid">${xs.map(cardHtml).join('')}</div>`
+      : `<div class="group">${xs.map(it => itemHtml(it, { sectioned: together })).join('')}</div>`);
+    // Split by whose idea it was whenever there is anyone to split it with. A
+    // single heading is still worth having: "all four recipes are Linnea's" is
+    // exactly the kind of thing this is for.
+    list.innerHTML = !shown.length ? `<div class="empty">${esc(emptyLine())}</div>`
+      : together ? byIdea(shown).map(g => whoseHd(g) + rows(g.items)).join('')
+        : rows(shown);
   }
 
   list.querySelectorAll('[data-it]').forEach((row) => {
@@ -273,85 +362,61 @@ function render() {
   syncComposer();
 }
 
+// For the Places screen, which switches between To go and Been itself.
+export function setTab(t) {
+  tab = t;
+  $('spaceScroll').scrollTop = 0;
+  render();
+  enter(0);
+}
+export const currentTab = () => tab;
+
 // Who a new thing is for is a question about the thing you are writing, so it
 // should not be sitting there before there is one. It appears on the first
 // keystroke and goes again when the box is empty — which also gives the list
 // back two rows of height for the whole time you are not typing.
 function syncComposer() {
-  $('visRow').hidden = !$('newItem').value.trim();
+  const typed = $('newItem').value.trim();
+  $('visRow').hidden = !typed;
+  // The + inside the pill fills in once there is something for it to add.
+  $('newItem').closest('.comp-in').classList.toggle('has', !!typed);
   // Ask for what you are looking at. "Something to do together…" under the
   // Recipes tab is the app forgetting which screen it is on.
   const k = kindList().find(x => x.id === kindTab);
   $('newItem').placeholder = (!k || k.id === defaultKind())
     ? 'Something to do together…'
     : `Add a ${k.label.toLowerCase()}…`;
+  // Under Places, typing is also searching — see pl.js.
+  if (isPlaceKind(k) && tab === 'open') placesTyping($('newItem').value);
 }
 
 /* ── kinds ──────────────────────────────────────────────────────────────── */
 
 // The table lives on the server (lib/kinds.js) and arrives on the wire, so
 // there is no second list here to fall out of step with it.
-const kindList = () => ((S.wire && S.wire.kinds) && S.wire.kinds.length
+export const kindList = () => ((S.wire && S.wire.kinds) && S.wire.kinds.length
   ? S.wire.kinds
   : [{ id: 'activity', label: 'Activity', plural: 'Activities', mods: [] }]);
 // The first kind in the table IS the default — the one everything starts as.
 // Read rather than written down, so renaming it on the server renames it here.
-const defaultKind = () => kindList()[0].id;
-const kindOrDefault = (it) => (it && it.kind) || defaultKind();
-const kindOf = (id) => kindList().find(k => k.id === id) || kindList()[0];
+export const defaultKind = () => kindList()[0].id;
+export const kindOrDefault = (it) => (it && it.kind) || defaultKind();
+export const kindOf = (id) => kindList().find(k => k.id === id) || kindList()[0];
 
 // A row of kinds, used by both the composer and the item sheet — the same
 // shape as visRow, and for the same reason: two copies of a control drift.
-function kindPicker(el, read, write) {
+export function kindPicker(el, read, write) {
   const paint = () => {
     const cur = read();
-    el.innerHTML = kindList().map(k => `<button data-k="${esc(k.id)}"
-      class="${k.id === cur ? 'on' : ''}">${esc(k.label)}</button>`).join('');
+    el.innerHTML = kindList().map(k => `<button type="button" data-k="${esc(k.id)}"
+      class="${k.id === cur ? 'on' : ''}" aria-pressed="${k.id === cur}">${iconFor(k.id, 18)}${esc(k.label)}</button>`).join('');
     el.querySelectorAll('[data-k]').forEach(b =>
       b.addEventListener('click', () => { write(b.dataset.k); paint(); }));
   };
   paint();
 }
 
-// The icons.
-//
-// Presentation, so they live here rather than in the kinds table — the server
-// owns the vocabulary, the client owns how it looks. Keyed by id, and a kind
-// added without one falls back to a plain mark rather than to nothing, so the
-// nav can never ship a hole.
-//
-// One set, drawn to one spec: 24-unit box, 1.6 stroke, round caps and joins, no
-// fills. That consistency is the whole job at this size — five icons from five
-// different drawing conventions read as five mistakes.
-const ICON = {
-  // A spark. The app's own flourish when you finish something is sparks, so the
-  // kind that means "something to do together" borrows it.
-  activity: '<path d="M12 3.5l1.7 5.1a2 2 0 0 0 1.3 1.3l5.1 1.7-5.1 1.7a2 2 0 0 0-1.3 1.3L12 19.8l-1.7-5.2a2 2 0 0 0-1.3-1.3L3.9 11.6l5.1-1.7a2 2 0 0 0 1.3-1.3z"/>',
-  // A strip of film. The sprockets are FILLED squares rather than more stroked
-  // lines: at 23px a third and fourth hairline inside an 18px box turns to
-  // mush, and the first attempt read as a book with two pages.
-  movie: '<rect x="3.2" y="4.8" width="17.6" height="14.4" rx="2.4"/>'
-    + '<path d="M7.4 4.8v14.4M16.6 4.8v14.4"/>'
-    + '<g fill="currentColor" stroke="none">'
-    + '<rect x="4.6" y="7.4" width="1.6" height="1.6" rx=".4"/>'
-    + '<rect x="4.6" y="11.2" width="1.6" height="1.6" rx=".4"/>'
-    + '<rect x="4.6" y="15" width="1.6" height="1.6" rx=".4"/>'
-    + '<rect x="17.8" y="7.4" width="1.6" height="1.6" rx=".4"/>'
-    + '<rect x="17.8" y="11.2" width="1.6" height="1.6" rx=".4"/>'
-    + '<rect x="17.8" y="15" width="1.6" height="1.6" rx=".4"/>'
-    + '</g>',
-  // A set with its ears up.
-  show: '<rect x="3.2" y="7.6" width="17.6" height="11.6" rx="2.4"/><path d="M8.4 3.6L12 7.6l3.6-4"/>',
-  // A pin.
-  place: '<path d="M12 20.8s6.6-5.4 6.6-10.1a6.6 6.6 0 1 0-13.2 0C5.4 15.4 12 20.8 12 20.8z"/><circle cx="12" cy="10.5" r="2.4"/>',
-  // A pot, steaming.
-  recipe: '<path d="M4.4 10.2h15.2v4.6a4 4 0 0 1-4 4H8.4a4 4 0 0 1-4-4z"/><path d="M2.9 10.2h18.2"/><path d="M9 7.4c0-1.1 1-1.5 1-2.6M12.6 7.4c0-1.1 1-1.5 1-2.6"/>',
-};
-const FALLBACK = '<circle cx="12" cy="12" r="6.4"/>';
-
-const iconFor = (id) => `<svg viewBox="0 0 24 24" aria-hidden="true" width="23" height="23"
-  fill="none" stroke="currentColor" stroke-width="1.6"
-  stroke-linecap="round" stroke-linejoin="round">${ICON[id] || FALLBACK}</svg>`;
+// The icons live in icons.js — one set, shared with the Places screen.
 
 /* ── the shelf ──────────────────────────────────────────────────────────── */
 
@@ -473,8 +538,17 @@ function paintWhen(it) {
   $('isTime').value = (it.when && it.when.time) || '';
   $('isTime').disabled = !$('isDate').value;
   $('isWhenClear').hidden = !it.when;
-  $('isWhenBy').textContent = it.when && it.plannedByName
-    ? `planned by ${it.plannedByName}` : '';
+  $('isWhenBy').textContent = whenHint(it);
+}
+
+// Under a When field: who planned it, or — before anybody has — that the other
+// person can, and that it saves as soon as you pick.
+export function whenHint(it) {
+  if (it.when && it.plannedByName) return `Planned by ${it.plannedBy === (S.wire && S.wire.me && S.wire.me.id) ? 'you' : it.plannedByName}.`;
+  const me = S.wire && S.wire.me && S.wire.me.id;
+  const others = ((S.space && S.space.members) || []).filter(m => m.id !== me);
+  const who = others.length === 1 ? others[0].name : others.length ? 'The others' : null;
+  return who ? `${who} can put it on a day too. Saves as soon as you pick.` : 'Saves as soon as you pick.';
 }
 
 async function saveWhen() {
@@ -565,11 +639,11 @@ function pop(el) {
 // dir 0 (the Done toggle) rises instead, because that is a change of state,
 // not a step sideways. Staggering stops after ten — anything later is below
 // the fold, and waiting on it would only make the screen feel slow.
-function enter(dir) {
+export function enter(dir) {
   if (calm()) return;
   const list = $('itemList');
-  const grid = list.querySelector('.grid');
-  const els = [...(grid || list).children];
+  // A shelf is a heading and a grid per person; the cards are what arrive.
+  const els = [...list.children].flatMap(el => (el.classList.contains('grid') ? [...el.children] : [el]));
   els.forEach((el, i) => {
     if (!el.animate) return;
     el.animate([
@@ -723,7 +797,7 @@ function celebrate(row) {
   });
 }
 
-async function toggle(id) {
+export async function toggle(id) {
   const it = S.items.find(x => x.id === id);
   if (!it) return;
   const finishing = !it.done;
@@ -752,15 +826,34 @@ async function toggle(id) {
 
 /* ── one item, opened ───────────────────────────────────────────────────── */
 
-function openItem(id) {
+export function openItem(id) {
   const it = S.items.find(x => x.id === id);
   if (!it) return;
+  // A place has its own page — the map, the way there, the plan — rather than
+  // the generic form. Whichever way in: a row, a pin, the calendar.
+  if (isPlaceKind(kindOf(kindOrDefault(it)))) return openPlace(id);
   editing = id;
-  $('isTitle').textContent = it.mine ? 'Your thing' : `${it.author.name}'s thing`;
-  $('isMeta').textContent = `added ${ago(it.createdAt)}`;
+  // The header is the thing itself: its emoji in a tile, its words, and a line
+  // saying whose idea it was and what kind of thing it is.
+  const { rest } = leadEmoji(it.title);
+  $('isEmoji').outerHTML = tileHtml(it, { big: true }).replace('class="etile big"', 'class="etile big" id="isEmoji"');
+  $('isTitle').textContent = rest;
+  $('isSub').textContent = `${ideaLine(it)} · ${kindOf(kindOrDefault(it)).label}`;
+  // Said out loud when somebody else's hand was last on the wording — an admin
+  // correcting a typo leaves the author's name on the row, so the sheet owns up.
+  // Likewise when the idea was somebody else's: who typed it and whose it was
+  // are both true, and the sheet says both.
+  const credited = it.ideaBy && it.ideaBy !== it.author.id;
+  $('isMeta').textContent = [
+    credited || !it.mine ? `added by ${it.mine ? 'you' : it.author.name} ${ago(it.createdAt)}` : `added ${ago(it.createdAt)}`,
+    credited ? (it.ideaMine ? 'your idea' : `${it.ideaByName}'s idea`) : null,
+    it.editedByName ? `edited by ${it.editedByName}` : null,
+  ].filter(Boolean).join(' · ');
   $('isName').value = it.title;
   $('isNotes').value = it.notes || '';
   $('isPlace').value = (it.mod && it.mod.place && it.mod.place.name) || '';
+  editingPlace = it.mod && it.mod.place ? { ...it.mod.place } : null;
+  hideSugs();
   $('isLink').value = (it.mod && it.mod.link && it.mod.link.url) || '';
   editingKind = kindOrDefault(it);
   kindPicker($('isKind'), () => editingKind, (k) => { editingKind = k; kindFields(); });
@@ -768,18 +861,66 @@ function openItem(id) {
   paintWatchRow(it);
   paintWhen(it);
   // Somebody else's wording is theirs. You can see it and tick it off; you cannot
-  // rewrite it.
+  // rewrite it — unless the server says you can (an admin, correcting things).
+  // `canEdit` is the server's answer, never worked out here.
   const ro = !it.canEdit;
+  editingRo = ro;
   for (const f of ['isName', 'isNotes', 'isPlace', 'isLink']) $(f).disabled = ro;
   // Somebody else's classification is theirs too — the picker goes with the
   // fields rather than sitting there looking tappable and doing nothing.
   $('isKind').closest('.fld').hidden = ro;
   $('isSave').hidden = ro;
   $('isDelete').hidden = ro;
-  $('isVis').hidden = ro;
+  // Who it is FOR — the author's, or an admin's. The server's answer again.
+  const ownVis = !ro && !!it.canSetVisibility;
+  $('isVis').hidden = !ownVis;
+  $('isVisFld').hidden = !ownVis;
   editingVis = it.visibility;
-  if (!ro) visRow($('isVis'), () => editingVis, (v) => { editingVis = v; });
+  if (ownVis) visRow($('isVis'), () => editingVis, (v) => { editingVis = v; });
+  paintIdea(it);
+  paintWhere();
   openSheet('itemSheet');
+}
+
+// "Your idea", "Linnea's idea" — the header line in a sheet.
+export function ideaLine(it) {
+  const me = S.wire && S.wire.me && S.wire.me.id;
+  const id = it.ideaBy || it.author.id;
+  return id === me || it.ideaMine ? 'Your idea' : `${it.ideaByName || it.author.name}'s idea`;
+}
+
+// Whose idea it was. On something you wrote, or on anything if you are an admin
+// (`canCredit` is the server's answer), to anyone in the list it lives in —
+// that list's members, not this screen's: a standing wish from another list is
+// credited among ITS people.
+let editingIdea = null;
+let openedIdea = null;
+// Returns the control's state, so the place page can use the same one.
+export function ideaControl(it, fld, el) {
+  const home = ((S.wire && S.wire.spaces) || []).find(s => s.id === it.spaceId);
+  const people = home ? home.members : [];
+  const me = S.wire && S.wire.me && S.wire.me.id;
+  const offer = !!it.canCredit && people.length > 1;
+  const st = { value: it.ideaBy || it.author.id, opened: it.ideaBy || it.author.id, offer };
+  fld.hidden = !offer;
+  if (!offer) return st;
+  // You first, then everyone else in the list.
+  const order = [...people].sort((a, b) => (b.id === me) - (a.id === me));
+  const paint = () => {
+    el.innerHTML = order.map(p => `<button type="button" data-v="${esc(p.id)}"
+      class="${p.id === st.value ? 'on' : ''}" aria-pressed="${p.id === st.value}">${p.id === me ? 'Mine' : `${esc(p.name)}'s`}</button>`).join('');
+    el.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => {
+      st.value = b.dataset.v;
+      paint();
+    }));
+  };
+  paint();
+  return st;
+}
+let ideaState = null;
+function paintIdea(it) {
+  ideaState = ideaControl(it, $('isIdeaFld'), $('isIdea'));
+  editingIdea = openedIdea = ideaState.value;
 }
 
 // Which fields the chosen kind puts in front of you.
@@ -822,22 +963,125 @@ function paintWatchRow(it) {
        <span class="ch">Find it</span>`;
 }
 
+/* ── where is it ─────────────────────────────────────────────────────────────
+   The Where field suggests real places as you type (lib/places.js), and the one
+   you tap is kept WITH its coordinates, so it lands on the map exactly where you
+   meant. Typing a name and not picking still works — it is looked up later, the
+   old way — and the line under the field says which of the two you have. */
+
+let editingPlace = null;   // what was picked, or what the item already had
+let editingRo = true;
+let sugs = [];
+let sugSeq = 0;
+let sugTimer = null;
+
+// The place to send: the picked one if the box still says its name, otherwise
+// whatever was typed, as a bare name. Editing the text after picking unpicks it,
+// because the coordinates belong to the place you tapped, not to your edit.
+function placeToSave() {
+  const typed = $('isPlace').value.trim();
+  if (!typed) return null;
+  const p = editingPlace && editingPlace.name === typed ? editingPlace : null;
+  return p && typeof p.lat === 'number'
+    ? { name: p.name, address: p.address || null, lat: p.lat, lon: p.lon }
+    : { name: typed };
+}
+
+function paintWhere() {
+  const el = $('isPlaceAt');
+  const p = placeToSave();
+  const pinned = !!(p && typeof p.lat === 'number');
+  el.classList.toggle('pinned', pinned);
+  el.textContent = !p ? ''
+    : pinned ? (p.address || 'On the map')
+      // Not something to nag somebody about who cannot change it.
+      : editingRo ? '' : 'Just words for now — pick a suggestion to pin the exact place';
+}
+
+function hideSugs() {
+  sugs = [];
+  sugSeq++;                 // and anything still in flight lands nowhere
+  clearTimeout(sugTimer);
+  const box = $('isPlaceSug');
+  box.hidden = true;
+  box.innerHTML = '';
+}
+
+// "Ramen" should mean ramen near you. The middle of the pins already in this
+// list is the best guess there is without asking the phone where it is — and
+// the median, so one place on holiday does not drag it into the ocean.
+function nearHere() {
+  const pts = (S.items || []).map(i => i.mod && i.mod.place)
+    .filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number');
+  if (!pts.length) return null;
+  const mid = (xs) => { const a = [...xs].sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; };
+  return { lat: mid(pts.map(p => p.lat)), lon: mid(pts.map(p => p.lon)) };
+}
+
+async function suggestPlaces(q) {
+  const seq = ++sugSeq;
+  const box = $('isPlaceSug');
+  if (q.trim().length < 2) { hideSugs(); return; }
+  const n = nearHere();
+  let b;
+  try {
+    b = await get(`/api/place/suggest?q=${encodeURIComponent(q.trim())}${
+      n ? `&lat=${n.lat}&lon=${n.lon}` : ''}`);
+  } catch (_) { b = { ok: false, results: [] }; }
+  if (seq !== sugSeq || editingRo) return;   // a later keystroke already asked
+  sugs = b.results || [];
+  if (!sugs.length) {
+    // Nothing found is not an error — a place can be just a name. Only say
+    // something when the suggestions themselves are unavailable.
+    box.innerHTML = b.ok ? '' : '<div class="sugs-note">No suggestions right now — it will be kept as words.</div>';
+    box.hidden = b.ok;
+    return;
+  }
+  box.innerHTML = sugs.map((s, i) => `<button type="button" class="sug" data-sug="${i}">
+      <b>${esc(s.name)}</b><small>${esc([s.what, s.address].filter(Boolean).join(' · '))}</small>
+    </button>`).join('')
+    + '<div class="sugs-by">Places from OpenStreetMap</div>';
+  box.hidden = false;
+}
+
+function pickPlace(i) {
+  const s = sugs[i];
+  if (!s) return;
+  editingPlace = { name: s.name, address: s.address || null, lat: s.lat, lon: s.lon };
+  $('isPlace').value = s.name;
+  hideSugs();
+  paintWhere();
+  // A kind's fields fold away when empty; this one is not empty any more.
+  kindFields();
+}
+
+// A kind whose only field is a place IS the place — "Toki Underground" under
+// Places — so an empty Where field starts from the title rather than from
+// nothing. Read off the manifest, not a hard-coded kind id.
+function titleIsThePlace() {
+  const mods = kindOf(editingKind).mods || [];
+  return mods.length === 1 && mods[0] === 'place';
+}
+
 async function saveItem() {
   const it = S.items.find(x => x.id === editing);
   if (!it) return;
   const title = $('isName').value.trim();
   if (!title) return toast('It needs a name');
-  const place = $('isPlace').value.trim();
   const url = $('isLink').value.trim();
   try {
     const b = await patch(`/api/item/${editing}`, {
       title,
       kind: editingKind,
       notes: $('isNotes').value.trim(),
-      visibility: editingVis,
-      // The module bag. The server drops anything it has no rules for.
+      // Only where it was offered. The server ignores it otherwise anyway.
+      ...(it.canSetVisibility ? { visibility: editingVis } : {}),
+      // Sent only when it changed, so saving a note never re-states the credit.
+      ...(it.canCredit && ideaState && ideaState.value !== ideaState.opened ? { ideaBy: ideaState.value } : {}),
+      // The module bag. The server drops anything it has no rules for, and
+      // keeps the poster itself — that slice is not this sheet's to send.
       mod: {
-        ...(place ? { place: { name: place } } : {}),
+        ...(placeToSave() ? { place: placeToSave() } : {}),
         ...(url ? { link: { url } } : {}),
       },
     });
@@ -941,11 +1185,38 @@ export function initSpace(changeHandler, backHandler) {
   // Rotating moves every tab, so put the marker back under its icon — without
   // travelling, since nothing was chosen.
   window.addEventListener('resize', () => { pillX = null; placePill($('kindNav')); });
-  initMap((id) => openItem(id));
+  initPlaces();
   $('spaceSettings').addEventListener('click', openSettings);
   $('spaceRose').addEventListener('click', openRose);
   initRose();
   $('btnAdd').addEventListener('click', add);
+
+  // The Where field.
+  $('isPlace').addEventListener('input', () => {
+    paintWhere();
+    clearTimeout(sugTimer);
+    const q = $('isPlace').value;
+    if (q.trim().length < 2) { hideSugs(); return; }
+    sugTimer = setTimeout(() => suggestPlaces(q), 280);   // a keystroke is not a search
+  });
+  $('isPlace').addEventListener('focus', () => {
+    if (editingRo || $('isPlace').value.trim() || !titleIsThePlace()) return;
+    suggestPlaces($('isName').value);
+  });
+  // Delegated, and on the box rather than each row, because the rows are
+  // rewritten on every keystroke. Deliberately NOT hidden on blur: on a phone
+  // the input blurs before the tap on a suggestion lands, and hiding on blur
+  // would make every suggestion untappable.
+  $('isPlaceSug').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sug]');
+    if (b) pickPlace(Number(b.dataset.sug));
+  });
+  $('isPlace').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('isPlaceSug').hidden) { e.stopPropagation(); hideSugs(); }
+    // Enter takes the top suggestion — the one you were typing toward.
+    if (e.key === 'Enter' && sugs.length) { e.preventDefault(); pickPlace(0); }
+  });
+
   $('newItem').addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
   $('newItem').addEventListener('input', syncComposer);
 

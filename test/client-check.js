@@ -59,7 +59,34 @@ function connectCdp(wsUrl) {
     spaces: [{ id: 'sp1', name: null, memberIds: [A, L], createdBy: A, createdAt: 1 }],
     items: [], invites: [], seq: 100,
   }));
-  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ sessionSecret: SECRET }));
+  // A stand-in for Photon (place suggestions) and Nominatim (the lookup the map
+  // makes for names typed without a pick). The suite must never need the
+  // internet, and the map is the one screen that would otherwise reach for it.
+  const asked = [];
+  const fake = require('http').createServer((req, res) => {
+    res.setHeader('content-type', 'application/json');
+    asked.push(new URL(req.url, 'http://x'));
+    if (req.url.startsWith('/search')) return res.end('[]');   // Nominatim: nowhere by that name
+    // Nominatim's lookup, for a place page's hours.
+    if (req.url.startsWith('/lookup')) {
+      return res.end(JSON.stringify([{ extratags: { opening_hours: 'Mo-Su 08:00-17:00', website: 'https://toki.example' },
+        address: { house_number: '1234', road: 'H Street Northeast' } }]));
+    }
+    res.end(JSON.stringify({ type: 'FeatureCollection', features: [{
+      type: 'Feature',
+      properties: { osm_key: 'amenity', osm_value: 'restaurant', name: 'Toki Underground', osm_type: 'N', osm_id: 2193,
+        housenumber: '1234', street: 'H Street Northeast', district: 'Atlas District', city: 'Washington', state: 'District of Columbia' },
+      geometry: { type: 'Point', coordinates: [-76.9890327, 38.9004823] },
+    }] }));
+  }).listen(0, '127.0.0.1');
+  await new Promise(r => fake.once('listening', r));
+  const FAKE = `http://127.0.0.1:${fake.address().port}`;
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
+    sessionSecret: SECRET, placesEndpoint: `${FAKE}/api/`, geoEndpoint: `${FAKE}/search`, geoLookupEndpoint: `${FAKE}/lookup`,
+    // Andrew is an admin here, as he is on the real box: full edit on anything
+    // he can see. Linnea is not, which is what the read-only checks rely on.
+    admins: [A],
+  }));
 
   const server = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
     env: { ...process.env, PORT: String(PORT), DATA_FILE: path.join(dir, 'store.json'), CONFIG_FILE: path.join(dir, 'config.json') },
@@ -83,6 +110,7 @@ function connectCdp(wsUrl) {
     try { cdp && cdp.close(); } catch (_) {}
     chrome.kill('SIGKILL');
     server.kill('SIGTERM');
+    fake.close();
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
     try { fs.rmSync(profile, { recursive: true, force: true }); } catch (_) {}
   };
@@ -108,11 +136,16 @@ function connectCdp(wsUrl) {
       }
       if (msg.method === 'Log.entryAdded' && msg.params.entry.level === 'error') {
         const t = msg.params.entry.text || '';
-        if (!/service ?worker/i.test(t)) errors.push(`CONSOLE: ${t}`);
+        // Map tiles are blocked below (no internet in the suite), and a blocked
+        // tile is the map's designed fallback — pins on a blank ground — not
+        // a page error.
+        const tile = /tile\.openstreetmap\.org/.test(msg.params.entry.url || '') || /ERR_BLOCKED_BY_CLIENT/.test(t);
+        if (!/service ?worker/i.test(t) && !tile) errors.push(`CONSOLE: ${t}`);
       }
     });
 
     await S('Runtime.enable'); await S('Log.enable'); await S('Page.enable'); await S('Network.enable');
+    await S('Network.setBlockedURLs', { urls: ['*tile.openstreetmap.org*'] });
     await S('Emulation.setDeviceMetricsOverride', { width: 430, height: 900, deviceScaleFactor: 2, mobile: true });
 
     const evalJs = async (expr) => {
@@ -207,7 +240,10 @@ function connectCdp(wsUrl) {
     // renderer is untouched, only the way in is gone.
     // Two since the calendar: views you switch INTO, never "To do" (the state
     // you are already in) and never the map.
-    check(await evalJs(`[...document.querySelectorAll('#spaceTabs button')].map(b => b.dataset.tab).join()`)
+    // The map is the third, and only once something here has a place — nothing
+    // does yet, so it must not be on screen. Asked by LAYOUT, like everything.
+    check(await evalJs(`[...document.querySelectorAll('#spaceTabs button')]
+      .filter(b => b.offsetWidth).map(b => b.dataset.tab).join()`)
       === 'cal,done', 'the toggles are Calendar and Done together, and nothing else');
     check(await visible('#tabDone'), 'and it is the record');
     // Small, and over on the right. It inherited the size and weight of the
@@ -223,7 +259,8 @@ function connectCdp(wsUrl) {
                leftGap: Math.round(br.left - rr.left) }; })()`);
     check(seg.w < seg.rowW * 0.45, `the toggle is ${seg.w} of ${seg.rowW}px — too big`);
     check(seg.rightGap < seg.leftGap, 'and it should sit at the right-hand end');
-    check(!(await visible('#spaceTabs [data-tab="map"]')), 'the map is parked for now');
+    check(!(await evalJs(`!!document.querySelector('#spaceTabs [data-tab="map"]')`)),
+      'no Map chip — the Places tab is the map');
     check(await evalJs(`document.getElementById('tabDone').getAttribute('aria-pressed')`) === 'false',
       'starting on what there is still to do');
     const beforeOpen = await evalJs(`document.querySelectorAll('#itemList .it').length`);
@@ -505,15 +542,26 @@ function connectCdp(wsUrl) {
     // THEMES ARE TOKENS. Switching one must repaint what is actually drawn —
     // including the tints, which used to be copied rgba() values and would
     // have stayed coral under any theme.
-    await evalJs(`document.documentElement.dataset.theme = 'olive'`);
+    await evalJs(`document.documentElement.dataset.theme = 'forest'`);
     await sleep(600);
-    const olive = await evalJs(`({
+    const forest = await evalJs(`({
       bg: getComputedStyle(document.body).backgroundColor,
       pill: getComputedStyle(document.querySelector('#kindNav .pill')).backgroundColor,
     })`);
-    check(olive.bg === 'rgb(31, 26, 18)', `olive paints the page: ${olive.bg}`);
-    check(!/242, 132, 92/.test(olive.pill) && !/0\.949/.test(olive.pill),
-      `and the tab marker is not left coral: ${olive.pill}`);
+    check(forest.bg === 'rgb(17, 26, 21)', `forest paints the page: ${forest.bg}`);
+    check(!/242, 132, 92/.test(forest.pill) && !/0\.949/.test(forest.pill),
+      `and the tab marker is not left coral: ${forest.pill}`);
+    // The DERIVED tokens (--sheet, --accent-tint…) are declared on [data-theme]
+    // as well as :root, so a swatch carrying its own theme paints from its own
+    // palette. Declared on :root alone, var(--bg) inside them resolves once, at
+    // the root, and the swatch would wear the page's colours.
+    const swatch = await evalJs(`(() => {
+      const mk = (t) => { const d = document.createElement('div'); if (t) d.dataset.theme = t;
+        d.style.background = 'var(--sheet)'; document.body.append(d);
+        const c = getComputedStyle(d).backgroundColor; d.remove(); return c; };
+      return { page: mk(null), dusk: mk('dusk'), forest: mk('forest') }; })()`);
+    check(swatch.page === swatch.forest && swatch.dusk !== swatch.forest,
+      `a derived token follows the theme it is declared under: ${JSON.stringify(swatch)}`);
     if (process.env.SHOT) {
       const { data } = await S('Page.captureScreenshot', { format: 'png' });
       require('fs').writeFileSync(process.env.SHOT, Buffer.from(data, 'base64'));
@@ -642,6 +690,209 @@ function connectCdp(wsUrl) {
         'and the place shows on the item');
     }
 
+    // ── Places: a map with the list under it ────────────────────────────
+    // The same items as every tab, drawn as places: their emojis are the pins,
+    // To go / Been replaces Done together, and typing is also searching.
+    const typeIn = (v) => evalJs(`(() => { const i = document.getElementById('newItem');
+      i.value = ${JSON.stringify('')} + ${JSON.stringify(v)}; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    const rowOf = (re) => `[...document.querySelectorAll('#itemList .it')].find(r => ${re}.test(r.innerText))`;
+    await evalJs(`document.querySelector('#kindNav [data-kind="place"]').click()`);
+    await sleep(700);
+    check(await visible('#placesTop') && await visible('#plCanvas'), 'the Places tab is a map');
+    check(await visible('#plGo') && await visible('#plBeen'), 'with To go / Been over it');
+    check(!(await visible('#tabDone')) && !(await visible('#spaceSettings')),
+      'which replace the Done together chip and the big title on this tab');
+    check(await visible('#itemList') && await visible('.composer') && await visible('#kindNav'),
+      'and the list, the composer and the nav still under it');
+
+    // Which one? After three characters, up to three real places, numbered,
+    // the same numbers on the map. The emoji is not what gets searched for.
+    await typeIn('🍜 Toki');
+    await sleep(1000);
+    const preds = await evalJs(`document.querySelectorAll('#itemList .pred').length`);
+    check(preds >= 1 && preds <= 3, `typing a place offers up to three (${preds})`);
+    check(await evalJs(`document.querySelectorAll('#plCanvas .npin').length`) === preds, 'with their numbers on the map');
+    check(/restaurant/i.test(await evalJs(`document.querySelector('#itemList .pred').innerText`)), 'each saying what it is');
+    const q = asked.filter(u => u.pathname === '/api/').pop();
+    check(q && q.searchParams.get('q') === 'Toki', `and the search is the words, not the emoji: ${q && q.searchParams.get('q')}`);
+    if (process.env.SHOT_PLACES) {
+      const { data } = await S('Page.captureScreenshot', { format: 'png' });
+      require('fs').writeFileSync(process.env.SHOT_PLACES, Buffer.from(data, 'base64'));
+    }
+    await evalJs(`document.querySelector('#itemList .pred').click()`);
+    await sleep(1300);
+    check(/pinned to the map/i.test(await evalJs(`document.getElementById('itemList').innerText`)), 'one tap pins it, and says so');
+    check(await evalJs(`!!${rowOf('/Toki Underground/')}`), 'the row says which place it is');
+    check(await evalJs(`(${rowOf('/Toki/')}).querySelector('b').innerText`) === 'Toki', 'and the title is what was typed');
+    check(await evalJs(`[...document.querySelectorAll('#plCanvas .epin')].some(p => p.innerText.includes('🍜'))`),
+      'and its emoji is the pin');
+    // Undo takes it back off and gives you your words back.
+    await evalJs(`document.querySelector('#itemList [data-undo]').click()`);
+    await sleep(1100);
+    check(!(await evalJs(`!!${rowOf('/Toki/')}`)), 'Undo takes it back off the list');
+    check(await evalJs(`document.getElementById('newItem').value`) === '🍜 Toki', 'and puts the words back in the box');
+    await typeIn('🍜 Toki');
+    await sleep(1000);
+    await evalJs(`document.querySelector('#itemList .pred').click()`);
+    await sleep(1300);
+    // The + still adds it as words, with no pin: nothing is pinned unless
+    // somebody chose the place.
+    await typeIn('🌳 Botanic garden');
+    await sleep(200);
+    await evalJs(`document.getElementById('btnAdd').click()`);
+    await sleep(1300);
+    check(/not on the map yet/i.test(await evalJs(`(${rowOf('/Botanic garden/')}).innerText`)), 'the + adds it as words, unpinned');
+
+    // ── one place, opened ───────────────────────────────────────────────
+    await evalJs(`(${rowOf('/Toki/')}).querySelector('[data-open]').click()`);
+    await sleep(1100);
+    check(await visible('#placeSheet .modal-in') && !(await visible('#itemSheet .modal-in')),
+      'a place opens its own page, not the generic form');
+    check(/Toki Underground/.test(await evalJs(`document.getElementById('plWhere').innerText`)), 'saying which place it is');
+    check(/destination=38\.9/.test(await evalJs(`document.getElementById('plDir').getAttribute('href')`)),
+      'Directions go to the pin');
+    check(await visible('#plInfo') && /open today · 8 AM–5 PM/i.test(await evalJs(`document.getElementById('plInfo').innerText`)),
+      `its hours, read for today: ${await evalJs(`document.getElementById('plInfo').innerText`)}`);
+    check(await evalJs(`document.getElementById('plWeb').getAttribute('href')`) === 'https://toki.example', 'and its website');
+    await evalJs(`document.getElementById('plBook').click()`);
+    await sleep(800);
+    const visitOf = async (re) => evalJs(`fetch('/api/space/sp1/items').then(r => r.json())
+      .then(b => (b.items.find(i => ${re}.test(i.title)) || {}).visit)`);
+    check(((await visitOf('/Toki/')) || {}).book === true, 'Book ahead saves as you flip it');
+    await evalJs(`document.getElementById('plWent').click()`);
+    await sleep(1000);
+    check(await visible('#plBeenBox') && !(await visible('#plPlanBox')), 'We went here turns the plan into the record');
+    await evalJs(`document.querySelector('#plAgain [data-again="soon"]').click()`);
+    await sleep(900);
+    check(((await visitOf('/Toki/')) || {}).again === 'soon', 'and "would you go back" is kept');
+    await evalJs(`document.getElementById('plClose').click()`);
+    await sleep(400);
+    check(await evalJs(`document.querySelector('#plBeen .n').innerText`) === '1', 'Been counts it');
+    await evalJs(`document.getElementById('plBeen').click()`);
+    await sleep(500);
+    check(/can’t wait to go back/i.test(await evalJs(`document.getElementById('itemList').innerText`)),
+      'and the Been list says so');
+    await evalJs(`document.getElementById('plGo').click()`);
+    await sleep(500);
+
+    // A place with no pin offers to find it — choosing, never matching in bulk.
+    await evalJs(`(${rowOf('/Botanic garden/')}).querySelector('[data-open]').click()`);
+    await sleep(700);
+    check(await visible('#plFind'), 'a place with no pin offers to find it on the map');
+    await evalJs(`document.getElementById('plFind').click()`);
+    await sleep(1000);
+    check(await evalJs(`document.querySelectorAll('#wsResults .pred').length`) >= 1, 'which searches for it');
+    await evalJs(`document.querySelector('#wsResults .pred').click()`);
+    await sleep(1300);
+    check(!(await visible('#whereSheet .modal-in')) && !(await visible('#plFind')), 'and one tap pins it');
+    await evalJs(`document.getElementById('plClose').click()`);
+    await sleep(400);
+
+    // ── one finger pans, two zoom ───────────────────────────────────────
+    // Real touches through the protocol, which the browser turns into pointer
+    // events exactly as a phone would. The first engine tracked one pointer: a
+    // second finger restarted the drag from where it landed, so a pinch jerked
+    // the map sideways and never zoomed. Measured on the pin, by where it is drawn.
+    await S('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    const pinAt = () => evalJs(`(() => { const p = [...document.querySelectorAll('#plCanvas .epin')]
+      .find(p => /Botanic garden/.test(p.getAttribute('aria-label')));
+      return { x: parseFloat(p.style.left), y: parseFloat(p.style.top) }; })()`);
+    const box = await evalJs(`(() => { const r = document.getElementById('plCanvas').getBoundingClientRect();
+      return { x: r.left, y: r.top }; })()`);
+    const touch = (type, pts) => S('Input.dispatchTouchEvent', {
+      type, touchPoints: pts.map((p, i) => ({ x: box.x + p.x, y: box.y + p.y, id: i })) });
+    const p0 = await pinAt();
+    const f0 = { x: p0.x - 50, y: p0.y + 40 };
+    await touch('touchStart', [f0]);
+    for (let k = 1; k <= 5; k++) await touch('touchMove', [{ x: f0.x + 6 * k, y: f0.y + 4 * k }]);
+    await touch('touchEnd', []);
+    await sleep(300);
+    const p1 = await pinAt();
+    check(Math.abs(p1.x - p0.x - 30) < 1.5 && Math.abs(p1.y - p0.y - 20) < 1.5,
+      `one finger pans the map with it: ${JSON.stringify([p0, p1])}`);
+    // Fingers 40px apart, spread to 64: ×1.6, around the point between them.
+    const P = { x: p1.x - 60, y: p1.y + 50 };
+    await touch('touchStart', [{ x: P.x - 20, y: P.y }, { x: P.x + 20, y: P.y }]);
+    for (let k = 1; k <= 6; k++) {
+      const spread = 20 + 2 * k;
+      await touch('touchMove', [{ x: P.x - spread, y: P.y }, { x: P.x + spread, y: P.y }]);
+    }
+    await touch('touchEnd', []);
+    await sleep(300);
+    const p2 = await pinAt();
+    const want = { x: P.x + 1.6 * (p1.x - P.x), y: P.y + 1.6 * (p1.y - P.y) };
+    check(Math.hypot(p2.x - want.x, p2.y - want.y) < 2,
+      `two fingers zoom in, around the point between them, and stay where they let go: ${JSON.stringify({ p1, p2, want })}`);
+    // Taps, as real touches. The place just pinned is the one picked out; a tap
+    // on the map itself puts it down, a tap on its pin picks it up again, and
+    // none of that throws away the zoom you just made — the Places map used to
+    // re-fit itself on every redraw.
+    const tap = async (p) => { await touch('touchStart', [p]); await touch('touchEnd', []); await sleep(450); };
+    const selRow = () => evalJs(`(() => { const r = document.querySelector('#itemList .it.sel'); return r ? r.innerText : ''; })()`);
+    check(/Botanic garden/.test(await selRow()), 'the place just pinned is the one picked out');
+    await tap(P);
+    check(!(await selRow()), 'a tap on the map itself puts it down');
+    const p3 = await pinAt();
+    check(Math.hypot(p3.x - p2.x, p3.y - p2.y) < 1.5, `and keeps the zoom you made: ${JSON.stringify({ p2, p3 })}`);
+    await tap({ x: p3.x, y: p3.y - 24 });                  // the bubble sits above its point
+    check(/Botanic garden/.test(await selRow()), 'a tap on a pin picks out its row');
+    const p4 = await pinAt();
+    check(Math.hypot(p4.x - p2.x, p4.y - p2.y) < 1.5, `still without moving the map: ${JSON.stringify({ p2, p4 })}`);
+    await tap({ x: p4.x, y: p4.y - 24 });
+    check(await visible('#placeSheet .modal-in'), 'and a second tap opens its page');
+    await S('Emulation.setTouchEmulationEnabled', { enabled: false });
+    await sleep(100);
+    await evalJs(`document.getElementById('plClose').click()`);
+    await sleep(400);
+
+
+
+    // ── where is it, on anything else ───────────────────────────────────
+    // Every other kind keeps the Where field in the ordinary sheet.
+    await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
+    await sleep(500);
+    await typeIn('Ramen night');
+    await evalJs(`document.getElementById('btnAdd').click()`);
+    await sleep(1200);
+    await evalJs(`(${rowOf('/Ramen night/')}).querySelector('[data-open]').click()`);
+    await sleep(500);
+    check(await visible('#itemSheet .modal-in'), 'anything else opens the ordinary sheet');
+    await evalJs(`(() => { const i = document.getElementById('isPlace');
+      i.value = 'toki u'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    check(/pick a suggestion/i.test(await evalJs(`document.getElementById('isPlaceAt').innerText`)),
+      'a typed name says it is just words until one is picked');
+    await sleep(900);
+    check(await evalJs(`document.querySelectorAll('#isPlaceSug .sug').length`) >= 1, 'typing offers places');
+    if (process.env.SHOT_WHERE) {
+      const { data } = await S('Page.captureScreenshot', { format: 'png' });
+      require('fs').writeFileSync(process.env.SHOT_WHERE, Buffer.from(data, 'base64'));
+    }
+    await evalJs(`document.querySelector('#isPlaceSug .sug').click()`);
+    await sleep(150);
+    check(await evalJs(`document.getElementById('isPlace').value`) === 'Toki Underground', 'tapping one fills the field');
+    check(!(await visible('#isPlaceSug')), 'and puts the list away');
+    check(/H Street/i.test(await evalJs(`document.getElementById('isPlaceAt').innerText`)), 'and says where it is pinned');
+    await evalJs(`document.getElementById('isSave').click()`);
+    await sleep(1200);
+
+    // Not left lying around: the whose-idea checks below count this list's rows.
+    await evalJs(`fetch('/api/space/sp1/items').then(r => r.json()).then(b => Promise.all(b.items
+      .filter(i => /Ramen night/.test(i.title)).map(i => fetch('/api/item/' + i.id, { method: 'DELETE' }))))`);
+
+    // ── a renamed theme ─────────────────────────────────────────────────
+    // Olive became Forest. A phone that saved "olive" must come back in Forest
+    // and remember it under the new name — not silently drop to Dusk, which is
+    // what an unknown theme does. The share-in below reloads anyway, so this
+    // reload costs nothing that follows it.
+    await evalJs(`localStorage.setItem('dw-theme', 'olive')`);
+    await S('Page.navigate', { url: `${BASE}/` });
+    await sleep(2200);
+    const renamed = await evalJs(`({ t: document.documentElement.dataset.theme,
+      saved: localStorage.getItem('dw-theme'), bg: getComputedStyle(document.body).backgroundColor })`);
+    check(renamed.t === 'forest' && renamed.saved === 'forest' && renamed.bg === 'rgb(17, 26, 21)',
+      `a phone that saved Olive opens in Forest: ${JSON.stringify(renamed)}`);
+    await evalJs(`localStorage.setItem('dw-theme', 'dusk'); document.documentElement.dataset.theme = 'dusk'`);
+
     // ── share in ────────────────────────────────────────────────────────
     // Arriving from a share sheet: the sheet opens pre-filled, you pick a list,
     // and it lands. One tap on the list, one on Add.
@@ -680,6 +931,14 @@ function connectCdp(wsUrl) {
     await sleep(1300);
     const cards = await evalJs(`document.querySelectorAll('#itemList .card').length`);
     check(cards >= 1, 'with cards in it');
+    // Split by whose idea it was: a heading per person, each over its own grid,
+    // so the posters stay a grid rather than becoming a list with labels.
+    check(await evalJs(`[...document.querySelectorAll('#itemList > .whose')]
+      .every(h => h.nextElementSibling && h.nextElementSibling.classList.contains('grid'))`)
+      && await evalJs(`document.querySelectorAll('#itemList > .whose').length`) >= 1,
+      'the shelf says whose idea each film was, a heading over each grid');
+    check(await evalJs(`document.querySelectorAll('#itemList > .grid > .card').length`) === cards,
+      'and every card sits in a grid');
     // There is no TMDB key here and the suite must never need the internet, so
     // every card is the typographic kind — which is exactly the state that has
     // to look right, both before TMDB answers and forever without a key.
@@ -729,6 +988,134 @@ function connectCdp(wsUrl) {
     await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
     await sleep(400);
 
+    // ── whose idea ──────────────────────────────────────────────────────
+    // Each tab says whose idea each thing was — theirs first, yours last — and
+    // whoever typed something can hand the credit to the person it came from.
+    // Activities has one of each by now: his record shopping, her share.
+    const sections = () => evalJs(`[...document.querySelectorAll('#itemList > .whose b')]
+      .map(b => b.textContent)`);
+    // Which heading each row sits under, by DOM order: a row belongs to the
+    // nearest heading above it.
+    // A section's rows sit in one card after its heading, so look inside it.
+    const under = (title) => evalJs(`(() => {
+      let h = null;
+      for (const el of document.getElementById('itemList').children) {
+        if (el.classList.contains('whose')) h = el.querySelector('b').textContent;
+        else if ([el, ...el.querySelectorAll('.it')].some(r => r.matches('.it')
+          && r.innerText.includes(${JSON.stringify(title)}))) return h;
+      }
+      return 'missing'; })()`);
+    const heads = await sections();
+    check(heads.join() === "Andrew's ideas,Your ideas", `his first, hers last — got ${heads}`);
+    check(await under('Go record shopping') === "Andrew's ideas", 'his is under his name');
+    check(await under('Khruangbin at the Anthem') === 'Your ideas', 'and her share under hers');
+    // Sentence case, with the person's initial — the redesign dropped the
+    // shouted uppercase labels everywhere.
+    check(await evalJs(`getComputedStyle(document.querySelector('#itemList .whose')).textTransform`) === 'none'
+      && await visible('#itemList .whose .av'), 'drawn as a heading with their initial, in sentence case');
+    check(await evalJs(`document.querySelector('#itemList .whose .av').innerText`) === 'A', "his section carries his initial");
+
+    // Not on his: the credit is the author's to give, and she did not write it.
+    await evalJs(`[...document.querySelectorAll('#itemList .it')]
+      .find(e => /Go record shopping/.test(e.innerText)).querySelector('[data-open]').click()`);
+    await sleep(500);
+    check(!(await visible('#isIdeaFld')), 'whose idea is not hers to change on his');
+    await evalJs(`document.getElementById('isCancel').click()`);
+    await sleep(300);
+
+    // On her own: hers by default, and his for the asking.
+    await evalJs(`[...document.querySelectorAll('#itemList .it')]
+      .find(e => /Khruangbin at the Anthem/.test(e.innerText)).querySelector('[data-open]').click()`);
+    await sleep(500);
+    check(await visible('#isIdeaFld'), 'whose idea is offered on her own');
+    check(await evalJs(`[...document.querySelectorAll('#isIdea button')].map(b => b.textContent).join()`)
+      === "Mine,Andrew's", 'as herself first, then the person she keeps the list with');
+    check(await evalJs(`document.querySelector('#isIdea button.on').textContent`) === 'Mine',
+      'starting from hers');
+    await evalJs(`[...document.querySelectorAll('#isIdea button')].find(b => /Andrew/.test(b.textContent)).click()`);
+    await sleep(100);
+    check(await evalJs(`document.querySelector('#isIdea button.on').textContent`) === "Andrew's",
+      'the choice shows before it is saved');
+    await evalJs(`document.getElementById('isSave').click()`);
+    await sleep(1100);
+    check(await under('Khruangbin at the Anthem') === "Andrew's ideas", 'saved, it moves under his name');
+    check((await sections()).join() === "Andrew's ideas", `and a heading with nothing under it goes — got ${await sections()}`);
+    await evalJs(`[...document.querySelectorAll('#itemList .it')]
+      .find(e => /Khruangbin at the Anthem/.test(e.innerText)).querySelector('[data-open]').click()`);
+    await sleep(500);
+    const meta = await evalJs(`document.getElementById('isMeta').textContent`);
+    check(/added by you/.test(meta) && /Andrew's idea/.test(meta), `the sheet says both halves: ${meta}`);
+    await evalJs(`document.getElementById('isCancel').click()`);
+    await sleep(300);
+
+    // From his side it is his idea, and the row owns up to who typed it.
+    await asUser(A);
+    await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
+    await sleep(500);
+    check(await under('Khruangbin at the Anthem') === 'Your ideas', 'on his side it is under his ideas');
+    check(await evalJs(`[...document.querySelectorAll('#itemList .it')]
+      .find(e => /Khruangbin at the Anthem/.test(e.innerText)).querySelector('.who').textContent`) === 'via Linnea',
+      'and says she was the one who wrote it down');
+
+    // As an admin he has full edit on hers: the words, who it is for, and whose
+    // idea it was — the last two were once the author's alone.
+    await evalJs(`[...document.querySelectorAll('#itemList .it')]
+      .find(e => /Khruangbin at the Anthem/.test(e.innerText)).querySelector('[data-open]').click()`);
+    await sleep(500);
+    check(await evalJs(`document.getElementById('isName').disabled`) === false, 'he can fix her wording');
+    check(await visible('#isSave'), 'and save it');
+    check(await visible('#isVis'), 'who it is for is offered on hers');
+    check(await visible('#isIdeaFld'), 'and so is whose idea');
+    await evalJs(`[...document.querySelectorAll('#isIdea button')].find(b => /Linnea/.test(b.textContent)).click()`);
+    await evalJs(`document.getElementById('isSave').click()`);
+    await sleep(1100);
+    check(await under('Khruangbin at the Anthem') === "Linnea's ideas", 'handed back, it moves under her name');
+    const order = (await sections()).join();
+    check(order === "Linnea's ideas,Your ideas", `HER IDEAS ABOVE HIS — got ${order}`);
+
+    // ── the redesign, by layout ─────────────────────────────────────────
+    // The emoji in a tile, the words beside it, the ring on the right — and the
+    // stored title never touched. Asked of the LAYOUT, like everything else.
+    await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
+    await sleep(500);
+    await typeIn('🏃‍♀️Go for a run');
+    await evalJs(`document.getElementById('btnAdd').click()`);
+    await sleep(1200);
+    const row = await evalJs(`(() => {
+      const r = ${rowOf('/Go for a run/')};
+      const b = r.querySelector('b').getBoundingClientRect();
+      const t = r.querySelector('.tick').getBoundingClientRect();
+      const hit = document.elementFromPoint(t.left + t.width / 2 + 20, t.top + t.height / 2);
+      return { tile: r.querySelector('.etile').innerText.trim(), title: r.querySelector('b').innerText,
+        right: t.left > b.right, ring: Math.round(t.width), hit: !!(hit && hit.closest('.tick')) }; })()`);
+    check(row.tile === '🏃‍♀️', `the leading emoji sits in its tile: ${row.tile}`);
+    check(row.title === 'Go for a run', `and the words beside it, typed without a space: ${row.title}`);
+    check(row.right, 'the ring is on the right, the thumb side');
+    check(row.ring === 26 && row.hit, `26px to look at, and still hit 20px out from its middle (${row.ring}, ${row.hit})`);
+    await evalJs(`(${rowOf('/Go for a run/')}).querySelector('[data-open]').click()`);
+    await sleep(500);
+    check(await evalJs(`document.getElementById('isName').value`) === '🏃‍♀️Go for a run', 'the stored title is untouched');
+    // Bottom sheets: anchored to the bottom, full width on a phone, an X you
+    // can hit, and none of the stacked Cancel / Close / Not now.
+    const sheet = await evalJs(`(() => { const r = document.querySelector('#itemSheet .modal-in').getBoundingClientRect();
+      const x = document.getElementById('isCancel').getBoundingClientRect();
+      return { bottom: Math.round(innerHeight - r.bottom), width: Math.round(innerWidth - r.width), x: Math.min(x.width, x.height) }; })()`);
+    check(Math.abs(sheet.bottom) <= 1 && sheet.width <= 1, `a sheet rises from the bottom, edge to edge: ${JSON.stringify(sheet)}`);
+    check(sheet.x >= 44, `with an X a thumb can hit (${sheet.x}px)`);
+    check(await evalJs(`[...document.querySelectorAll('.modal button')].filter(b =>
+      /^(cancel|close|not now)$/i.test(b.innerText.trim())).length`) === 0, 'and no stacked Cancel / Close / Not now buttons');
+    await evalJs(`document.getElementById('itemSheet').click()`);
+    await sleep(300);
+    check(!(await visible('#itemSheet .modal-in')), 'a tap on the scrim closes it');
+    // Done together is its icon and its count; the words are for a screen reader.
+    const doneChip = await evalJs(`({ label: document.getElementById('tabDone').getAttribute('aria-label'),
+      text: document.getElementById('tabDone').innerText.trim() })`);
+    check(/^Done together/.test(doneChip.label) && /^\d*$/.test(doneChip.text),
+      `Done together is an icon and a count, labelled for a screen reader: ${JSON.stringify(doneChip)}`);
+    check(/^\d+ to do$/.test(await evalJs(`document.getElementById('spaceCount').innerText`)), 'with how many on the left');
+    await evalJs(`fetch('/api/space/sp1/items').then(r => r.json()).then(b => Promise.all(b.items
+      .filter(i => /Go for a run/.test(i.title)).map(i => fetch('/api/item/' + i.id, { method: 'DELETE' }))))`);
+
     // ── [hidden] still means hidden, by LAYOUT ─────────────────────────
     // The map is parked, so its flow cannot be driven from the UI — but the
     // property that block existed to guard is not about the map. `.items{
@@ -737,7 +1124,7 @@ function connectCdp(wsUrl) {
     // gone. Same trap that hid nothing in the item sheet a day later. Assert it
     // where it lives, on the panes themselves, so it is still guarded when the
     // map comes back.
-    for (const sel of ['#itemList', '#mapWrap', '#visRow', '#kindNav']) {
+    for (const sel of ['#itemList', '#visRow', '#kindNav', '#isIdeaFld', '#placesTop', '#plFind', '#plInfo', '#nudgeRow']) {
       const got = await evalJs(`(() => {
         const e = document.querySelector('${sel}');
         if (!e) return 'missing';

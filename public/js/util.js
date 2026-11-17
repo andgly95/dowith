@@ -60,3 +60,49 @@ export function resetViewport() {
     setTimeout(() => window.scrollTo(0, 0), 260);
   });
 }
+
+// A title's leading emoji, split off for the tile on a row — presentation only.
+// The stored title is never touched: the edit field shows the whole string, and
+// a title typed with no space after the emoji ("🏋️Work out") lines up like the
+// rest. ZWJ sequences, skin tones and flags included. A title that is ONLY an
+// emoji keeps itself as the words too, so a row is never blank.
+//
+// Also what a place search is sent without: Photon has never heard of "🍜".
+const LEAD = /^((?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:️|⃣|\p{Emoji_Modifier}|\p{Regional_Indicator}|‍\p{Extended_Pictographic})*)\s*/u;
+export function leadEmoji(title) {
+  const t = String(title || '');
+  const m = LEAD.exec(t);
+  if (!m) return { emoji: '', rest: t };
+  return { emoji: m[1], rest: t.slice(m[0].length) || t };
+}
+
+// Metres between two points, as the crow flies. Good to a few metres at city
+// scale, which is all "3.6 mi" needs.
+export function metres(a, b) {
+  if (!a || !b) return null;
+  const R = 6371e3, rad = (d) => (d * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+// Miles where people think in miles, kilometres everywhere else.
+const MILES = /^en-(US|GB|LR|MM)$/i.test((typeof navigator !== 'undefined' && navigator.language) || '');
+export function distLabel(m) {
+  if (m === null || m === undefined || !Number.isFinite(m)) return '';
+  if (MILES) {
+    const mi = m / 1609.344;
+    return mi < 0.1 ? 'here' : `${mi < 10 ? mi.toFixed(1) : Math.round(mi)} mi`;
+  }
+  const km = m / 1000;
+  return km < 0.1 ? 'here' : `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
+}
+
+// "Oct 4", or "Oct 4, 2025" once it is not this year.
+export function shortDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const opts = { month: 'short', day: 'numeric' };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  return d.toLocaleDateString('en-US', opts);
+}

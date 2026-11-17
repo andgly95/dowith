@@ -22,14 +22,17 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 131 assertions + a headless-chromium check
+- **Tests:** `npm test` — 157 assertions + a headless-chromium check
 
 ## The model
 
 ```js
 space = { id, name, memberIds: [...], createdBy, createdAt }
 item  = { id, spaceId, authorId, title, notes, visibility, tags,
-          mod: { place?, link? }, done, doneAt, doneBy, createdAt, updatedAt }
+          mod: { place?, link?, watch? }, done, doneAt, doneBy,
+          when?, plannedBy?, visit?, editedBy?, ideaBy?, createdAt, updatedAt }
+mod.place = { name, lat, lon, address, area?, what?, osm? }   // area/what/osm only with a pin
+visit     = { book, again: 'soon'|'maybe'|'once'|null, memory } // see Places
 ```
 
 - **A space holds people.** Two, usually. A pair needs no name — from your side it
@@ -63,7 +66,8 @@ convenience; this one is the promise.
   bug this app cannot have, and there is a truth-table row for every way in.
 - **Editing and completing are different rights.** The sentence stays the author's;
   ticking it off is anyone who can see it, because doing the thing is the point and
-  "Linnea ticked off record shopping" is the nice bit.
+  "Linnea ticked off record shopping" is the nice bit. The one exception to editing
+  is an **admin** (below) — and it is never an exception to *seeing*.
 - **A shared item stops being visible once its author leaves the space.** `shared`
   means "the two of us" and there is no longer a two of us.
 - Routes answer **404, not 403**, for something you cannot see. "This exists but is
@@ -79,7 +83,13 @@ succeed and change nothing.
   a membership check, never from the request body. There is no request shape that
   signs an item with someone else's name or writes it into someone else's list.
 - A PATCH cannot move an item between spaces, reassign its author, or set `done` —
-  ticking off is its own operation because *who* did it is part of the record.
+  ticking off is its own operation because *who* did it is part of the record. It
+  can carry `ideaBy`, but only from the author and only through `SP.canCredit`
+  (see *Whose idea*).
+- **A PATCH neither sets nor loses `mod.watch`.** `mod` is replaced wholesale and the
+  sheet sends only the slices a person types, so saving a note on a film used to
+  take its poster with it. The route now carries the poster across (and still drops
+  it on a rename or a change of kind); only `/watch` sets or clears it.
 - The default is `shared`. A default of `private` would quietly make the app a
   diary.
 
@@ -106,6 +116,73 @@ and this app shows other people's items to you).
 
 **A map view is a renderer over items carrying `place`** — the seam is already
 there. Same for anything else: add a module, add a renderer.
+
+## Admins — correcting things, not reading them
+
+`admins` in `config.local.json` is a list of user ids (`["link:andrew"]`). **There is
+no route that grants it** — shell access to the box is the credential, the same as
+minting a sign-in link — and it is read live, so adding or removing someone needs no
+restart (the suite revokes it mid-run to prove that).
+
+What it buys: **an admin has the author's full edit on anything they can already
+SEE** — the words, the kind, the poster, the place, whose idea it was, who it is for,
+and deleting it. A typo in Linnea's title, a film filed as a show, the wrong
+"Obsession", a duplicate, her idea that was really his.
+
+- **`SP.canEdit(item, uid, spaces, { admin })` calls `canSee` inside it.** Admin is a
+  right to fix what is on your screen, never a key to anybody's private things. A
+  private item of hers is the same 404 to an admin as to a stranger, and a test
+  asserts *admin-can-edit ⇒ can-see* for every visibility, author, list and person.
+  The rose is untouched — `pleasure.view()` knows nothing about admins.
+- **Who it is for and whose idea it was were the author's alone at first**, and
+  became an admin's too when he asked for full edit (`SP.canSetVisibility`,
+  `SP.canCredit`, both `{ admin }` and both behind `canSee`). An admin can narrow or
+  widen what is on his own screen; he still cannot reach past it. Making her item
+  `private` makes it vanish from his screen too — that is the rule working.
+- **The sheet asks the server**: the wire carries `canEdit`, `canSetVisibility` and
+  `canCredit`, and the client shows a control only when its flag is true. None of
+  them is worked out client-side.
+- **`editedBy` records whose hand was last on the wording**, from the session, via
+  `applyPatch(item, raw, now, by)`. The row still says it is Linnea's, so the sheet
+  says *"edited by Andrew"* — otherwise an admin quietly puts words in her mouth.
+- Only `=== true` counts; `{ admin: 'yes' }` is not an admin.
+
+## Whose idea — credit, not ownership
+
+Every kind tab's to-do list is **split by whose idea each thing was**: a heading
+per person (`LINNEA'S IDEAS 2`, `YOUR IDEAS 6`), theirs first and yours last, over a
+grid of posters on a shelf or plain rows elsewhere. "One of yours tonight, one of
+mine next time" needs to be able to see which are which. A single heading is still
+drawn when everything is one person's — "all four recipes are Linnea's" is exactly
+the kind of thing this is for. A one-person list has no headings.
+
+`item.ideaBy` is who it came from **when that is not the author** — Andrew holding
+the phone while Linnea says "we should watch Obsession". The sheet's **Whose idea**
+control (`Mine` / `Linnea's`) hands it over.
+
+- **A label, not a right.** `authorId` is still who WROTE it, and every rule in
+  `lib/spaces.js` keys on that; nothing reads `ideaBy` except `canCredit` and
+  `ideaOf`. Crediting her does not let her edit it, and a private thing credited to
+  her is still invisible to her. A property test runs every visibility, author,
+  list, viewer and credited person and asserts each right reads the same with the
+  credit as without it.
+- **The author's to give, or an admin's** (`SP.canCredit`), and only ever to someone
+  in the item's own list — a name outside it is refused and nothing in that PATCH
+  lands. Creating cannot set it.
+- **Crediting yourself clears it**, so "the author's own idea" is one state.
+- **"Yours" is decided against who is signed in** (`S.wire.me.id`), not only the
+  server's `ideaMine`, so her section stays above yours whatever the wire carries.
+  It was first ordered by count, and on a wire without the flag that put his six
+  films above her two.
+- **A name on screen is one the viewer already knows** (`SP.nameable`). A public
+  wish reaches everyone who shares a list with its author, so a credit to — or an
+  admin's "edited by" from — one of the author's OTHER lists would introduce a
+  stranger. Those fall back to the author and to nothing. The wire overrides the raw
+  `ideaBy`/`editedBy` ids that `...it` would otherwise carry.
+- Under a heading that says it was your idea, a row somebody else typed says
+  **`via Linnea`**; the sheet says both halves ("added by you · Linnea's idea").
+- `enter()` flattens each grid into its cards, so the stagger still runs over
+  posters and not over whole sections.
 
 ## Invites
 
@@ -258,24 +335,66 @@ one and will for a long time, so the shelf was a screen you tapped through on th
 to the only place you were ever going. The back arrow still reaches it — the common
 case is free and the rare one costs a tap, rather than the other way about.
 
-Above the list there is **one small toggle, `Done together`**, at the right-hand end
-— not a tab bar. It first shipped with the size and weight of the three-up row it had
-stopped being part of, which put a bold card-backed button where the primary action
-goes; it is not the primary action, the list under it is.
+### The redesign (Nov 17) — what makes it read as current
+
+From the design handoff on the `design/redesign` branch (`design/redesign/HANDOFF.md`,
+mockups in `screens/`). Five rules did most of it, and they hold everywhere:
+
+1. **Serif for display only** — the list's name, "Do With", sheet titles, a place's
+   title, a poster-less card. Rows, labels, chips and buttons are `--sans`; a row title
+   is 16.5px/500. A whole list set in 17px serif was most of what read as 2015.
+2. **Rows sit in rounded cards** (`.group`, `--r-card`) with hairlines inset to start
+   after the emoji tile. A section's rows are one card; a month's in the record too.
+3. **Sentence-case labels.** No more uppercase-and-tracking: field labels, months and
+   section headings are 13.5–15px/600.
+4. **Bottom sheets, not centred modals.** Every `.modal` rises from the bottom with a
+   grabber and a 44px **X** in its header; the stacked `Cancel` / `Close` / `Not now`
+   ghosts are gone. The X keeps the old button's id (`isCancel`, `meCancel`…) so every
+   close handler survived, and **a tap on any sheet's scrim clicks its X** (app.js), so
+   whatever closing that sheet does — forget a share, repaint the rose's dot — happens
+   whichever way you leave.
+5. **44px minimum hit targets** (`--tap`). The tick is 26px to look at and 48px to hit:
+   its `::after` is the hit area, and a pseudo-element is part of the button.
+
+**The header** is back on the left, the rose on the right, and under them, left-aligned,
+"To do with" and the name in the serif at 34px — still the button into the list's
+settings. **The control row** under it: the count on the left in the tab's own verb
+(`5 to do`, `8 to watch`, `6 to go`, `4 to make`), and the chips on the right.
+
+**A row** is `[emoji tile] [title / one line of meta] [ring]`. The tile holds the
+title's **leading emoji** — `leadEmoji()` in util.js, ZWJ sequences, skin tones and
+flags included — or the kind's icon when there is none. **Presentation only**: the
+stored title is never touched, the edit field shows the whole string, and a title typed
+with no space (`🏃‍♀️Go for a run`) lines up like the rest. The ring is on the
+**right**, the thumb side; every celebration rule is relative to `.tick`, so the
+animation moved with it. The meta is one 13px line of words separated by dots, not a
+row of pills.
+
+**The `[hidden]` trap is settled globally**: `[hidden]{display:none !important}`. It
+had fired three times (`.kindnav`, `.items`, the sheet's fields). The suite still
+asserts by layout, because a more specific rule can always win.
+
+**Class names are global — again.** The account's grouped rows were first called
+`.card` and every poster on the shelf grew a box behind it. They are `.box`.
+
+Above the list there is **one small toggle, `Done together`** — not a tab bar — and it
+is now **its sage check icon and its count only**, with the words as its
+`aria-label` (`"Done together, 9"`). On a narrow phone the words were what wrapped.
 
 - **"To do" was a tab for the state you were already in.** The count that mattered was
   never on it either; the list underneath is the count.
-- **The map is parked** until it has something worth showing. Its renderer, its
-  geocoding and every path into it are untouched — only the way in is gone, which is
-  one line in `render()` and one control in the markup. The `[hidden]`-by-layout
-  assertion that guarded it was kept and pointed at the panes directly, because that
-  trap (`display:flex` beating the UA `[hidden]` rule) is not about the map and has now
-  bitten this app twice.
+- **There is no Map chip.** There was one — a cross-kind Map view at the left end
+  of the chips, once something had a place — and it went when the Places tab became
+  the map (Nov 17): a second, lesser map of the same places was one way too many in.
 
 **The composer shows who a new thing is for only once you start typing.** Visibility is
 a question about the thing being written, so it has no business being on screen before
 there is one — and the list gets two rows of height back for the whole time you are not
-typing. It appears on the first keystroke and goes again when the box is empty.
+typing. It appears on the first keystroke and goes again when the box is empty. It is
+three equal segments that say what they mean — `Just me · only you`, `Us · you and
+Linnea` (in a pair it names them; in a group, "this list"), `Anyone · all your people`.
+The composer is one 52px pill with the **+ inside it**, tinted while empty and filled
+once there is something to add.
 
 ## The bottom nav — one tab per kind
 
@@ -406,6 +525,13 @@ Island". No confident match means no poster, which the card already draws proper
   everywhere else. A tier of something already listed is then dropped — "Netflix" plus
   "Netflix Standard with Ads" is one service twice, and on a card with room for four
   that costs a real one.
+- **A logo tile carries a hairline ring.** The handoff saw a "gap" in one film's
+  row and asked for a missing-image fallback — which already existed. It was
+  never a missing image: Apple TV's logo is a black tile, and on a dark card a black
+  tile with no edge is a hole. **Measure the thing before fixing the theory.**
+- **Tiers are folded on the way OUT too** (`watch.dedupeServices` in `itemWire`). A
+  film looked up before the tier rule still had "Paramount Plus Premium" *and*
+  "Essential" on disk; the store is not rewritten for a presentation rule.
 - **Only `flatrate` providers.** Rent and buy are a different question, and a card that
   says "on Amazon" when it means "$3.99 on Amazon" is lying quietly — the kind of lie
   nobody catches until they are on the sofa. Capped at four; a card is not a directory.
@@ -599,20 +725,147 @@ because a lock screen reads itself out loud in a room.
   worth sending, and a failed send doesn't burn the week. "Not much on the list" is
   not a failure and doesn't count against the retry budget.
 
+## Places — a map with the list under it (`public/js/pl.js`)
+
+The Places tab is not a list with a map toggle: **the map fills the top half and the
+list is a sheet over the bottom of it**, and **their emojis are the pins** (the leading
+emoji, in a bubble ringed coral for to-go and sage for been). It is the same items as
+every tab — `place` is just the kind whose only field is a place, detected from the
+manifest — drawn the way people think about places: where, how far, been or not.
+
+- **To go / Been** float over the map and replace `Done together` on this tab (they
+  set the same `tab` the chip does). The set you are not looking at stays on the map
+  as dots, so switching never empties it. Rows carry whose idea it was as an initial
+  on the tile's corner — no sections here, sorted **closest first** when the phone has
+  said where it is, newest first when not; Been is most recent first and reads
+  "Went Oct 4 · Can't wait to go back".
+- **Tap a pin** and its row is highlighted and scrolled to; **tap it again** (or tap a
+  row) and its page opens; **tap the map itself** and the selection goes. Pinch to zoom. The header, title and control row give way to back, the
+  segmented control and the rose, floating over the map in `--glass`. **No backdrop
+  blur yet** — they sit where Safari 26 samples the status-bar tint, and that has to be
+  measured on a phone before it is risked.
+- **Which one?** Typing three characters in the Places composer swaps the list for up
+  to three **numbered** suggestions with distances, the same numbers on the map. **One
+  tap creates it pinned**, title exactly as typed; **the + still adds it as words** with
+  no pin. Then a "Pinned to the map" card with **Undo** (deletes it, puts your words
+  back). Choosing, not guessing: nothing gets a pin unless somebody tapped its place.
+  The leading emoji is not sent — Photon has never heard of "🍜".
+- **A place's page replaces the generic sheet** for the place kind, from anywhere (a
+  row, a pin, the calendar): a map snippet, the title as typed, the
+  place's own name, "Bar · Georgetown · 1.3 mi", four actions — **Directions** (a Google
+  Maps URL to the pin's coordinates, keyless), **Plan it** (Go again once been),
+  **Website**, **Share** — then hours, address and website, **Your plan** (When, saving
+  on change; **Book ahead**), whose idea, **Why go** (the notes), who sees it, **We went
+  here** (it is `done`), and Change the place / Move to another tab / Delete.
+- **Once been**, the plan becomes a sage **Been together** card (the day, who ticked it
+  off) with **Would you go back?** (Can't wait / Maybe someday / Once was enough), and
+  Why go gives way to **What was it like?** We went here becomes a quiet "Not been
+  after all".
+- **A place with no pin** — every place on the live list on Nov 17 — shows **Find it on
+  the map** in the snippet's place, opening a Which one? search with the title as the
+  query. Never matched in bulk: a wrong pin is worse than a wrong poster.
+
+**Why OpenStreetMap and not Google, which the handoff specified.** Google needs a
+billing account and keys, and the handoff's own rule was that with no key the Places
+tab is the ordinary list — which would have shipped none of it. Google's terms also
+forbid its place data on a non-Google map and cap caching its coordinates at 30 days.
+So it is built on what was already here: OSM tiles, Photon as you type, and Nominatim
+by OSM id for a place's hours (`GET /api/item/:id/place`). Swapping in Google later is
+`lib/places.js` plus a Maps JS map in `pl.js`; the screens would not change.
+
+**The visit** (`item.visit`, `POST /api/item/:id/visit`, `items.setVisit`) is the half
+of a place that is about the two of you: `book` is planning, so — like `when` — anyone
+who can see the item may set it; `again` and `memory` are the record, so the same
+people may, **and only once it is done** (409 before). It lives **beside `when`, not in
+`mod.place`** as the handoff drew it, because a place with no pin still needs it and
+`mod` is replaced wholesale by every save. A PATCH can neither set nor lose it. Nothing
+left is `null`, not three falses.
+
+**Opening hours** are read by `lib/hours.js` — pure, small, and it gives up rather than
+guess: the common shapes (`Mo-Fr 08:00-17:00; Sa 10:00-14:00`, `24/7`, `off`, `Fr-Mo`
+wrapping, `PH` skipped) become a Monday-first week, a day no rule mentions is closed
+(that is what the format means), and anything else is `null` so the page shows the raw
+string. **Which day is today is the phone's call** — the server's Saturday is UTC's.
+
+**Privacy, the same trade as TMDB and Nominatim.** While you type on the Places tab,
+the words go to Photon, biased toward the phone's position if it said, else the middle
+of the list's pins. The position is asked once, used for distance and that bias, and
+**never stored** — not on the phone, not in the store; the in-memory suggestion cache
+keys on it rounded to ~1km. A place page asks Nominatim about an OSM id, through
+`myItem`, so a private item's place is a 404 to anyone else.
+
 ## The map
 
-`public/js/map.js` — a second view over items carrying `place`. No mapping library:
+`public/js/map.js` — one engine, `createMap(canvas, opts)`, drawing two maps: the
+**Places tab** and the **snippet** at the top of a place's page. The caller says what
+goes on it (`points()`, with `fit:false` for things drawn but not framed, like the other
+set's dots and the phone's position). No mapping library:
 tiles are plain `<img>` at an integer zoom in Web Mercator, the same approach trips
 uses. Eighty lines, no dependency to break, and it degrades to pins-on-a-blank-
 ground if the tiles don't load, which still answers "is there anything near us".
 
-- Pan and zoom are hand-rolled pointer handling. During a drag the layer moves
-  under a CSS transform and only re-renders on release — re-rendering per
-  `pointermove` re-requests every tile. `moved` suppresses the click after a drag
+- Pan and zoom are hand-rolled pointer handling. During a gesture the layer moves
+  under a CSS transform and only re-renders when the fingers come off — re-rendering
+  per `pointermove` re-requests every tile. `moved` suppresses the click after a drag
   and **clears on the next tick**, or one pan disables every pin until you drag again.
+- **Every pointer is tracked, not just the first: one finger pans, two pinch.** The
+  first engine tracked one, so a second finger restarted the drag from where it landed
+  and a pinch slid the map sideways without zooming. A pinch zooms around the point
+  between your fingers; lifting one finger carries on as a pan. Trackpad pinches (wheel
+  + ctrlKey) and wheels zoom toward the cursor, one redraw a frame. The suite pinches
+  with real touches through the protocol and measures where the pin is drawn — and
+  that check fails on the old engine, which is how it is known to test anything.
+- **Zoom is continuous.** Tiles only exist at whole levels, so they are drawn at the
+  nearest one and scaled by the remainder (×0.71–×1.41). Snapping to a whole level
+  when the fingers lift reads on a phone as the map flinching away from you.
+- **Re-framed only when what it shows changes** (the other tab, a pin added or gone,
+  suggestions arriving). The Places map first re-fitted on every redraw, so tapping
+  a pin after zooming threw the zoom away. A tap on the map itself puts the selected
+  pin down.
+- **A tap is not a pan.** Release used to re-render on every pointerup — which
+  destroyed the pin before its click could land — and pointer capture sent that click
+  to the canvas anyway. Now a release only re-renders after real movement, and a press
+  that starts on a pin is not captured.
 - `view.z === null` means auto-fit; the first gesture pins it.
-- The map tab only appears once something has a place. A permanently empty tab is
-  worse than no tab.
+- **A tile that fails to load is removed**, not left as a broken-image glyph with a
+  seam round it — the blank ground *is* the fallback. The suite blocks
+  `tile.openstreetmap.org` (it must never need the internet), which is how this was
+  noticed.
+
+### Where — choosing a place, not guessing one (`lib/places.js`)
+
+The Where field **suggests real places as you type**, and the one you tap is stored
+**with its coordinates and address**, so it lands exactly where you meant. The same
+argument as the film chooser: "Toki" is a ramen bar on H Street to you and a city in
+Japan to a geocoder, a wrong pin looks exactly like a right one, and recognising the
+right row costs one tap.
+
+- **Photon, not Nominatim.** Nominatim's usage policy forbids autocomplete outright.
+  Photon (komoot) is built for type-ahead on the same OSM data, so pins agree with the
+  tiles, and it needs no key — a feature that needs a billing account first is one
+  nobody turns on. Public instance, fair use: results are cached **in memory**, not in
+  the store (every prefix anybody typed is not worth a JSON file forever).
+- **Proxied** (`GET /api/place/suggest`) so Photon sees this box, not each phone, and so
+  the provider is one file. If OSM is ever too thin, swapping in Google Places is
+  `suggest()` and nothing else.
+- **Biased to the median of the list's existing pins**, with `location_bias_scale=0.1`
+  and `zoom=12` — Photon's default bias put a ramen place in Ryazan first for a
+  query made from DC. A specific name still wins from anywhere. Median, not mean,
+  so one holiday pin does not drag the bias into the ocean. `0,0` is no bias.
+- **Under Places, an empty Where starts from the title** — the title IS the place.
+  Detected from the manifest (a kind whose only mod is `place`), not a hard-coded id.
+- **Editing the text after picking unpicks it.** The coordinates belong to the place
+  you tapped, not to your edit; the line under the field says which you have
+  ("Just words for now — pick a suggestion…"). A bare name still works and is kept
+  as words. It used to be looked up lazily when the Map view opened; with that view
+  gone nothing calls `POST /api/space/:id/geocode` from the client any more. The route
+  and its tests stay — scoped, harmless, and the obvious thing to call if a map of
+  every kind ever comes back.
+- **Not hidden on blur.** On a phone the input blurs before the tap on a suggestion
+  lands, so hiding on blur makes every suggestion untappable.
+- Coordinates are range-checked here AND by the module gate; a pin in the sea is
+  refused twice. `placesEndpoint` and `geoEndpoint` in config exist so the suite can
+  point both at a local stand-in.
 
 ### Geocoding
 
@@ -637,6 +890,10 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
   item exists.
 - The cache is shared across everybody and lives in `state.places` — a place's
   coordinates are not anybody's private business.
+- **A place's details** (`geo.placeDetails(osm)`) go through the same one-a-second
+  queue: Nominatim `/lookup` by OSM id with `extratags`, held **in memory** for six
+  hours, never in the store — they are somebody else's live facts about a business.
+  Links are http(s) only. `geoLookupEndpoint` lets the suite point it at a stand-in.
 
 ## HTTP routes
 
@@ -645,16 +902,19 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `POST /api/auth/google` | ID token + optional invite → session. **Public.** |
 | `GET /api/auth/me` · `POST /api/auth/signout` | status; sign out |
 | `GET /api/invite/:code` | who invited you — **works signed out** |
-| `GET /api/state` | you, your spaces with per-viewer titles, module manifest |
+| `GET /api/state` | you, your spaces with per-viewer titles and counts (`byKind` too), module manifest |
 | `POST /api/space` · `PATCH /api/space/:id` · `POST /api/space/:id/leave` | lists |
 | `GET /api/space/:id/items` · `POST /api/space/:spaceId/item` | the list itself |
 | `POST /api/space/:id/invite` | mint an invite into this list |
 | `PATCH`·`DELETE /api/item/:id` · `POST /api/item/:id/done` | one thing |
 | `POST /api/item/:id/when` | put it on a day `{date, time?}` or `{clear:true}` — anyone who can see it |
+| `POST /api/item/:id/visit` | `{book?, again?, memory?}` — anyone who can see it; `again`/`memory` only once done (409) |
+| `GET /api/item/:id/place` | a place's hours, website, address — live from OSM by its id; 404 if you can't see it |
 | `GET`·`POST /api/space/:id/pleasure` | the rose — pairs only; partner's try answers appear only as matches |
 | `GET /api/square/status` · `POST /api/square/import` | the bridge (501) |
 | `GET /share` | share target / Shortcut / bookmarklet — serves the shell |
-| `POST /api/space/:id/geocode` | resolve place names you can see, batched |
+| `POST /api/space/:id/geocode` | resolve place names you can see, batched — not called by the client since the Map view went |
+| `GET /api/place/suggest?q=&lat=&lon=` | places as you type (Photon, proxied, cached); writes nothing |
 | `POST /api/push/subscribe` · `/unsubscribe` · `/test` | nudges |
 
 `mySpace()` and `myItem()` resolve from the session plus a membership/visibility
@@ -665,12 +925,23 @@ entitled to. There is no route that takes a user id.
 
 - **`lib/spaces.js` is pure and is the source of truth for who sees what.** Don't
   mirror `canSee` into the client; the client renders what the server sent.
-- **Every colour is a token.** Themes (`dusk`, `olive`) are one `[data-theme]` block
+- **Every colour is a token.** Themes (`dusk`, `forest`) are one `[data-theme]` block
   of tokens each in `style.css`, plus a name in `THEMES` in `app.js`. Tints go through
   `color-mix(… var(--accent) 16%, transparent)`, never a copied `rgba()`, or they stay
   coral under every other theme. Scoped by attribute rather than only `:root`, so a
   picker swatch carries `data-theme` itself and paints from the same values. Per
   device (`localStorage`), applied by an inline `<head>` script before first paint.
+  - **Derived tokens** (`--sheet`, `--accent-tint`, `--sage-tint`, `--glass`, the
+    `--r-*` radii, `--tap`) are `color-mix()` over the palette, declared on
+    `:root,[data-theme]` — BOTH, because a custom property reading `var(--bg)`
+    resolves where it is declared, and on `:root` alone a swatch would wear the
+    page's theme. The suite asserts it.
+  - **Renaming a theme needs a migration.** Olive became Forest (Nov 17), and a
+    phone that saved `"olive"` would otherwise drop to Dusk with no way to tell
+    why. Both readers map it — the `<head>` script (first paint) and `RENAMED` in
+    `app.js` — and the suite reloads with `"olive"` saved to prove it.
+  - **`--faint` is decoration, never something you must read.** It is ~3:1 on a
+    card; placeholders and the tick ring were on it and moved to `--dim`.
 - **`esc()` for anything interpolated into innerHTML** — this app shows other
   people's words to you.
 - **Assert visibility by layout in tests** (`offsetWidth`/`getClientRects`), never
@@ -678,7 +949,10 @@ entitled to. There is no route that takes a user id.
 - **No build step.** `style.css` gets `?v=STAMP`; the JS tree is served under
   `/js-<STAMP>/`, anchored on `src="` and global (a bare `.replace('/js/', …)`
   takes the first match anywhere in the file, and a comment mentioning a path was
-  once enough to eat the stamp). **Restart to bust caches.**
+  once enough to eat the stamp). **Restart to bust caches** — and restart after ANY change. A running server reads
+  `index.html` and the JS from disk on every request, so an old process serves the
+  NEW screen against its OLD routes: the first cut of *Whose idea* reached a phone
+  that way, and an old PATCH quietly dropped a film's poster under it.
 - **The suite points `CONFIG_FILE` at scratch space before requiring lib/config**,
   which resolves its path once at load. A test suite must not write into the thing
   it is testing.
