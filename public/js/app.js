@@ -5,6 +5,7 @@ import { loadState, get, subscribePush, unsubscribePush } from './api.js';
 import { initAuth, checkAuth, showAuth, signOut } from './auth.js';
 import { initShelf, renderShelf } from './shelf.js';
 import { initSpace, openSpace } from './space.js';
+import { openCook } from './cook.js';
 import { initShare, incoming, openShare } from './share.js';
 
 function toShelf() {
@@ -113,7 +114,7 @@ async function start() {
   // happens whichever way you leave it.
   document.querySelectorAll('.modal').forEach((m) => m.addEventListener('click', (e) => {
     if (e.target !== m) return;
-    const x = m.querySelector('.modal-hd .x, .pl-snip .x');
+    const x = m.querySelector('.modal-hd .x, .pl-snip .x, .rp-x');
     if (x) x.click();
   }));
   // Land in the list, not on the shelf of lists.
@@ -124,7 +125,21 @@ async function start() {
   // is the right way round: the common case is free and the rare one costs a
   // tap, rather than the other way about.
   const first = (S.wire && S.wire.spaces) || [];
-  if (first.length) await openSpace(first[0].id); else toShelf();
+  // A nudge or a timer says which list — and, for a timer, which recipe and
+  // step to cook from. Only a list you are in; anything else is the first.
+  const deep = deepLink(location.href);
+  const target = deep && first.find(x => x.id === deep.list);
+  if (target) await openSpace(target.id);
+  else if (first.length) await openSpace(first[0].id); else toShelf();
+  if (deep) { followCook(deep); history.replaceState(null, '', '/'); }
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', async (e) => {
+      const d = e.data && e.data.type === 'open' ? deepLink(new URL(e.data.url, location.origin).href) : null;
+      if (!d) return;
+      if (d.list && d.list !== S.spaceId && first.some(x => x.id === d.list)) await openSpace(d.list);
+      followCook(d);
+    });
+  }
 
   // A share survives the sign-in round trip because it lives in the URL, so this
   // runs after auth rather than before it.
@@ -136,6 +151,18 @@ async function start() {
     if (document.hidden) return;
     loadState().then(() => { if (S.spaceId) return; renderShelf(); }).catch(() => {});
   });
+}
+
+// `/?list=<space>&cook=<item>&step=<n>`, from a nudge or a cooking timer.
+function deepLink(href) {
+  const q = new URL(href).searchParams;
+  const list = q.get('list');
+  const cook = q.get('cook');
+  if (!list && !cook) return null;
+  return { list, cook, step: Math.max(0, Number(q.get('step')) || 0) };
+}
+function followCook(d) {
+  if (d && d.cook && (S.items || []).some(i => i.id === d.cook)) openCook(d.cook, { step: d.step });
 }
 
 async function boot() {

@@ -118,6 +118,57 @@
     <nav class="kindnav" id="kindNav"></nav>
   </section>
 
+  <!-- ───────────── COOK MODE ─────────────
+       One step per screen, readable from across a counter. No nav, no composer. -->
+  <section id="scr-cook" class="screen cook">
+    <header class="ck-top">
+      <button type="button" class="x" id="ckClose" aria-label="Stop cooking"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+      <b id="ckStep">Step 1</b>
+      <span class="ck-serves" id="ckServes"></span>
+    </header>
+    <div class="ck-prog" id="ckProg" aria-hidden="true"></div>
+    <div class="ck-line">
+      <span id="ckWake" hidden><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.6"/><path d="M12 3.5v1.8M12 18.7v1.8M3.5 12h1.8M18.7 12h1.8M6 6l1.3 1.3M16.7 16.7L18 18M6 18l1.3-1.3M16.7 7.3L18 6"/></svg>Screen stays on</span>
+      <span id="ckOther" hidden></span>
+    </div>
+    <div class="ck-tray" id="ckTray" hidden></div>
+    <div class="scroll ck-body" id="ckBody"></div>
+    <div class="ck-nav">
+      <button type="button" class="ck-back" id="ckBack"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5.5M11 6l-6 6 6 6"/></svg>Back</button>
+      <button type="button" class="primary ck-next" id="ckNext">Next step</button>
+    </div>
+    <!-- Start, pause and done are announced; the per-second count is not, or a
+         screen reader would read it every second. -->
+    <div class="sr" aria-live="polite" id="ckSay"></div>
+  </section>
+
+  <!-- ───────────── MADE IT ───────────── -->
+  <section id="scr-made" class="screen made">
+    <header class="ck-top"><button type="button" class="x" id="mdClose" aria-label="Back to the steps"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></header>
+    <div class="scroll">
+      <div class="md-in">
+        <span class="md-ok"><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"/></svg></span>
+        <h1>Made it</h1>
+        <p class="md-title" id="mdTitle"></p>
+        <p class="md-when" id="mdWhen"></p>
+        <div class="box md-card"><b>Would you make it again?</b><div class="chips" id="mdAgain"></div></div>
+        <div class="box md-card" id="mdOutBox"><b>Ran out of anything?</b><small>Tap it and it goes on the list to buy.</small><div class="chips" id="mdOut"></div></div>
+        <label class="fld"><span>Tweaks for next time</span><textarea id="mdTweaks" rows="3" maxlength="500" placeholder="More garlic? Less cream?"></textarea></label>
+        <button type="button" class="primary big" id="mdDone">Done</button>
+        <p class="rd-note">It moves to Done together, with your notes.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────── KITCHEN ─────────────
+       A pushed screen, not a sheet: you stand in front of a fridge with it. -->
+  <section id="scr-kitchen" class="screen">
+    <header class="topbar"><button class="icon-btn" id="kiBack" aria-label="Back"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button></header>
+    <div class="ki-hd"><h1 class="big">Kitchen</h1><div class="segs small" id="kiWho"></div></div>
+    <div class="ki-tabs"><div class="segs" id="kiTabs"></div></div>
+    <div class="scroll"><div class="ki-body" id="kiBody"></div><div class="pad"></div></div>
+  </section>
+
 </div>
 
 <!-- something shared in from elsewhere -->
@@ -240,6 +291,27 @@
       <div class="chips mover" id="plKinds" hidden></div>
       <button type="button" class="crow warn" id="plDelete"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.6 7l.9 12.2h9L17.4 7M10.2 10.6v5.4M13.8 10.6v5.4"/></svg></i><span class="cb"><b>Delete</b></span></button>
     </div>
+  </div>
+</div>
+
+<!-- one recipe, opened: its own page rather than the generic form -->
+<div id="recipeSheet" class="modal" hidden>
+  <div class="modal-in recipe-in">
+    <button type="button" class="x rp-x" id="rpClose" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+    <div id="rpBody"></div>
+    <div class="rp-bar">
+      <button type="button" class="rp-plan" id="rpPlan"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg>Plan it</button>
+      <input type="date" id="rpDate" class="rp-date" aria-label="Plan it for a day" tabindex="-1">
+      <button type="button" class="primary" id="rpCook"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.6v12.8L18.4 12z"/></svg><span id="rpCookLabel">Start cooking</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- reading a recipe from its link, or from pasted text -->
+<div id="readSheet" class="modal" hidden>
+  <div class="modal-in">
+    <div class="modal-hd"><div class="hd-t"><b id="rdTitle">Add the recipe</b></div><button type="button" class="x" id="rdClose" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
+    <div id="rdBody"></div>
   </div>
 </div>
 

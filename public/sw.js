@@ -22,17 +22,27 @@ self.addEventListener('push', (e) => {
     tag: d.tag || 'dowith',
     renotify: true,
     icon: '/icon.svg',
-    data: { spaceId: d.spaceId || null },
+    data: { spaceId: d.spaceId || null, url: d.url || null },
   }));
 });
 
 // Tapping it should land you in the list it was about, not on the shelf.
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const id = e.notification.data && e.notification.data.spaceId;
+  const data = e.notification.data || {};
+  const id = data.spaceId;
+  // A cooking timer carries where to go back to — cook mode, on that step. Only
+  // a same-origin path is honoured.
+  const url = typeof data.url === 'string' && data.url.startsWith('/') && !data.url.startsWith('//')
+    ? data.url : (id ? `/?list=${id}` : '/');
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-    for (const c of list) if ('focus' in c) return c.focus();
-    return self.clients.openWindow ? self.clients.openWindow(id ? `/?list=${id}` : '/') : undefined;
+    for (const c of list) {
+      if ('focus' in c) {
+        if (data.url && 'postMessage' in c) c.postMessage({ type: 'open', url });
+        return c.focus();
+      }
+    }
+    return self.clients.openWindow ? self.clients.openWindow(url) : undefined;
   }));
 });
 

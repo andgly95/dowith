@@ -1389,6 +1389,9 @@ async function server() {
     spaces: [
       { id: 'sp1', name: null, memberIds: [A, L], createdBy: A, createdAt: 1 },
       { id: 'sp2', name: null, memberIds: [A, S], createdBy: A, createdAt: 1 },
+      // A group: Linnea and Sam know each other only from this. A group list
+      // opens nobody's kitchen.
+      { id: 'sp3', name: 'Ski trip', memberIds: [A, L, S], createdBy: A, createdAt: 1 },
     ],
     items: [], invites: [], seq: 100,
   }));
@@ -1398,6 +1401,8 @@ async function server() {
   const photon = require('http').createServer((req, res) => {
     photonHits.push(new URL(req.url, 'http://x'));
     res.setHeader('content-type', 'application/json');
+    // Recipe pages for the reader, and the things a page must not be.
+    if (req.url.startsWith('/r/')) return recipeFixture(req, res);
     // And for Nominatim's lookup, which the place page asks for hours.
     if (req.url.startsWith('/lookup')) {
       return res.end(JSON.stringify([{
@@ -1422,7 +1427,7 @@ async function server() {
   };
 
   let child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PORT: String(PORT), DATA_FILE: dataFile, CONFIG_FILE: cfgFile },
+    env: { ...process.env, PORT: String(PORT), DATA_FILE: dataFile, CONFIG_FILE: cfgFile, PREVIEW_ALLOW_PRIVATE: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';
@@ -1463,7 +1468,7 @@ async function server() {
     const hers = (await api('GET', '/api/state', null, L)).body;
     assert.strictEqual(mine.spaces.find(s => s.id === 'sp1').title, 'Linnea');
     assert.strictEqual(hers.spaces.find(s => s.id === 'sp1').title, 'Andrew');
-    assert.strictEqual(hers.spaces.length, 1, 'and she sees only the lists she is in');
+    assert.deepStrictEqual(hers.spaces.map(x => x.id).sort(), ['sp1', 'sp3'], 'and she sees only the lists she is in — not his with Sam');
   });
 
   await t('items land, and the three visibilities behave over the wire', async () => {
@@ -1731,7 +1736,7 @@ async function server() {
     assert.ok(/^[A-Z2-9]{8}$/.test(code), `bad code: ${code}`);
 
     child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-      env: { ...process.env, PORT: String(PORT), DATA_FILE: dataFile, CONFIG_FILE: cfgFile },
+      env: { ...process.env, PORT: String(PORT), DATA_FILE: dataFile, CONFIG_FILE: cfgFile, PREVIEW_ALLOW_PRIVATE: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     for (let i = 0; i < 60; i++) {
@@ -2074,12 +2079,159 @@ async function server() {
     assert.strictEqual(await recipes(A), his, 'and not his');
   });
 
+  /* ── recipes, end to end ─────────────────────────────────────────────── */
+  const FX = (p) => `http://127.0.0.1:${photon.address().port}${p}`;
+  const kitchenOf = async (owner, as) => api('GET', `/api/kitchen/${encodeURIComponent(owner)}`, null, as);
+  let readRecipe = null;
+
+  await t('reading a link: signed in only, saves nothing, keeps the photo here', async () => {
+    assert.strictEqual((await api('POST', '/api/recipe/read', { url: FX('/r/recipe.html') }, null)).status, 401);
+    const before = (await api('GET', '/api/space/sp1/items', null, A)).body.items.length;
+    const r = await api('POST', '/api/recipe/read', { url: FX('/r/recipe.html') }, A);
+    assert.strictEqual(r.body.ok, true, JSON.stringify(r.body));
+    readRecipe = r.body.recipe;
+    assert.strictEqual(readRecipe.name, 'Tomato & Basil Pasta');
+    assert.strictEqual(readRecipe.site, 'Test Kitchen');
+    assert.ok(/^[a-f0-9]{24}\.jpg$/.test(readRecipe.image), `the photo is kept here: ${readRecipe.image}`);
+    assert.strictEqual(readRecipe.readBy, A);
+    assert.deepStrictEqual(r.body.ready, [false, false, true], 'checked against your kitchen — salt and pepper are always had');
+    assert.strictEqual((await api('GET', '/api/space/sp1/items', null, A)).body.items.length, before, 'and nothing was saved');
+    const im = await fetch(`${BASE}/api/img/${readRecipe.image}`, { headers: { cookie: cookieFor(A) } });
+    assert.strictEqual(im.status, 200);
+    assert.ok(/immutable/.test(im.headers.get('cache-control')));
+    assert.strictEqual((await fetch(`${BASE}/api/img/${readRecipe.image}`)).status, 401, 'behind the sign-in guard');
+    assert.strictEqual((await api('GET', '/api/img/..%2Fstore.json', null, A)).status, 404);
+  });
+
+  await t("a page that won't give its recipe up is a 'no-recipe', never an error", async () => {
+    for (const [u, why] of [['/r/none.html', 'no-recipe'], ['/r/notes.txt', 'no-recipe'], ['/r/missing', 'unreachable']]) {
+      const r = await api('POST', '/api/recipe/read', { url: FX(u) }, A);
+      assert.strictEqual(r.status, 200);
+      assert.deepStrictEqual([r.body.ok, r.body.why], [false, why], u);
+    }
+    assert.strictEqual((await api('POST', '/api/recipe/read', { url: 'file:///etc/passwd' }, A)).body.why, 'refused');
+    const pasted = await api('POST', '/api/recipe/paste', { text: 'Ingredients\n2 eggs\nSteps\nBeat the eggs for 1 minute.' }, A);
+    assert.strictEqual(pasted.body.ok, true);
+    assert.strictEqual(pasted.body.recipe.from, 'paste');
+    assert.deepStrictEqual(pasted.body.recipe.steps[0].timers, [{ secs: 60, label: 'Step 1' }], '"beat" is not on the verb list, so the step names it');
+    assert.strictEqual((await api('POST', '/api/recipe/paste', { text: 'hello' }, A)).body.why, 'no-recipe');
+  });
+
+  let pasta = null;
+  await t('saved: the title as typed, who read it from the session, and a save of the sheet never loses it', async () => {
+    const made = await api('POST', '/api/space/sp1/item', { title: '🍝 Pasta night', kind: 'recipe',
+      mod: { link: { url: FX('/r/recipe.html') }, recipe: { ...readRecipe, readBy: L } } }, A);
+    pasta = made.body.item;
+    assert.strictEqual(pasta.title, '🍝 Pasta night', 'the title stays exactly as typed');
+    assert.strictEqual(pasta.mod.recipe.readBy, A, 'who read it is the session, not the body');
+    assert.ok((await api('GET', '/api/state', null, A)).body.kinds.find(k => k.id === 'recipe').cook, 'the kind says it cooks');
+    const patched = await api('PATCH', `/api/item/${pasta.id}`, { title: '🍝 Pasta night', kind: 'recipe', notes: 'double garlic', mod: { link: { url: FX('/r/recipe.html') } } }, A);
+    assert.strictEqual(patched.body.item.mod.recipe.name, 'Tomato & Basil Pasta', 'a save of the sheet keeps the recipe');
+    const moved = await api('PATCH', `/api/item/${pasta.id}`, { title: 'Pasta night', kind: 'activity', mod: {} }, A);
+    assert.ok(moved.body.item.mod.recipe, 'and so does a change of kind — a kind never confiscates');
+    await api('PATCH', `/api/item/${pasta.id}`, { title: '🍝 Pasta night', kind: 'recipe', mod: { link: { url: FX('/r/recipe.html') } } }, A);
+    const forged = await api('PATCH', `/api/item/${pasta.id}`, { title: '🍝 Pasta night', mod: { recipe: { ...readRecipe, name: 'Forged' } } }, A);
+    assert.strictEqual(forged.body.item.mod.recipe.name, 'Tomato & Basil Pasta', 'and a PATCH cannot set one — /recipe does');
+  });
+
+  await t('attaching a recipe: anyone who can see the item, nobody who cannot', async () => {
+    const hers = (await api('POST', '/api/space/sp1/item', { title: 'Soup', kind: 'recipe' }, L)).body.item;
+    const r = await api('POST', `/api/item/${hers.id}/recipe`, { recipe: readRecipe }, A);
+    assert.strictEqual(r.status, 200, 'he can attach one to hers: it comes from the link');
+    assert.strictEqual(r.body.item.mod.recipe.readBy, A);
+    assert.strictEqual((await api('POST', `/api/item/${hers.id}/recipe`, { recipe: readRecipe }, S)).status, 404, 'Sam cannot see it');
+    assert.strictEqual((await api('POST', `/api/item/${hers.id}/recipe`, { recipe: { name: 'empty' } }, A)).status, 400);
+    const cleared = await api('POST', `/api/item/${hers.id}/recipe`, { clear: true }, L);
+    assert.strictEqual(cleared.body.item.mod.recipe, undefined);
+  });
+
+  await t('kitchens: yours and your pair partner\'s, never a group co-member\'s — 404 on every route', async () => {
+    assert.deepStrictEqual((await api('GET', '/api/state', null, L)).body.kitchens.map(k => k.id), [L, A],
+      'hers, then his — not Sam, whom she knows from a group');
+    assert.strictEqual((await kitchenOf(A, A)).status, 200);
+    assert.strictEqual((await kitchenOf(A, L)).status, 200, 'a pair partner');
+    for (const [method, path, body] of [['GET', '', null], ['POST', '/pantry', { name: 'eggs', state: 'have' }], ['POST', '/buy', { add: [{ name: 'eggs' }] }]]) {
+      assert.strictEqual((await api(method, `/api/kitchen/${encodeURIComponent(L)}${path}`, body, S)).status, 404, `Sam → hers${path}`);
+      assert.strictEqual((await api(method, `/api/kitchen/${encodeURIComponent(S)}${path}`, body, L)).status, 404, `her → Sam's${path}`);
+    }
+    assert.strictEqual((await kitchenOf('nobody', A)).status, 404);
+  });
+
+  await t('the pantry and the list: Out goes to Running low, a ticked row becomes Have', async () => {
+    const k = encodeURIComponent(A);
+    const p1 = await api('POST', `/api/kitchen/${k}/pantry`, { name: 'Pasta', state: 'have' }, L);
+    assert.strictEqual(p1.status, 200, 'she can change his — and it says so');
+    assert.strictEqual(p1.body.pantry.find(e => e.key === 'pasta').by, L);
+    await api('POST', `/api/kitchen/${k}/pantry`, { name: 'Salt', state: 'out' }, A);
+    assert.strictEqual((await api('POST', `/api/kitchen/${k}/pantry`, { name: 'x', state: 'plenty' }, A)).status, 400);
+    const list = (await api('GET', '/api/space/sp1/items', null, A)).body.items.find(i => i.id === pasta.id);
+    assert.deepStrictEqual(list.ready[A], [true, false, false], 'his pasta counts, and salt is Out');
+    assert.ok(list.ready[L], "and in a pair list, her kitchen is checked too");
+    const added = await api('POST', `/api/kitchen/${k}/buy`, { add: [{ name: 'tomatoes', amount: '2 cups', for: pasta.id }, { name: 'tomatoes', for: pasta.id }, { name: 'basil', for: 'it-nope' }] }, A);
+    assert.deepStrictEqual(added.body.buy.map(b => [b.name, b.for]), [['tomatoes', pasta.id], ['basil', null]],
+      'once each, and a `for` the caller cannot see is dropped');
+    assert.deepStrictEqual(added.body.running.map(r => r.key), ['salt'], 'Running low: what is Out and not on the list');
+    const got = await api('POST', `/api/kitchen/${k}/buy`, { got: added.body.buy[0].id }, A);
+    assert.strictEqual(got.body.buy.length, 1);
+    assert.strictEqual(got.body.pantry.find(e => e.key === 'tomato').state, 'have', 'bought, so it is in the pantry');
+    const restocked = await api('POST', `/api/kitchen/${k}/buy`, { gotKey: 'salt' }, A);
+    assert.strictEqual(restocked.body.pantry.find(e => e.key === 'salt').state, 'have');
+    assert.strictEqual(restocked.body.running.length, 0);
+    // Sam left his pair list with Andrew earlier in this suite, so all they
+    // share now is the ski-trip group — and a group opens nobody's fridge.
+    assert.strictEqual((await kitchenOf(A, S)).status, 404, 'once the pair list goes, so does the kitchen');
+    // A row "for" a recipe she cannot see does not tell her its title.
+    const secret = (await api('POST', '/api/space/sp1/item', { title: 'Anniversary dinner', kind: 'recipe', visibility: 'private' }, A)).body.item;
+    await api('POST', `/api/kitchen/${k}/buy`, { add: [{ name: 'saffron', for: secret.id }] }, A);
+    const hers = (await kitchenOf(A, L)).body.buy.find(b => b.name === 'saffron');
+    assert.deepStrictEqual([hers.for, hers.forTitle], [null, null], "his private recipe's title stays his");
+    assert.strictEqual((await kitchenOf(A, A)).body.buy.find(b => b.name === 'saffron').forTitle, 'Anniversary dinner');
+  });
+
+  await t('made it: the record and the tick, by anyone who can see it', async () => {
+    const r = await api('POST', `/api/item/${pasta.id}/cooked`, { again: 'soon', tweaks: '  more garlic ' }, L);
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.body.item.done, true, 'made it ticks it off');
+    assert.deepStrictEqual([r.body.item.cooked[0].by, r.body.item.cooked[0].again, r.body.item.cooked[0].tweaks], [L, 'soon', 'more garlic']);
+    assert.strictEqual((await api('POST', `/api/item/${pasta.id}/cooked`, { again: 'forever' }, L)).status, 400);
+    await api('POST', `/api/item/${pasta.id}/done`, { done: false }, A);
+    const again = await api('POST', `/api/item/${pasta.id}/cooked`, {}, A);
+    assert.strictEqual(again.body.item.cooked.length, 2, 'making it again keeps the history');
+    assert.strictEqual((await api('POST', `/api/item/${pasta.id}/cooked`, {}, S)).status, 404);
+  });
+
+  await t('timers: the server keeps the clock, six at once, and only yours to stop', async () => {
+    assert.strictEqual((await api('POST', `/api/item/${pasta.id}/timer`, { secs: 3 }, A)).status, 400);
+    const r = await api('POST', `/api/item/${pasta.id}/timer`, { secs: 60, label: 'Boil', step: 0 }, A);
+    assert.strictEqual(r.status, 200);
+    assert.ok(Math.abs(r.body.endsAt - r.body.now - 60000) < 50, 'the end is the server\'s clock, and its `now` comes back');
+    assert.strictEqual((await api('DELETE', `/api/timer/${r.body.id}`, null, L)).status, 404, 'not hers to stop');
+    assert.strictEqual((await api('DELETE', `/api/timer/${r.body.id}`, null, A)).status, 200);
+    for (let i = 0; i < 6; i++) await api('POST', `/api/item/${pasta.id}/timer`, { secs: 600 }, A);
+    assert.strictEqual((await api('POST', `/api/item/${pasta.id}/timer`, { secs: 600 }, A)).status, 400, 'six at once is the most');
+    assert.strictEqual((await api('POST', `/api/item/${pasta.id}/timer`, { secs: 600 }, S)).status, 404);
+  });
+
+  await t("cooking together: where the other one is, kept twenty minutes, never pushed", async () => {
+    assert.deepStrictEqual((await api('POST', `/api/item/${pasta.id}/cooking`, { step: 2 }, L)).body.others, []);
+    assert.deepStrictEqual((await api('GET', `/api/item/${pasta.id}/cooking`, null, A)).body.others,
+      [{ id: L, name: 'Linnea', step: 2 }]);
+    assert.strictEqual((await api('POST', `/api/item/${pasta.id}/cooking`, { step: 99 }, A)).status, 400);
+    assert.strictEqual((await api('GET', `/api/item/${pasta.id}/cooking`, null, S)).status, 404);
+  });
+
+  await t('reading is rate-limited per person', async () => {
+    let last;
+    for (let i = 0; i < 31; i++) last = await api('POST', '/api/recipe/read', { url: FX('/r/none.html') }, S);
+    assert.strictEqual(last.body.why, 'slow-down', 'thirty an hour');
+  });
+
   await t('data survives a restart', async () => {
     const before = (await api('GET', '/api/state', null, A)).body;
     child.kill('SIGTERM');
     await new Promise(r => child.on('exit', r));
     child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-      env: { ...process.env, PORT: String(PORT), DATA_FILE: dataFile, CONFIG_FILE: cfgFile },
+      env: { ...process.env, PORT: String(PORT), DATA_FILE: dataFile, CONFIG_FILE: cfgFile, PREVIEW_ALLOW_PRIVATE: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     for (let i = 0; i < 60; i++) {
@@ -2093,6 +2245,265 @@ async function server() {
   child.kill('SIGTERM');
   photon.close();
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
+}
+
+/* ── recipes: the reader, the kitchen, the fetch guard, the gate ─────────── */
+
+const ld = (o) => `<script type="application/ld+json">${JSON.stringify(o)}</script>`;
+const RECIPE_LD = {
+  '@context': 'https://schema.org', '@type': 'Recipe',
+  name: 'Tomato &amp; Basil <b>Pasta</b>',
+  recipeYield: 'Serves 4-6', prepTime: 'PT10M', cookTime: 'PT30M',
+  recipeIngredient: ['1 1/2 lb pasta', '2 cups tomatoes, chopped', 'salt and pepper to taste'],
+  recipeInstructions: [
+    { '@type': 'HowToStep', text: 'Boil the pasta for 10 minutes.' },
+    { '@type': 'HowToStep', text: 'Toss with the tomatoes &amp; serve.' },
+  ],
+  image: [{ '@type': 'ImageObject', url: '/r/square.jpg', width: 1200, height: 1200 },
+    { '@type': 'ImageObject', url: '/r/photo.jpg', width: 1200, height: 900 }],
+};
+// A JPEG is its first three bytes, as far as the sniffer is concerned.
+const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);
+
+function recipeFixture(req, res) {
+  const u = req.url;
+  const page = (body, type = 'text/html; charset=utf-8') => { res.setHeader('content-type', type); res.end(body); };
+  if (u === '/r/recipe.html') return page(`<html><head><meta property="og:site_name" content="Test Kitchen">${ld(RECIPE_LD)}</head></html>`);
+  if (u === '/r/none.html') return page(`<html><head>${ld({ '@type': 'Article', name: 'Not a recipe' })}</head></html>`);
+  if (u === '/r/notes.txt') return page('1 cup flour', 'text/plain');
+  if (u === '/r/photo.jpg') return page(JPEG, 'image/jpeg');
+  if (u === '/r/fake.jpg') return page(Buffer.from('<html>not an image</html>'), 'image/jpeg');
+  if (u === '/r/big.html') return page('<html>' + 'x'.repeat(5000) + '</html>');
+  if (u === '/r/private') { res.statusCode = 302; res.setHeader('location', 'http://10.0.0.1/r/recipe.html'); return res.end(); }
+  if (u === '/r/loop') { res.statusCode = 302; res.setHeader('location', '/r/loop'); return res.end(); }
+  if (u === '/r/hop') { res.statusCode = 301; res.setHeader('location', '/r/recipe.html'); return res.end(); }
+  res.statusCode = 404; res.end();
+}
+
+async function recipes() {
+  console.log('\nrecipes');
+  const R = require('../lib/recipe');
+  const K = require('../lib/kitchen');
+  const F = require('../lib/fetchpage');
+  const M = require('../lib/modules');
+  const T = require('../lib/timers');
+  const page = (...blocks) => `<html><head>${blocks.join('')}</head><body></body></html>`;
+
+  await t('a recipe is read from its JSON-LD: names cleaned, times, yield, timers and what each step uses', () => {
+    const got = R.fromHtml(page(ld(RECIPE_LD)), 'https://www.example.com/r/1');
+    assert.ok(got);
+    const r = got.recipe;
+    assert.strictEqual(r.name, 'Tomato & Basil Pasta', 'tags stripped and entities decoded');
+    assert.strictEqual(r.site, 'example.com', 'the hostname, without www, when the page names no publisher');
+    assert.deepStrictEqual([r.prep, r.cook, r.total], [10, 30, 40], 'total falls back to prep + cook');
+    assert.deepStrictEqual(r.yield, { n: 4, unit: 'servings' }, '"Serves 4-6" serves 4');
+    assert.deepStrictEqual(r.steps[0].timers, [{ secs: 600, label: 'Boil' }]);
+    assert.deepStrictEqual(r.steps[0].uses, [0], 'boiling the pasta uses the pasta');
+    assert.deepStrictEqual(r.steps[1].uses, [1], 'and tossing with tomatoes, the tomatoes');
+    const late = R.usesIn('Stir in the cream, the parmesan and the red pepper flakes.',
+      ['1 cup heavy cream', '½ cup grated parmesan', '1 tsp red pepper flakes'].map(R.parseLine));
+    assert.deepStrictEqual(late, [0, 1, 2], 'every ingredient a step names, not only those before its first comma');
+    const ings = ['1 1/2 lb chicken thighs', '1 cup chicken broth', '2 tbsp olive oil'].map(R.parseLine);
+    assert.deepStrictEqual(R.usesIn('Sear the chicken in the olive oil.', ings), [0, 2],
+      '"the chicken" is the thighs — not the broth, which is made from it');
+    assert.deepStrictEqual(R.usesIn('Pour in the chicken broth.', ings), [1], 'and "chicken broth" is the broth alone');
+    assert.strictEqual(r.steps[1].text, 'Toss with the tomatoes & serve.');
+    assert.strictEqual(got.imageUrl, 'https://www.example.com/r/photo.jpg', 'the image closest to 4:3, made absolute');
+  });
+
+  await t('…however the page wraps it: an array, an @graph, sections, an HTML string, a broken block first', () => {
+    const base = { '@type': 'Recipe', name: 'X', recipeIngredient: ['1 egg'] };
+    assert.ok(R.fromHtml(page(ld([{ '@type': 'WebPage' }, base])), 'https://a.b/'), 'an array');
+    assert.ok(R.fromHtml(page(ld({ '@graph': [{ '@type': 'Organization' }, { ...base, '@type': ['Recipe', 'NewsArticle'] }] })), 'https://a.b/'),
+      'an @graph, with @type as an array');
+    const sections = R.fromHtml(page(ld({ ...base, recipeInstructions: [
+      { '@type': 'HowToSection', name: 'Sauce', itemListElement: [{ '@type': 'HowToStep', text: 'A' }, { '@type': 'HowToStep', text: 'B' }] },
+      { '@type': 'HowToSection', itemListElement: [{ '@type': 'HowToStep', name: 'C' }] }] })), 'https://a.b/');
+    assert.deepStrictEqual(sections.recipe.steps.map(x => x.text), ['A', 'B', 'C'], 'sections flatten, name stands in for text');
+    const html = R.fromHtml(page(ld({ ...base, recipeInstructions: '<ol><li>Mix.</li><li>Bake 20 minutes.</li></ol>' })), 'https://a.b/');
+    assert.deepStrictEqual(html.recipe.steps.map(x => x.text), ['Mix.', 'Bake 20 minutes.'], 'one HTML string, split on its items');
+    const broken = R.fromHtml(page('<script type="application/ld+json">{ "@type": "Recipe", nope }</script>', ld(base)), 'https://a.b/');
+    assert.ok(broken, 'a broken block before a good one is skipped, not fatal');
+    assert.strictEqual(R.fromHtml(page(ld({ '@type': 'Article', name: 'News' })), 'https://a.b/'), null, 'JSON-LD with no Recipe is no recipe');
+    assert.strictEqual(R.fromHtml('<html></html>', 'https://a.b/'), null);
+    assert.strictEqual(R.fromHtml(page(ld({ '@type': 'Recipe', name: 'Empty' })), 'https://a.b/'), null, 'a Recipe with nothing in it is not one');
+    const og = R.fromHtml(page('<meta property="og:site_name" content="NYT Cooking">', ld(base)), 'https://cooking.example/');
+    assert.strictEqual(og.recipe.site, 'NYT Cooking', "the page's own site name wins");
+  });
+
+  await t('an ingredient line: amounts, ranges, every unit spelling — and NEVER a guessed amount', () => {
+    const rows = [
+      ['1 1/2 cups flour', 1.5, null, 'cup', 'flour', null],
+      ['1½ tbsp butter, softened', 1.5, null, 'tbsp', 'butter', 'softened'],
+      ['¾ cup heavy cream', 0.75, null, 'cup', 'heavy cream', null],
+      ['2 to 3 tablespoons olive oil', 2, 3, 'tbsp', 'olive oil', null],
+      ['2-3 T butter', 2, 3, 'tbsp', 'butter', null],
+      ['1 t salt', 1, null, 'tsp', 'salt', null],
+      ['4 chicken thighs (about 1 1/2 lb)', 4, null, null, 'chicken thighs', 'about 1 1/2 lb'],
+      ['3 cloves garlic, minced', 3, null, 'clove', 'garlic', 'minced'],
+      ['1 cup of flour', 1, null, 'cup', 'flour', null],
+      ['0.5 kg potatoes', 0.5, null, 'kg', 'potatoes', null],
+      ['2 large boneless, skinless chicken breasts, patted dry', 2, null, null, 'large boneless, skinless chicken breasts', 'patted dry'],
+    ];
+    for (const [line, q, q2, unit, name, note] of rows) {
+      const p = R.parseLine(line);
+      assert.deepStrictEqual([p.q, p.q2, p.unit, p.name, p.note], [q, q2, unit, name, note], line);
+      assert.strictEqual(p.text, line, 'the line as published is always kept');
+    }
+    const aliases = { cup: ['cup', 'cups', 'c'], tbsp: ['tablespoon', 'tablespoons', 'tbsp', 'Tbs', 'T'], tsp: ['teaspoon', 'tsp', 't'],
+      lb: ['pound', 'pounds', 'lb', 'lbs', 'lb.'], oz: ['ounce', 'oz'], g: ['gram', 'grams', 'g'], kg: ['kg'], ml: ['ml', 'milliliters'],
+      l: ['liter', 'litre', 'l'], clove: ['cloves'], can: ['can', 'cans'], pinch: ['pinch'] };
+    for (const [unit, list] of Object.entries(aliases)) {
+      for (const a of list) assert.strictEqual(R.parseLine(`2 ${a} thing`).unit, unit, a);
+    }
+    for (const line of ['salt and pepper to taste', '1 (14-ounce) can coconut milk', 'a handful of basil', 'Juice of half a lemon']) {
+      const p = R.parseLine(line);
+      assert.strictEqual(p.q, null, `${line} is left alone`);
+      assert.strictEqual(p.text, line);
+    }
+    assert.strictEqual(R.parseLine('2 furlongs rope').unit, null, 'an unknown unit is no unit');
+  });
+
+  await t('timers in a step: ranges take the low end, words and hours count, and over six hours is not a timer', () => {
+    const cases = [
+      ['Bake for 25 to 30 minutes, until golden.', [[1500, 'Bake']]],
+      ['Sear the chicken 3 minutes a side.', [[180, 'Sear']]],
+      ['Let it rest for an hour.', [[3600, 'Rest']]],
+      ['Simmer 1½ hours, stirring.', [[5400, 'Simmer']]],
+      ['Whisk for one minute, then chill 30 minutes.', [[60, 'Whisk'], [1800, 'Chill']]],
+      ['Marinate for 8 hours.', []],
+      ['Chill overnight.', []],
+      ['Leave it alone for 5 minutes.', [[300, 'Step 2']]],
+    ];
+    for (const [text, want] of cases) {
+      assert.deepStrictEqual(R.timersIn(text, 2).map(x => [x.secs, x.label]), want, text);
+    }
+    assert.strictEqual(R.minutes('PT1H5M'), 65);
+    assert.strictEqual(R.minutes('nonsense'), null);
+  });
+
+  await t('pasted text: headings when there are headings, and a fair guess when there are not', () => {
+    const r = R.fromText('Weeknight pasta\nIngredients\n- 200 g spaghetti\n- 2 tbsp olive oil\nMethod\n1. Boil the spaghetti for 9 minutes.\n2. Toss with the oil.');
+    assert.deepStrictEqual(r.ingredients.map(x => x.name), ['spaghetti', 'olive oil']);
+    assert.deepStrictEqual(r.steps.map(x => x.text), ['Boil the spaghetti for 9 minutes.', 'Toss with the oil.'], 'bullets and numbers stripped');
+    assert.strictEqual(r.from, 'paste');
+    const bare = R.fromText('2 eggs\n1 cup milk\n1. Whisk the eggs and the milk together until smooth and pale, about a minute.');
+    assert.strictEqual(bare.ingredients.length, 2);
+    assert.strictEqual(bare.steps.length, 1);
+    assert.strictEqual(R.fromText('just some words'), null);
+  });
+
+  await t('the kitchen: a head noun decides, staples are had unless Out, water always', () => {
+    const k = (x) => K.key(x);
+    assert.ok(!K.covers(k('chicken broth'), k('chicken thighs')), '"chicken broth" never covers "chicken thighs"');
+    assert.ok(K.covers(k('olive oil'), k('extra-virgin olive oil')), '"olive oil" covers "extra-virgin olive oil"');
+    assert.ok(K.covers(k('chicken thighs'), k('2 boneless skinless chicken thighs, diced')), 'prep and size words are not the thing');
+    assert.strictEqual(k('Tomatoes'), k('tomato'));
+    assert.ok(K.covers(k('garlic'), k('garlic cloves')), '"3 garlic cloves" is garlic — a clove is how it comes');
+    assert.strictEqual(k('salmon fillets'), 'salmon fillet', 'a fillet is the thing itself, not a measure');
+    const ings = ['water', 'kosher salt', 'freshly ground black pepper', 'red bell pepper', 'heavy cream', 'chicken thighs'].map(name => ({ name }));
+    assert.deepStrictEqual(K.match(ings, { 'chicken thigh': { name: 'Chicken thighs', state: 'low' } }),
+      [true, true, true, false, false, true], 'low still counts as having it');
+    assert.deepStrictEqual(K.match([{ name: 'salt' }], { salt: { name: 'Salt', state: 'out' } }), [false], 'Out beats a staple');
+    assert.deepStrictEqual(K.match([{ name: 'chicken thighs' }], { 'chicken thigh': { name: 'x', state: 'out' } }), [false]);
+    assert.strictEqual(K.aisleOf('chicken broth'), 'Cupboard', 'the head noun first: broth, not chicken');
+    assert.strictEqual(K.aisleOf('garlic'), 'Produce');
+  });
+
+  await t("a kitchen opens to its owner and to pair partners — not to a group, not to strangers", () => {
+    const sp = [
+      { id: 'p1', memberIds: ['a', 'l'] }, { id: 'p2', memberIds: ['a', 's'] },
+      { id: 'g1', name: 'Ski trip', memberIds: ['a', 'l', 's'] },
+    ];
+    const table = [
+      ['a', 'a', true], ['a', 'l', true], ['l', 'a', true], ['a', 's', true],
+      ['l', 's', false, 'a group list opens nobody\'s fridge'], ['s', 'l', false],
+      ['x', 'a', false, 'a stranger'], ['a', 'x', false], [null, 'a', false], ['a', null, false],
+    ];
+    for (const [v, o, want, why] of table) assert.strictEqual(K.canUse(v, o, sp), want, why || `${v} → ${o}`);
+    assert.deepStrictEqual(K.kitchensFor('a', sp), ['a', 'l', 's'], 'yours first, then pair partners');
+    assert.deepStrictEqual(K.kitchensFor('l', sp), ['l', 'a'], 'and never somebody from a group');
+  });
+
+  await t('the fetch guard refuses private addresses in every spelling', () => {
+    for (const ip of ['127.0.0.1', '10.1.2.3', '172.16.0.1', '172.31.255.1', '192.168.1.1', '169.254.169.254', '100.64.0.1',
+      '0.0.0.0', '224.0.0.1', '::1', '::', 'fc00::1', 'fd12:3456::1', 'fe80::1', '::ffff:127.0.0.1', '::ffff:7f00:1',
+      '::ffff:10.0.0.1', '64:ff9b::a00:1', 'not an ip']) {
+      assert.strictEqual(F.privateAddr(ip), true, ip);
+    }
+    for (const ip of ['93.184.216.34', '8.8.8.8', '2606:4700:4700::1111', '172.32.0.1', '100.128.0.1']) {
+      assert.strictEqual(F.privateAddr(ip), false, ip);
+    }
+  });
+
+  await t('…at connect time, through redirects, and with a size cap and a content type', async () => {
+    const fx = require('http').createServer(recipeFixture).listen(0, '127.0.0.1');
+    await new Promise(r => fx.once('listening', r));
+    const at = (p) => `http://127.0.0.1:${fx.address().port}${p}`;
+    const local = { allow: (ip) => ip === '127.0.0.1' };
+    const why = async (u, o) => { try { await F.fetchPage(u, o); return 'ok'; } catch (e) { return e.why || e.message; } };
+    try {
+      assert.strictEqual(await why(at('/r/recipe.html'), local), 'ok', 'a page it is allowed to read');
+      assert.strictEqual((await F.fetchPage(at('/r/hop'), local)).url, at('/r/recipe.html'), 'a redirect is followed');
+      assert.strictEqual(await why(at('/r/private'), local), 'refused', 'a redirect into a private address is refused');
+      assert.strictEqual(await why(at('/r/loop'), local), 'unreachable', 'four redirects at most');
+      assert.strictEqual(await why(at('/r/big.html'), { ...local, maxBytes: 1000 }), 'too-big', 'the cap is enforced while streaming');
+      assert.strictEqual(await why(at('/r/notes.txt'), local), 'wrong-type', 'a page has to be HTML');
+      assert.strictEqual(await why(at('/r/photo.jpg'), { ...local, kind: 'image' }), 'ok');
+      assert.strictEqual(await why(at('/r/recipe.html'), { ...local, kind: 'image' }), 'wrong-type', 'and an image an image');
+      // No allow-list: the real guard. Its own address is private, so it is
+      // refused as a literal, and `localhost` is refused at lookup — the check
+      // the socket itself uses, which is what closes DNS rebinding.
+      assert.strictEqual(await why(at('/r/recipe.html')), 'refused', 'a private literal');
+      assert.strictEqual(await why(`http://localhost:${fx.address().port}/r/recipe.html`), 'refused', 'a name that resolves somewhere private');
+      for (const u of ['file:///etc/passwd', 'ftp://example.com/', 'http://user:pw@example.com/', 'not a url']) {
+        assert.strictEqual(await why(u), 'refused', u);
+      }
+    } finally { fx.close(); }
+  });
+
+  await t('the gate: a stranger\'s page cannot put anything odd in the store', () => {
+    const good = { name: 'X', image: 'a'.repeat(24) + '.jpg', ingredients: [{ text: '1 cup flour', q: 1, unit: 'cup', name: 'flour' }],
+      steps: [{ text: 'Mix.', timers: [{ secs: 60, label: 'Mix' }], uses: [0] }] };
+    assert.strictEqual(M.cleanMods({ recipe: good }).recipe.image, good.image);
+    for (const image of ['../../etc/passwd', 'abc.jpg', 'a'.repeat(24) + '.gif', 'javascript:alert(1)', 'A'.repeat(24) + '.jpg']) {
+      assert.strictEqual(M.cleanMods({ recipe: { ...good, image } }).recipe.image, null, image);
+    }
+    const big = M.cleanMods({ recipe: {
+      ingredients: Array.from({ length: 99 }, () => ({ text: 'x'.repeat(999), q: 1, unit: 'furlong', name: 'y'.repeat(999) })),
+      steps: [{ text: 'Go.', timers: [{ secs: 999999 }, { secs: 2 }, { secs: 30, label: 'z'.repeat(99) }], uses: [0, 7, 999, -1, 'x'] }],
+    } }).recipe;
+    assert.strictEqual(big.ingredients.length, 60, 'sixty ingredients at most');
+    assert.strictEqual(big.ingredients[0].text.length, 300);
+    assert.strictEqual(big.ingredients[0].name.length, 120);
+    assert.strictEqual(big.ingredients[0].unit, null, 'an unknown unit is none');
+    assert.deepStrictEqual(big.steps[0].timers, [{ secs: 30, label: 'z'.repeat(24) }], 'over six hours and under five seconds go');
+    assert.deepStrictEqual(big.steps[0].uses, [0, 7], 'a step uses only ingredients that exist');
+    assert.strictEqual(M.cleanMods({ recipe: { name: 'Nothing in it' } }).recipe, undefined, 'a recipe with nothing in it is not one');
+    assert.strictEqual(M.cleanMods({ link: { url: 'javascript:alert(1)' } }).link, undefined, 'and the link beside it is still http(s) only');
+  });
+
+  await t('a due timer goes to whoever started it, and to nobody else', async () => {
+    const st = {
+      users: { a: { id: 'a' }, l: { id: 'l' } },
+      spaces: [{ id: 'p', memberIds: ['a', 'l'] }],
+      items: [{ id: 'i1', spaceId: 'p', authorId: 'a', title: 'Ragu', visibility: 'private' },
+        { id: 'i2', spaceId: 'p', authorId: 'a', title: 'Soup', visibility: 'shared' }],
+      timers: [],
+    };
+    const now = 1e12;
+    assert.ok(T.add(st, { id: 't1', uid: 'a', itemId: 'i1', secs: 60, label: 'Simmer' }, now).timer);
+    assert.ok(T.add(st, { id: 't2', uid: 'l', itemId: 'i1', secs: 60 }, now).timer, 'even one on an item she cannot see');
+    assert.ok(T.add(st, { id: 't3', uid: 'l', itemId: 'i2', secs: 600 }, now).timer);
+    assert.strictEqual(T.add(st, { id: 'x', uid: 'a', itemId: 'i1', secs: 3 }, now).error ? 'refused' : 'ok', 'refused');
+    const sent = [];
+    const r = await T.fire(st, async (u, p) => { sent.push([u.id, p.title, p.url]); }, now + 61 * 1000);
+    assert.deepStrictEqual(sent, [['a', 'Simmer is done', '/?list=p&cook=i1&step=0']], 'the starter only — a private item\'s timer never reaches anyone else');
+    assert.deepStrictEqual(r, { due: 2, sent: 1 });
+    assert.deepStrictEqual(st.timers.map(x => x.id), ['t3'], 'due ones are gone, the rest wait');
+    assert.strictEqual(T.remove(st, 't3', 'a'), false, 'nobody stops somebody else\'s timer');
+    assert.strictEqual(T.remove(st, 't3', 'l'), true);
+  });
 }
 
 /* ── place suggestions ───────────────────────────────────────────────────── */
@@ -2224,6 +2635,7 @@ async function placeSuggestions() {
   await nudges();
   await geocoding();
   await placeSuggestions();
+  await recipes();
   await server();
 
   console.log(`\n${pass} passed, ${fails.length} failed`);

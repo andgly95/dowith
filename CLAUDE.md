@@ -17,12 +17,12 @@ Same shape as `~/workout` and `~/trips`:
 
 - **Runtime:** Node.js v22, no build step — `node server.js` is production
 - **Server:** Express, thin `server.js` + CommonJS modules in `lib/`
-- **Store:** single JSON file (`data/store.json`)
+- **Store:** single JSON file (`data/store.json`), and recipe photos in `data/img/` (see *Recipes*)
 - **Frontend:** vanilla JS ES modules in `public/js/` + plain HTML/CSS
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 157 assertions + a headless-chromium check
+- **Tests:** `npm test` — 178 assertions + a headless-chromium check
 
 ## The model
 
@@ -30,9 +30,13 @@ Same shape as `~/workout` and `~/trips`:
 space = { id, name, memberIds: [...], createdBy, createdAt }
 item  = { id, spaceId, authorId, title, notes, visibility, tags,
           mod: { place?, link?, watch? }, done, doneAt, doneBy,
-          when?, plannedBy?, visit?, editedBy?, ideaBy?, createdAt, updatedAt }
+          when?, plannedBy?, visit?, cooked?, editedBy?, ideaBy?, createdAt, updatedAt }
 mod.place = { name, lat, lon, address, area?, what?, osm? }   // area/what/osm only with a pin
 visit     = { book, again: 'soon'|'maybe'|'once'|null, memory } // see Places
+mod.recipe = { name, site, image, yield, prep, cook, total, ingredients[], steps[], from, readAt, readBy }
+cooked    = [{ at, by, again, tweaks }]                          // see Recipes
+state.kitchens[uid] = { pantry: { [key]: { name, state, aisle, by, at } }, buy: [...] }
+state.timers = [{ id, uid, itemId, step, label, endsAt }]
 ```
 
 - **A space holds people.** Two, usually. A pair needs no name — from your side it
@@ -725,6 +729,112 @@ because a lock screen reads itself out loud in a room.
   worth sending, and a failed send doesn't burn the week. "Not much on the list" is
   not a failure and doesn't count against the retry budget.
 
+## Recipes and the kitchen (`lib/recipe.js`, `lib/kitchen.js`, `public/js/recipe*.js`, `cook.js`, `kitchen.js`)
+
+Built from the handoff on the `design/recipes` branch (PR #2). The recipe kind has
+`cook: true` on the manifest, like `art`, so the client keeps no list of its own.
+
+### Who may open a kitchen — read this first
+
+**A kitchen is a new audience**, so it gets one pure rule and a truth table, like
+`canSee`: `kitchen.canUse(viewer, owner, spaces)` is true for **yourself and anyone you
+share a PAIR list with**, and false for everybody else — **including people you only
+share a group list with**. A kitchen is somebody's home; the ski-trip crew does not get
+to read your fridge. Starting narrow is cheap to widen; widening by accident is a
+disclosure. Every kitchen route answers **404** when it is false (the suite checks each
+route for a group-only co-member and a stranger), and **leaving the pair list closes the
+kitchen** — the suite has Sam leave his pair with Andrew and then get the 404.
+
+- **These are the only routes that name a person** (`/api/kitchen/:uid`). Identity is
+  still the session alone; the id only says WHOSE kitchen, and `canUse` decides.
+- One pantry and one list to buy **per person** (Andrew confirmed: separate pantries).
+  You can change your partner's — `by` records whose hand it was. Kitchens notify nobody.
+- A buy row "for" a recipe names it only to someone who can see that recipe; his
+  private recipe's title is not shown in her view of his list.
+- The wire carries `kitchens: [{id,name}]` (yours first, then pair partners) and, on
+  each recipe in the list, `ready: { [uid]: [bool…] }` for your kitchen and your pair
+  partner's. **The matcher runs on the server** (`kitchen.match`), in one tested place;
+  the client renders what it is sent — the `canSee` rule again.
+
+### Reading a recipe — choosing, not guessing
+
+- **Paste a link, and it is READ, not added**: the composer under Recipes (and the
+  share sheet, for the iOS Shortcut) sends a URL to `POST /api/recipe/read`, which
+  **saves nothing**. A sheet shows what came with it — a ring, not a check, for anything
+  "not on this page" — and what you are short, and nothing is saved until Save. **The
+  title stays exactly as typed**; a bare link takes the recipe's own name.
+- `lib/recipe.js` is pure: every `application/ld+json` block (a broken one is skipped,
+  not fatal), walked for the first `Recipe` through arrays, `@graph` and `mainEntity`;
+  instructions as strings, HTML, `HowToStep`s or `HowToSection`s; ISO durations; yields
+  like "Serves 4-6". Tags stripped, entities decoded — sites put HTML everywhere.
+- **NEVER GUESS AN AMOUNT.** `parseLine` reads mixed numbers, Unicode fractions, ranges
+  and a fixed unit table; anything else keeps `q: null` and is shown exactly as
+  published, never scaled. "1 (14-ounce) can" is left alone — scaling it is guessing.
+  A comma with only describing words before it is part of the name: "3 large boneless,
+  skinless chicken breasts" was "large boneless" until the real NYT page showed it.
+- **Timers** come from the step text: ranges take the low end (easier to add time than
+  undo it), over six hours is not a timer, labelled by the cooking verb before them.
+- **Which ingredients a step uses**: its head noun in the step; a bare "chicken" is the
+  one chicken ingredient that is not derived (thighs, not broth); and a word followed by
+  another ingredient's head is that one's ("red pepper flakes" is not the pepper in "salt
+  and pepper"). Matched against the whole sentence — the pantry key stops at a comma,
+  which in a step threw away everything after "heavy cream,".
+- **Pages that will not share** are a `no-recipe`, never an error: paste the text (the
+  same Found sheet checks it before saving), or just keep the link. Checked against a
+  real NYT Cooking recipe page on Nov 17: it does publish its JSON-LD.
+
+### The fetch guard (`lib/fetchpage.js`) — the one place a typed URL is fetched
+
+http(s) only, no credentials; **4 redirects, each re-checked**; 8 s; a size cap
+enforced while streaming (3 MB pages, 2 MB images); the content type checked. **The
+address is refused at connect time** — the socket's own `lookup` rejects loopback, RFC
+1918, link-local and the metadata address, CGNAT, ULA, multicast and the IPv4-mapped and
+NAT64 forms of all of them, so DNS rebinding has no gap; IP literals are checked before
+the request. 30 reads an hour per person, in memory. `PREVIEW_ALLOW_PRIVATE=1` is for
+the suites only, which serve fixtures from localhost.
+
+### Photos (`lib/img.js`, `data/img/`)
+
+Downloaded once, never hotlinked (that hands every viewer's IP to the site and breaks
+when it moves): image/* only, the type **sniffed from the bytes** (JPEG, PNG, WebP),
+content-addressed `<24 hex>.<ext>`, served by `GET /api/img/:name` behind the sign-in
+guard, immutable. A daily sweep deletes what no item references and is a day old.
+`data/` is gitignored, as ever.
+
+### The page, cook mode, Made it, the kitchen
+
+- **The recipe page replaces the generic sheet** for the kind (as the place page does);
+  its *Edit details* opens the generic sheet by name (`openItem(id, { generic: true })`).
+  The link back to the original is always on screen. **A PATCH neither sets nor loses
+  `mod.recipe`** — the sheet never sends it, and it survives a rename or a change of kind;
+  `POST /api/item/:id/recipe` sets or clears it (the `complete` right: it is derived
+  from the author's link, like the poster and pin backfills).
+- **Servings are per DEVICE** (`dw-serves:<id>`): tonight, not the recipe. `amount()`
+  rounds as a cook would write it (⅛ … ¾ for cups and spoons, nearest 5 g, half a clove),
+  and the browser check imports it into the page and asserts it. **Times never scale.**
+- **Ingredient rings write that kitchen's pantry** (need → Have, have → Out); *Add N to
+  the list* puts what is missing on its list to buy.
+- **Cook mode** is a screen, one step at a time at 25px, that step's ingredients scaled,
+  timers one tap away. **Timers are registered with the server** (`POST /api/item/:id/
+  timer`; the server keeps the clock and sends its `now` back) and a 10 s tick pushes due
+  ones **to whoever started them, and nobody else**, with a link back into cook mode on
+  that step (`/?list=&cook=&step=`, which the app now follows — it ignored `?list=`
+  before). Seen on screen, the server timer is cancelled so it does not say it twice.
+- **"Screen stays on" is shown only while a wake lock is actually held.** Before iOS
+  18.4 a home-screen app could not hold one, and the line is simply absent.
+- The per-second countdown is **not** in a live region; start, pause and done are.
+- **"Linnea's on step 4"**: posted on each step, polled every 15 s while open, kept 20
+  minutes **in memory**, never pushed.
+- **Made it** (`POST /api/item/:id/cooked`, ≤20 kept) records would-you-again and tweaks
+  and ticks it off; "Ran out" chips set those pantry entries Out. In Done together it
+  reads "Made Nov 17 · Can't wait"; un-ticking keeps the history.
+- **The kitchen** is a pushed screen: pantry by aisle (a small table; a wrong aisle is
+  cosmetic) with Have → Low → Out; To buy grouped by recipe plus *Running low*. A ticked
+  row is struck through and becomes Have **when you leave the screen** (or the app).
+- **Class names are global, a third time.** The kitchen's state button was `.pill` — the
+  nav's travelling marker — and gave it a 64px minimum width; the browser check caught
+  the marker settling 10px wide. It is `.kstate`. Recipe cards are `.rcard`, not `.card`.
+
 ## Places — a map with the list under it (`public/js/pl.js`)
 
 The Places tab is not a list with a map toggle: **the map fills the top half and the
@@ -915,11 +1025,19 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `GET /share` | share target / Shortcut / bookmarklet — serves the shell |
 | `POST /api/space/:id/geocode` | resolve place names you can see, batched — not called by the client since the Map view went |
 | `GET /api/place/suggest?q=&lat=&lon=` | places as you type (Photon, proxied, cached); writes nothing |
+| `POST /api/recipe/read {url}` · `/paste {text}` | read a recipe; **saves nothing** — `{ok, recipe, ready}` or `{ok:false, why}` |
+| `POST /api/item/:id/recipe` | attach a read recipe `{recipe}` or `{clear:true}` — anyone who can see it |
+| `POST /api/item/:id/cooked` | made it `{again?, tweaks?}`, and ticks it off |
+| `POST /api/item/:id/timer` · `DELETE /api/timer/:id` | a cooking timer the server will push when due; only yours to stop |
+| `GET`·`POST /api/item/:id/cooking` | where the others are in the recipe — memory only |
+| `GET /api/kitchen/:uid` · `POST …/pantry` · `POST …/buy` | a kitchen — yours or a pair partner's, else 404 |
+| `GET /api/img/:name` | a recipe photo, signed in, immutable |
 | `POST /api/push/subscribe` · `/unsubscribe` · `/test` | nudges |
 
 `mySpace()` and `myItem()` resolve from the session plus a membership/visibility
 check in one step, so no handler below them ever sees something the caller is not
-entitled to. There is no route that takes a user id.
+entitled to. Only the kitchen routes name a person, and only as WHOSE kitchen —
+identity is still the session, and `kitchen.canUse` decides (see *Recipes*).
 
 ## Conventions
 

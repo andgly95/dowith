@@ -48,6 +48,21 @@ const UI = {
   cal: '<rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
   chev: '<path d="M9 5.5l6.5 6.5L9 18.5"/>',
   phone: '<path d="M6.5 4.5h3l1.5 4-2 1.3a10 10 0 0 0 5.2 5.2l1.3-2 4 1.5v3a2 2 0 0 1-2.2 2A15.5 15.5 0 0 1 4.5 6.7a2 2 0 0 1 2-2.2z"/>',
+  list: '<path d="M4 7l1.6 1.6L8.4 5.8M4 15.5l1.6 1.6 2.8-2.8"/><path d="M11.5 7.2h8.5M11.5 16h8.5"/>',
+  basket: '<path d="M3.6 10h16.8l-1.7 8.4a2 2 0 0 1-2 1.6H7.3a2 2 0 0 1-2-1.6z"/><path d="M8.4 10l3.6-6 3.6 6M9.4 13.6v3M14.6 13.6v3"/>',
+  minus: '<path d="M5.5 12h13"/>',
+  plus: '<path d="M12 5.5v13M5.5 12h13"/>',
+  timer: '<circle cx="12" cy="13.2" r="7.2"/><path d="M12 9.6v3.8l2.4 1.4M9.6 3.4h4.8"/>',
+  trash: '<path d="M4.5 7h15M9.5 7V4.8h5V7M6.6 7l.9 12.2h9L17.4 7M10.2 10.6v5.4M13.8 10.6v5.4"/>',
+  pencil: '<path d="M4.5 19.5h4l10-10a2.8 2.8 0 0 0-4-4l-10 10z"/><path d="M13.2 6.8l4 4"/>',
+  link: '<path d="M10.2 13.8a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.1 1.1"/><path d="M13.8 10.2a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.1-1.1"/>',
+  play: '<path d="M8 5.6v12.8L18.4 12z"/>',
+  pause: '<path d="M8.6 5.6v12.8M15.4 5.6v12.8"/>',
+  back: '<path d="M19 12H5.5M11 6l-6 6 6 6"/>',
+  next: '<path d="M5 12h13.5M13 6l6 6-6 6"/>',
+  sun: '<circle cx="12" cy="12" r="3.6"/><path d="M12 3.5v1.8M12 18.7v1.8M3.5 12h1.8M18.7 12h1.8M6 6l1.3 1.3M16.7 16.7L18 18M6 18l1.3-1.3M16.7 7.3L18 6"/>',
+  x: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  share: '<path d="M12 14.6V3.8M8.2 7.4L12 3.8l3.8 3.6"/><path d="M7 10.6H5.8v9h12.4v-9H17"/>',
 };
 
 export const icon = (name, size = 20, sw = 1.8) => `<svg viewBox="0 0 24 24" aria-hidden="true" width="${size}" height="${size}"

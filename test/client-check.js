@@ -67,6 +67,21 @@ function connectCdp(wsUrl) {
     res.setHeader('content-type', 'application/json');
     asked.push(new URL(req.url, 'http://x'));
     if (req.url.startsWith('/search')) return res.end('[]');   // Nominatim: nowhere by that name
+    // A recipe page, written for the suite, and its photo.
+    if (req.url === '/r/recipe.html') {
+      res.setHeader('content-type', 'text/html');
+      return res.end(`<html><head><meta property="og:site_name" content="Test Kitchen"><script type="application/ld+json">${JSON.stringify({
+        '@type': 'Recipe', name: 'Lemon Chicken', recipeYield: '4 servings', prepTime: 'PT10M', cookTime: 'PT20M', image: '/r/photo.jpg',
+        recipeIngredient: ['1 1/2 lb chicken thighs', '2 tbsp olive oil', '3 cloves garlic, minced', 'A handful of parsley'],
+        recipeInstructions: ['Season the chicken thighs.', 'Sear the chicken in the olive oil for 1 minute.', 'Add the garlic, then the parsley, and serve.'],
+      })}</script></head></html>`);
+    }
+    if (req.url === '/r/photo.jpg') {
+      res.setHeader('content-type', 'image/jpeg');
+      // A real (tiny) JPEG: the card falls back to its emoji when an image will
+      // not decode, so a fake one would test the fallback, not the photo.
+      return res.end(Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCAAGAAgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwCeiiivMPZP/9k=', 'base64'));
+    }
     // Nominatim's lookup, for a place page's hours.
     if (req.url.startsWith('/lookup')) {
       return res.end(JSON.stringify([{ extratags: { opening_hours: 'Mo-Su 08:00-17:00', website: 'https://toki.example' },
@@ -89,7 +104,9 @@ function connectCdp(wsUrl) {
   }));
 
   const server = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PORT: String(PORT), DATA_FILE: path.join(dir, 'store.json'), CONFIG_FILE: path.join(dir, 'config.json') },
+    // PREVIEW_ALLOW_PRIVATE: test-only, so the recipe reader may fetch the
+    // stand-in page from localhost — the guard refuses it everywhere else.
+    env: { ...process.env, PORT: String(PORT), DATA_FILE: path.join(dir, 'store.json'), CONFIG_FILE: path.join(dir, 'config.json'), PREVIEW_ALLOW_PRIVATE: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let slog = '';
@@ -531,11 +548,13 @@ function connectCdp(wsUrl) {
     await sleep(500);
     // The marker is one element that travels, so it has to END UP under the
     // icon it travelled to — measured by layout, after the motion settles.
-    const pillOff = await evalJs(`(() => {
+    const pill = await evalJs(`(() => {
       const p = document.querySelector('#kindNav .pill').getBoundingClientRect();
       const i = document.querySelector('#kindNav button.on .ic').getBoundingClientRect();
-      return Math.round(Math.abs(p.left - i.left) + Math.abs(p.width - i.width)); })()`);
-    check(pillOff <= 2, `the marker settles under the chosen tab (off by ${pillOff}px)`);
+      return { off: Math.round(Math.abs(p.left - i.left) + Math.abs(p.width - i.width)),
+        p: [Math.round(p.left), Math.round(p.width)], i: [Math.round(i.left), Math.round(i.width)],
+        vw: innerWidth, sw: document.documentElement.scrollWidth }; })()`);
+    check(pill.off <= 2, `the marker settles under the chosen tab: ${JSON.stringify(pill)}`);
     check(await evalJs(`getComputedStyle(document.getElementById('newItem'), '::placeholder').color`)
       !== await evalJs(`getComputedStyle(document.getElementById('newItem')).color`),
       'a placeholder is not drawn in the colour of typed text');
@@ -642,21 +661,31 @@ function connectCdp(wsUrl) {
     check(await visible('#spaceSheet'), 'tapping the title opens the list settings');
     await evalJs(`document.getElementById('ssCancel').click()`);
 
-    check(await evalJs(`document.querySelectorAll('#itemList .it').length`) >= 1,
-      'classifying moved it to the Recipes tab');
-
-    const recipeLink = await evalJs(`(() => {
-      const a = document.querySelector('#itemList .it a.go');
-      return a ? { text: a.innerText.trim(), href: a.getAttribute('href'),
-                   rel: a.getAttribute('rel') } : null; })()`);
-    check(recipeLink, 'the recipe row carries its link as an action');
-    // Named for what the link is FOR, and never the same word as the badge
-    // beside it — a row that said "RECIPE" twice read as a bug.
-    check(/cook/i.test(recipeLink.text), `named, not "link": ${recipeLink.text}`);
-    check(recipeLink.href === 'https://cooking.nytimes.com/recipes/1018069', 'pointing at the recipe');
-    check(recipeLink.rel === 'noopener noreferrer', 'and opened safely');
-    // The place typed while it was briefly a film survived the save.
-    check(/our kitchen/i.test(await evalJs(`document.getElementById('itemList').innerText`)),
+    check(await evalJs(`document.querySelectorAll('#itemList .rcard').length`) >= 1,
+      'classifying moved it to the Recipes tab, where recipes are cards');
+    check(await visible('#itemList .ktiles'), 'under the Pantry and To buy tiles');
+    // A recipe with a link and nothing read yet offers to read it — the link is
+    // what the recipe comes from, not a bare "COOK ↗" any more.
+    const offer = await evalJs(`(() => { const b = document.querySelector('#itemList .rcard [data-addrec]');
+      return b ? { text: b.innerText.trim(), url: b.dataset.url } : null; })()`);
+    check(offer && /read the recipe/i.test(offer.text), `the card offers to read it: ${JSON.stringify(offer)}`);
+    check(offer.url === 'https://cooking.nytimes.com/recipes/1018069', 'from its own link');
+    // Its page links back to the original, safely, and says it has no recipe yet.
+    await evalJs(`document.querySelector('#itemList .rcard [data-open]').click()`);
+    await sleep(500);
+    check(await visible('#recipeSheet .modal-in') && !(await visible('#itemSheet .modal-in')),
+      'a recipe opens its own page, not the generic form');
+    const back = await evalJs(`(() => { const a = document.querySelector('#rpBody .site-chip');
+      return a ? { href: a.getAttribute('href'), rel: a.getAttribute('rel') } : null; })()`);
+    check(back && back.href === 'https://cooking.nytimes.com/recipes/1018069' && back.rel === 'noopener noreferrer',
+      `the link back to the original is always on screen, opened safely: ${JSON.stringify(back)}`);
+    check(await visible('#rpRead'), 'and there is a Read the recipe button where the ingredients will go');
+    await evalJs(`document.getElementById('rpClose').click()`);
+    await sleep(300);
+    // The place typed while it was briefly a film survived the save — a card
+    // does not show it, so ask the server.
+    check(await evalJs(`fetch('/api/space/sp1/items').then(r => r.json()).then(b =>
+      b.items.some(i => i.kind === 'recipe' && i.mod && i.mod.place && /our kitchen/i.test(i.mod.place.name)))`),
       'and nothing typed was quietly discarded');
 
     await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
@@ -1072,6 +1101,102 @@ function connectCdp(wsUrl) {
     check(await under('Khruangbin at the Anthem') === "Linnea's ideas", 'handed back, it moves under her name');
     const order = (await sections()).join();
     check(order === "Linnea's ideas,Your ideas", `HER IDEAS ABOVE HIS — got ${order}`);
+
+    // ── recipes: read, save, scale, cook, made it, the kitchen ─────────
+    // The formatter first, imported into the page from the same module the
+    // screens use.
+    const amounts = await evalJs(`(async () => {
+      const base = document.querySelector('script[type=module]').src.replace(/app\.js.*$/, '');
+      const { amount } = await import(base + 'recipe.js');
+      return [amount(1.5, 1, 'cup'), amount(0.75, 2, 'cup'), amount(1, 1 / 3, 'tbsp'), amount(12, 1.1, null),
+        amount(237, 1, 'g'), amount(42, 1, 'ml'), amount(1.234, 1, 'kg'), amount(3, 0.1, 'clove'), amount(2, 1.5, 'tbsp', 3),
+        amount(null, 2, 'cup'), amount(4, 2, 'clove')]; })()`);
+    check(JSON.stringify(amounts) === JSON.stringify(['1½ cups', '1½ cups', '⅓ tbsp', '13', '240 g', '40 ml', '1.2 kg', '½ clove', '3–4½ tbsp', null, '8 cloves']),
+      `amounts scale to what a cook would write: ${JSON.stringify(amounts)}`);
+
+    await evalJs(`document.querySelector('#kindNav [data-kind="recipe"]').click()`);
+    await sleep(600);
+    await typeIn(`Tuesday chicken ${FAKE}/r/recipe.html`);
+    await evalJs(`document.getElementById('btnAdd').click()`);
+    await sleep(1800);
+    check(/found the recipe/i.test(await evalJs(`document.getElementById('rdTitle').innerText`)), 'a pasted link is READ first, not added as words');
+    check(/Lemon Chicken/.test(await evalJs(`document.getElementById('rdBody').innerText`)), 'the sheet says what it found');
+    check(/saved under your title: Tuesday chicken/i.test(await evalJs(`document.getElementById('rdBody').innerText`)),
+      'and that the title stays as typed');
+    check(!(await evalJs(`fetch('/api/space/sp1/items').then(r => r.json()).then(b => b.items.some(i => i.title === 'Tuesday chicken'))`)),
+      'nothing is saved until Save');
+    await evalJs(`document.getElementById('rdSave').click()`);
+    await sleep(1400);
+    const card = await evalJs(`(() => { const c = [...document.querySelectorAll('#itemList .rcard')].find(x => /Tuesday chicken/.test(x.innerText));
+      return c ? { photo: !!c.querySelector('.rtile img'), text: c.innerText } : null; })()`);
+    check(card && card.photo && /30 min · serves 4/.test(card.text) && /Have \d of 4/.test(card.text),
+      `the card: its photo, time, servings and what you have — ${JSON.stringify(card)}`);
+
+    await evalJs(`[...document.querySelectorAll('#itemList .rcard')].find(x => /Tuesday chicken/.test(x.innerText)).querySelector('[data-open]').click()`);
+    await sleep(700);
+    const firstLine = () => evalJs(`document.querySelector('#rpBody .ig .ig-t').innerText`);
+    check(await firstLine() === '1½ lb chicken thighs', `amounts as written: ${await firstLine()}`);
+    await evalJs(`document.getElementById('rpMore').click()`);
+    await sleep(150);
+    await evalJs(`document.getElementById('rpMore').click()`);
+    await sleep(150);
+    check(await evalJs(`document.querySelector('#rpBody .box.serves .sv').innerText`) === '6', 'servings go up');
+    check(await firstLine() === '2¼ lb chicken thighs', `and the amounts with them: ${await firstLine()}`);
+    const unread = await evalJs(`[...document.querySelectorAll('#rpBody .ig .ig-t')].map(e => e.innerText).find(t => /parsley/.test(t))`);
+    check(unread === 'A handful of parsley', `a line it could not read is shown as published, unscaled: ${unread}`);
+    // Tapping a ring writes the kitchen: need → Have.
+    const ringOf = (re) => `[...document.querySelectorAll('#rpBody .ig')].find(e => ${re}.test(e.innerText)).querySelector('.ring')`;
+    check(await evalJs(`${ringOf('/garlic/')}.getAttribute('aria-pressed')`) === 'false', 'garlic is not in his kitchen');
+    await evalJs(`${ringOf('/garlic/')}.click()`);
+    await sleep(1200);
+    check(await evalJs(`${ringOf('/garlic/')}.getAttribute('aria-pressed')`) === 'true', 'and one tap puts it there');
+    check(await evalJs(`fetch('/api/kitchen/' + encodeURIComponent('${A}')).then(r => r.json()).then(k => k.pantry.some(e => e.key === 'garlic' && e.state === 'have'))`),
+      'in his pantry, on the server');
+
+    // Cook mode: big type, its own ingredients scaled, a timer, no screen-lock claim it cannot keep.
+    await evalJs(`Object.defineProperty(navigator, 'wakeLock', { value: undefined, configurable: true })`);
+    await evalJs(`document.getElementById('rpCook').click()`);
+    await sleep(600);
+    check(await visible('#scr-cook') && !(await visible('#kindNav')), 'cook mode is the whole screen');
+    check(!(await visible('#ckWake')), '"Screen stays on" is not claimed without a wake lock');
+    check(await evalJs(`parseFloat(getComputedStyle(document.querySelector('.ck-text')).fontSize)`) >= 24, 'the step is readable from across a counter');
+    await evalJs(`document.getElementById('ckNext').click()`);
+    await sleep(300);
+    check(/2¼ lb chicken thighs/.test(await evalJs(`document.querySelector('.ck-uses').innerText`)), "the step's own ingredients, scaled");
+    await evalJs(`document.querySelector('#ckBody [data-run]').click()`);
+    await sleep(800);
+    check(await evalJs(`fetch('/api/item/' + [...document.querySelectorAll('#itemList .rcard')].find(x => /Tuesday chicken/.test(x.innerText)).dataset.it + '/cooking').then(r => r.status)`) === 200,
+      'cooking is posted');
+    await evalJs(`document.getElementById('ckNext').click()`);
+    await sleep(300);
+    check(await evalJs(`document.querySelectorAll('#ckTray .tray').length`) === 1, "the running timer rides along in the tray");
+    check(await evalJs(`document.getElementById('ckNext').classList.contains('finish')`), 'the last step finishes');
+    await evalJs(`document.getElementById('ckNext').click()`);
+    await sleep(500);
+    check(await visible('#scr-made'), 'Made it');
+    await evalJs(`document.querySelector('#mdAgain [data-v="soon"]').click()`);
+    await evalJs(`document.getElementById('mdTweaks').value = 'more lemon'`);
+    await evalJs(`document.getElementById('mdDone').click()`);
+    await sleep(1500);
+    const made = await evalJs(`fetch('/api/space/sp1/items').then(r => r.json()).then(b => b.items.find(i => i.title === 'Tuesday chicken'))`);
+    check(made.done && made.cooked.length === 1 && made.cooked[0].again === 'soon' && made.cooked[0].tweaks === 'more lemon',
+      `made it is recorded and ticks it off: ${JSON.stringify(made.cooked)}`);
+    check(await visible('#scr-space'), 'and you are back in the list');
+
+    // The kitchen, from its tile: the pantry by aisle, a state that cycles.
+    await evalJs(`document.querySelector('[data-kitchen="pantry"]').click()`);
+    await sleep(800);
+    check(await visible('#scr-kitchen'), 'the Pantry tile opens the kitchen');
+    check(/Produce/.test(await evalJs(`document.getElementById('kiBody').innerText`)), 'grouped by aisle');
+    await evalJs(`[...document.querySelectorAll('#kiBody [data-cycle]')].find(b => b.dataset.cycle === 'garlic').click()`);
+    await sleep(600);
+    check(await evalJs(`[...document.querySelectorAll('#kiBody [data-cycle]')].find(b => b.dataset.cycle === 'garlic').innerText`) === 'Low', 'Have → Low');
+    await evalJs(`document.querySelector('#kiTabs [data-t="buy"]').click()`);
+    await sleep(300);
+    check(/Running low[\s\S]*Garlic/i.test(await evalJs(`document.getElementById('kiBody').innerText`)), 'and Low is on the list to buy');
+    await evalJs(`document.getElementById('kiBack').click()`);
+    await sleep(500);
+    check(await visible('#scr-space'), 'back to the list');
 
     // ── the redesign, by layout ─────────────────────────────────────────
     // The emoji in a tile, the words beside it, the ring on the right — and the

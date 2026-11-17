@@ -25,6 +25,11 @@ function defaultState() {
     // The pleasure inventory, keyed by PAIR of people (sorted ids joined by
     // '|'), never by list — see lib/pleasure.js. Served by two routes only.
     pleasure: {},
+    // One pantry and one list to buy per PERSON, keyed by user id — see
+    // lib/kitchen.js for who may open whose.
+    kitchens: {},
+    // Cooking timers registered so a locked phone still gets told; ≤6 a person.
+    timers: [],
     seq: 1,
   };
 }

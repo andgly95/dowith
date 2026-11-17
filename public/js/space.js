@@ -11,6 +11,10 @@ import { calendarHtml, dayKey, todayKey, dayLabel, timeLabel } from './calendar.
 import { initRose, openRose, peekRose } from './rose.js';
 import { iconFor, icon } from './icons.js';
 import { isPlaceKind, renderPlaces, initPlaces, openPlace, placesTyping, leavePlaces } from './pl.js';
+import { tilesHtml, cardHtml as recipeCardHtml, bindRecipes, initRecipes, openRead, urlIn } from './recipes.js';
+import { openRecipe, initRecipe } from './recipe.js';
+import { initKitchen } from './kitchen.js';
+import { initCook } from './cook.js';
 
 let onChange = () => {};
 let onBack = () => {};
@@ -121,7 +125,13 @@ function itemHtml(it, { sectioned = false } = {}) {
       target="_blank" rel="noopener noreferrer">${
       lead ? `${esc(k.go || 'Open')} ↗` : 'Link'}</a>`);
   }
-  if (it.done && it.doneByName) bits.push(`<span class="who">${esc(it.doneByName)} ticked it off ${esc(ago(it.doneAt))}</span>`);
+  const madeAt = it.done && Array.isArray(it.cooked) && it.cooked.length ? it.cooked[it.cooked.length - 1] : null;
+  if (madeAt) {
+    // "Made Nov 17 · Can't wait": a recipe's record says when, and whether again.
+    const again = { soon: 'Can’t wait', maybe: 'Maybe someday', once: 'Once was enough' }[madeAt.again];
+    bits.push(`<span class="who">Made ${esc(new Date(madeAt.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}</span>`);
+    if (again) bits.push(`<span class="who">${esc(again)}</span>`);
+  } else if (it.done && it.doneByName) bits.push(`<span class="who">${esc(it.doneByName)} ticked it off ${esc(ago(it.doneAt))}</span>`);
   // Under a heading saying it was your idea, a row you did not type says who
   // did — the same owning-up as "edited by" in the sheet.
   else if (sectioned) { if (!it.mine && it.ideaBy !== it.author.id) bits.push(`<span class="who">via ${esc(it.author.name)}</span>`); }
@@ -315,15 +325,19 @@ export function render() {
       : recordHtml(seen);
   } else {
     const shown = inGroup(open, kindTab);
+    // A kind that cooks (recipes) is a shelf of cards under the kitchen tiles.
+    const cook = !!(kindList().find(k => k.id === kindTab) || {}).cook;
     // Each section's rows are one card; a shelf's are a grid of posters.
-    const rows = (xs) => (art ? `<div class="grid">${xs.map(cardHtml).join('')}</div>`
-      : `<div class="group">${xs.map(it => itemHtml(it, { sectioned: together })).join('')}</div>`);
+    const rows = (xs) => (cook ? `<div class="rgrid">${xs.map(it => recipeCardHtml(it, { sectioned: together })).join('')}</div>`
+      : art ? `<div class="grid">${xs.map(cardHtml).join('')}</div>`
+        : `<div class="group">${xs.map(it => itemHtml(it, { sectioned: together })).join('')}</div>`);
     // Split by whose idea it was whenever there is anyone to split it with. A
     // single heading is still worth having: "all four recipes are Linnea's" is
     // exactly the kind of thing this is for.
-    list.innerHTML = !shown.length ? `<div class="empty">${esc(emptyLine())}</div>`
+    list.innerHTML = (cook ? tilesHtml() : '') + (!shown.length ? `<div class="empty">${esc(emptyLine())}</div>`
       : together ? byIdea(shown).map(g => whoseHd(g) + rows(g.items)).join('')
-        : rows(shown);
+        : rows(shown));
+    if (cook) bindRecipes(list);
   }
 
   list.querySelectorAll('[data-it]').forEach((row) => {
@@ -385,7 +399,8 @@ function syncComposer() {
   const k = kindList().find(x => x.id === kindTab);
   $('newItem').placeholder = (!k || k.id === defaultKind())
     ? 'Something to do together…'
-    : `Add a ${k.label.toLowerCase()}…`;
+    : k.cook ? `Add a ${k.label.toLowerCase()}, or paste a link…`
+      : `Add a ${k.label.toLowerCase()}…`;
   // Under Places, typing is also searching — see pl.js.
   if (isPlaceKind(k) && tab === 'open') placesTyping($('newItem').value);
 }
@@ -740,6 +755,17 @@ async function add() {
   const input = $('newItem');
   const title = input.value.trim();
   if (!title) return;
+  // Under Recipes, a link is read first: the sheet shows what it found and
+  // saves only when asked. Words around the link are the title; a bare link
+  // takes the recipe's own name.
+  const kk = kindList().find(x => x.id === (kindTab || defaultKind()));
+  const url = kk && kk.cook ? urlIn(title) : null;
+  if (url) {
+    input.value = '';
+    syncComposer();
+    openRead({ url, title: title.replace(url, '').replace(/\s+/g, ' ').trim() });
+    return;
+  }
   input.value = '';
   syncComposer();
   try {
@@ -826,12 +852,14 @@ export async function toggle(id) {
 
 /* ── one item, opened ───────────────────────────────────────────────────── */
 
-export function openItem(id) {
+export function openItem(id, { generic = false } = {}) {
   const it = S.items.find(x => x.id === id);
   if (!it) return;
   // A place has its own page — the map, the way there, the plan — rather than
-  // the generic form. Whichever way in: a row, a pin, the calendar.
-  if (isPlaceKind(kindOf(kindOrDefault(it)))) return openPlace(id);
+  // the generic form. Whichever way in: a row, a pin, the calendar. A recipe
+  // likewise; its page's Edit details asks for the generic sheet by name.
+  if (!generic && isPlaceKind(kindOf(kindOrDefault(it)))) return openPlace(id);
+  if (!generic && kindOf(kindOrDefault(it)).cook) return openRecipe(id);
   editing = id;
   // The header is the thing itself: its emoji in a tile, its words, and a line
   // saying whose idea it was and what kind of thing it is.
@@ -1186,6 +1214,10 @@ export function initSpace(changeHandler, backHandler) {
   // travelling, since nothing was chosen.
   window.addEventListener('resize', () => { pillX = null; placePill($('kindNav')); });
   initPlaces();
+  initRecipes();
+  initRecipe();
+  initCook();
+  initKitchen(() => { showScreen('scr-space'); render(); });
   $('spaceSettings').addEventListener('click', openSettings);
   $('spaceRose').addEventListener('click', openRose);
   initRose();

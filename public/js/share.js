@@ -15,6 +15,10 @@ let pending = null;      // { title, text, url }
 let where = null;        // chosen space id
 let vis = 'shared';
 let onDone = () => {};
+// A shared link that turns out to be a recipe page. Read in the background the
+// moment the sheet opens — the iOS Shortcut is the best way recipes get in.
+let found = null;          // { url, recipe } once read
+let readFor = null;
 
 // What the platform handed us. A share is usually title + url, sometimes just
 // text with a URL buried in it, and occasionally only text.
@@ -54,9 +58,25 @@ export function openShare(inc) {
 
   $('shShared').textContent = url ? url.slice(0, 60) : 'shared with Do With';
   $('shTitle').value = name;
+  found = null;
   paintWhere();
   paintVis();
   openSheet('shareSheet');
+  if (url) readRecipe(url, name);
+}
+
+// When the page has a recipe, the sheet says so, saves it as a Recipe, and a
+// title that was only "Something from …" becomes the recipe's own name. Words
+// somebody typed are never replaced.
+async function readRecipe(url, name) {
+  readFor = url;
+  let b;
+  try { b = await post('/api/recipe/read', { url }); } catch (_) { return; }
+  if (readFor !== url || !b || !b.ok || $('shareSheet').hidden) return;
+  found = { url, recipe: b.recipe };
+  const typed = $('shTitle').value.trim();
+  if (!typed || typed === name && /^Something from /.test(name)) $('shTitle').value = b.recipe.name || typed;
+  $('shShared').textContent = `A recipe${b.recipe.site ? ` from ${b.recipe.site}` : ''} · ${b.recipe.ingredients.length} ingredients, ${b.recipe.steps.length} steps`;
 }
 
 function paintWhere() {
@@ -85,9 +105,12 @@ async function save() {
   if (!title) return toast('Give it a name');
   const { url } = split(pending || { title: '', text: '', url: '' });
   try {
+    const recipe = found && found.url === url ? found.recipe : null;
+    const cookKind = ((S.wire && S.wire.kinds) || []).find(k => k.cook);
     const b = await post(`/api/space/${where}/item`, {
       title, visibility: vis,
-      mod: url ? { link: { url } } : {},
+      ...(recipe && cookKind ? { kind: cookKind.id } : {}),
+      mod: { ...(url ? { link: { url } } : {}), ...(recipe ? { recipe } : {}) },
     });
     applyWire(b.state);
     localStorage.setItem(LAST, where);
@@ -102,6 +125,8 @@ async function save() {
 // back-button does not offer to add the same thing twice.
 function clear() {
   pending = null;
+  found = null;
+  readFor = null;
   if (/[?&](title|text|url)=/.test(location.search) || location.pathname === '/share') {
     history.replaceState(null, '', '/');
   }
