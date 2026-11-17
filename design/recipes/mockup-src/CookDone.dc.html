@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Do With: made it</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0C0A0D}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+input,textarea{font:inherit}
+input::placeholder,textarea::placeholder{color:#9A90A2;opacity:1}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 920px; box-sizing: border-box; overflow: hidden; background: {{t.bg}}; color: {{t.text}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; gap: 20px; padding: 8px 16px 28px">
+    <a href="Recipes.dc.html" aria-label="Close" style="align-self: flex-start; width: 44px; height: 44px; border-radius: 22px; background: {{t.surface}}; color: {{t.text}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"></path></svg></a>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center">
+      <span aria-hidden="true" style="width: 88px; height: 88px; border-radius: 44px; background: {{t.sage}}; color: {{t.onSage}}; display: flex; align-items: center; justify-content: center"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"></path></svg></span>
+      <h1 style="margin: 8px 0 0; font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 36px; line-height: 1.1; font-weight: 600">Made it</h1>
+      <span style="font-size: 16px; color: {{t.text2}}">💍🐣 Marry Me Chicken</span>
+      <span style="font-size: 14px; color: {{t.dim}}">Cooked together · Tue, Nov 17</span>
+    </div>
+    <div role="group" aria-label="Would you make it again?" style="display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 20px; background: {{t.surface}}">
+      <span style="font-size: 15px; font-weight: 600">Would you make it again?</span>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <sc-for list="{{again}}" as="a" hint-placeholder-count="3">
+          <button type="button" aria-pressed="{{a.pressed}}" onClick="{{a.pick}}" style="min-height: 40px; border: 0; border-radius: 20px; background: {{a.bg}}; color: {{a.fg}}; padding: 0 14px; font-size: 14px; font-weight: 600">{{a.label}}</button>
+        </sc-for>
+      </div>
+    </div>
+    <div role="group" aria-label="Ran out of anything?" style="display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 20px; background: {{t.surface}}">
+      <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 15px; font-weight: 600">Ran out of anything?</span><span style="font-size: 13px; color: {{t.dim}}">Tap it and it goes on the list to buy.</span></span>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <sc-for list="{{used}}" as="u" hint-placeholder-count="6">
+          <button type="button" aria-pressed="{{u.pressed}}" onClick="{{u.toggle}}" style="min-height: 40px; border: 0; border-radius: 20px; background: {{u.bg}}; color: {{u.fg}}; display: flex; align-items: center; gap: 6px; padding: 0 14px; font-size: 14px; font-weight: 600">{{u.label}}</button>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <label for="cdTweaks" style="padding: 0 6px; font-size: 15px; font-weight: 600">Tweaks for next time</label>
+      <textarea id="cdTweaks" rows="2" placeholder="More garlic? Less cream?" style="box-sizing: border-box; width: 100%; border: 0; border-radius: 16px; background: {{t.surface}}; color: {{t.text}}; padding: 13px 16px; font-size: 16px; line-height: 1.45; resize: none; outline: none"></textarea>
+    </div>
+    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 6px">
+      <a href="Recipes.dc.html" style="min-height: 56px; border-radius: 18px; background: {{t.accent}}; color: {{t.onAccent}}; display: flex; align-items: center; justify-content: center; font-size: 16.5px; font-weight: 700">Done</a>
+      <span style="text-align: center; font-size: 12.5px; color: {{t.dim}}">It moves to Done together, with your notes.</span>
+    </div>
+  </div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme": {"editor": "enum", "default": "dusk", "options": ["dusk", "forest"]}, "$preview": {"width": 390, "height": 920}}'>
+class Component extends DCLogic {
+  theme(key) {
+    var P = {
+      dusk: { bg: '#17131A', card: '#211C26', card2: '#2B2430', line: '#332B3A', ink: '#F4EEE9', ink2: '#CBBFC6', dim: '#948A9C', faint: '#6B6274', accent: '#F2845C', sage: '#8FB9A8', warn: '#E0714F', onAccent: '#2A1206', onSage: '#10251D', rose: '#E0708A' },
+      forest: { bg: '#111A15', card: '#18241D', card2: '#213027', line: '#2D3F34', ink: '#EDF1E7', ink2: '#C6D1C4', dim: '#93A69A', faint: '#627569', accent: '#E8A658', sage: '#93CFA0', warn: '#E07A5F', onAccent: '#2A1705', onSage: '#0D2416', rose: '#E08A92' }
+    };
+    var p = P[key] || P.dusk;
+    function hex(h) { var n = parseInt(String(h).replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+    function toHex(c) { return '#' + c.map(function (v) { var s = Math.round(Math.max(0, Math.min(255, v))).toString(16); return s.length < 2 ? '0' + s : s; }).join('').toUpperCase(); }
+    function mix(a, b, w) { return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w, a[2] + (b[2] - a[2]) * w]; }
+    function lum(c) { var r = c.map(function (v) { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r[0] + 0.7152 * r[1] + 0.0722 * r[2]; }
+    function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    function ensure(c, ref, min, toward) { var x = c; for (var i = 0; i < 20 && ratio(x, ref) < min; i++) x = mix(x, toward, 0.06); return x; }
+    function rgba(c, a) { return 'rgba(' + Math.round(c[0]) + ', ' + Math.round(c[1]) + ', ' + Math.round(c[2]) + ', ' + a + ')'; }
+    var bg = hex(p.bg), card = hex(p.card), card2 = hex(p.card2), ink = hex(p.ink), acc = hex(p.accent), sage = hex(p.sage);
+    var dim = ensure(hex(p.dim), card2, 4.5, ink);
+    return {
+      key: p === P.forest ? 'forest' : 'dusk',
+      bg: p.bg, surface: p.card, raised: p.card2, line: p.line,
+      sheet: toHex(mix(bg, card, 0.5)),
+      text: p.ink, text2: p.ink2, dim: toHex(dim), faint: p.faint,
+      accent: p.accent, accentTint: rgba(acc, 0.16), onAccent: p.onAccent,
+      sage: p.sage, sageTint: rgba(sage, 0.16), onSage: p.onSage,
+      warn: p.warn, rose: p.rose,
+      scrim: rgba(mix(bg, [0, 0, 0], 0.5), 0.7),
+      glass: rgba(mix(bg, card, 0.5), 0.86),
+      mapLand: toHex(mix(bg, card, 0.6)),
+      mapWater: toHex(mix(bg, [70, 118, 160], 0.3)),
+      mapPark: toHex(mix(mix(bg, card, 0.6), sage, 0.13)),
+      mapRoad: toHex(mix(bg, ink, 0.1)),
+      mapMajor: toHex(mix(bg, ink, 0.18)),
+      mapLabel: toHex(mix(bg, ink, 0.5))
+    };
+  }
+  lead(title) {
+    var m = /^((?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:️|⃣|\p{Emoji_Modifier}|\p{Regional_Indicator}|‍\p{Extended_Pictographic})*)\s*/u.exec(title);
+    if (!m) return { emoji: '', rest: title };
+    return { emoji: m[1], rest: title.slice(m[0].length) };
+  }
+
+  renderVals() {
+    var self = this;
+    var t = this.theme(this.props.theme ?? 'dusk');
+    var st = this.state || {};
+    var again = st.again || 'soon';
+    var out = st.out || {};
+    return {
+      t: t,
+      again: [['soon', 'Can’t wait'], ['maybe', 'Maybe someday'], ['once', 'Once was enough']].map(function (a) {
+        var on = again === a[0];
+        return { label: a[1], pressed: on ? 'true' : 'false', bg: on ? t.sage : t.raised, fg: on ? t.onSage : t.text2, pick: function () { self.setState({ again: a[0] }); } };
+      }),
+      used: ['Chicken thighs', 'Garlic', 'Olive oil', 'Chicken broth', 'Flour', 'Basil'].map(function (n) {
+        var on = !!out[n];
+        return { label: (on ? '✓ ' : '') + n, pressed: on ? 'true' : 'false', bg: on ? t.accentTint : t.raised, fg: on ? t.accent : t.text2,
+          toggle: function () { var o = Object.assign({}, out); o[n] = !o[n]; self.setState({ out: o }); } };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

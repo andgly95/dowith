@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Do With: a recipe</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0C0A0D}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+input,textarea{font:inherit}
+input::placeholder,textarea::placeholder{color:#9A90A2;opacity:1}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 2360px; box-sizing: border-box; overflow: hidden; background: {{t.bg}}; color: {{t.text}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+    <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: {{t.scrim}}"></div>
+    <section role="dialog" aria-label="Marry Me Chicken" style="position: absolute; top: 44px; left: 0; right: 0; bottom: 0; box-sizing: border-box; background: {{t.sheet}}; border-radius: 26px 26px 0 0; padding: 8px 12px 120px; display: flex; flex-direction: column; gap: 18px">
+      <div aria-hidden="true" style="align-self: center; width: 38px; height: 5px; border-radius: 3px; background: {{t.faint}}"></div>
+
+      <div style="position: relative; height: 210px; border-radius: 22px; overflow: hidden">
+        <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(150deg, #EDC79B 0%, #CF7444 52%, #7A3420 100%); display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, 0.35)"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="2.5"></rect><circle cx="9" cy="9" r="1.8"></circle><path d="M20.5 15l-4.2-4.2a1.5 1.5 0 0 0-2.1 0L5 20"></path></svg></div>
+        <a href="Recipes.dc.html" aria-label="Close" style="position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; border-radius: 22px; background: {{t.glass}}; backdrop-filter: blur(12px); color: {{t.text}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"></path></svg></a>
+        <a href="https://cooking.nytimes.com/" style="position: absolute; left: 10px; bottom: 10px; min-height: 36px; display: flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 18px; background: rgba(15, 10, 12, 0.55); backdrop-filter: blur(8px); color: #FFFFFF; font-size: 13px; font-weight: 600">NYT Cooking<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></a>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 4px; padding: 0 6px">
+        <h1 style="margin: 0; font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 29px; line-height: 1.12; font-weight: 600; letter-spacing: -0.015em">💍🐣 Marry Me Chicken</h1>
+        <span style="font-size: 14px; color: {{t.dim}}">Linnea’s idea · Recipe</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+        <sc-for list="{{times}}" as="x" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 16px; background: {{t.surface}}">
+            <span style="font-size: 12.5px; color: {{t.dim}}">{{x.k}}</span><span style="font-size: 16.5px; font-weight: 600">{{x.v}}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px; border-radius: 18px; background: {{t.surface}}">
+        <span style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 15.5px; font-weight: 600">Servings</span><span style="font-size: 13px; color: {{t.dim}}">Amounts change, times don’t</span></span>
+        <button type="button" aria-label="Fewer servings" onClick="{{less}}" style="width: 44px; height: 44px; border: 0; border-radius: 22px; background: {{t.raised}}; color: {{t.text}}; display: flex; align-items: center; justify-content: center; padding: 0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path></svg></button>
+        <span aria-live="polite" style="min-width: 28px; text-align: center; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums">{{serves}}</span>
+        <button type="button" aria-label="More servings" onClick="{{more}}" style="width: 44px; height: 44px; border: 0; border-radius: 22px; background: {{t.raised}}; color: {{t.text}}; display: flex; align-items: center; justify-content: center; padding: 0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+      </div>
+
+      <section aria-label="Ingredients" style="display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 6px">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 700">Ingredients</h2>
+          <div role="group" aria-label="Whose kitchen" style="display: flex; gap: 2px; padding: 3px; border-radius: 14px; background: {{t.surface}}">
+            <sc-for list="{{kitchens}}" as="k" hint-placeholder-count="2">
+              <button type="button" aria-pressed="{{k.pressed}}" onClick="{{k.pick}}" style="min-height: 36px; border: 0; border-radius: 11px; background: {{k.bg}}; color: {{k.fg}}; padding: 0 12px; font-size: 13.5px; font-weight: 600">{{k.label}}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 18px; background: {{t.surface}}">
+          <div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-size: 15px; font-weight: 600">{{haveLine}}</span><span style="font-size: 14px; font-weight: 600; color: {{t.sage}}">{{haveCount}}</span></div>
+          <div aria-hidden="true" style="height: 6px; border-radius: 3px; background: {{t.raised}}; overflow: hidden"><div style="width: {{havePct}}; height: 6px; background: {{t.sage}}"></div></div>
+          <sc-if value="{{anyMissing}}" hint-placeholder-val="{{ true }}">
+            <button type="button" onClick="{{addMissing}}" style="min-height: 44px; border: 0; border-radius: 14px; background: {{addBg}}; color: {{addFg}}; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 600"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 17 2 2 4-4"></path><path d="m3 7 2 2 4-4"></path><path d="M13 6h8M13 12h8M13 18h8"></path></svg>{{addLabel}}</button>
+          </sc-if>
+        </div>
+        <div role="list" style="background: {{t.surface}}; border-radius: 18px; overflow: hidden">
+          <sc-for list="{{ing}}" as="g" hint-placeholder-count="11">
+            <div role="listitem" style="position: relative; display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 14px 0 4px">
+              <div aria-hidden="true" style="position: absolute; left: 52px; right: 0; top: 0; height: 1px; background: {{g.sep}}"></div>
+              <button type="button" aria-label="{{g.aria}}" aria-pressed="{{g.pressed}}" onClick="{{g.toggle}}" style="width: 44px; height: 44px; flex-shrink: 0; border: 0; background: transparent; padding: 0; display: flex; align-items: center; justify-content: center">
+                <span style="width: 22px; height: 22px; box-sizing: border-box; border-radius: 11px; border: 1.75px solid {{g.ring}}; background: {{g.fill}}; color: {{t.onSage}}; display: flex; align-items: center; justify-content: center"><span style="display: flex; opacity: {{g.check}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"></path></svg></span></span>
+              </button>
+              <span style="flex: 1; font-size: 15.5px; line-height: 1.35; color: {{g.color}}"><b style="font-weight: 650; color: {{t.text}}">{{g.amt}}</b> {{g.n}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section aria-label="Steps" style="display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; padding: 0 6px; font-size: 18px; font-weight: 700">Steps <span style="font-weight: 500; color: {{t.dim}}">6</span></h2>
+        <ol style="margin: 0; padding: 4px 0; list-style: none; background: {{t.surface}}; border-radius: 18px">
+          <sc-for list="{{steps}}" as="s" hint-placeholder-count="6">
+            <li style="display: flex; gap: 12px; padding: 12px 14px">
+              <span aria-hidden="true" style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 14px; background: {{t.raised}}; color: {{t.text2}}; display: flex; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 700">{{s.n}}</span>
+              <span style="flex: 1; display: flex; flex-direction: column; gap: 8px">
+                <span style="font-size: 15px; line-height: 1.45; color: {{t.text2}}">{{s.t}}</span>
+                <sc-if value="{{s.hasTimer}}" hint-placeholder-val="{{ false }}">
+                  <span style="align-self: flex-start; display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 10px; background: {{t.accentTint}}; color: {{t.accent}}; font-size: 13px; font-weight: 600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2h4"></path><path d="M12 14l3-3"></path><circle cx="12" cy="14" r="8"></circle></svg>{{s.timer}}</span>
+                </sc-if>
+              </span>
+            </li>
+          </sc-for>
+        </ol>
+      </section>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <label for="rcNotes" style="padding: 0 6px; font-size: 15px; font-weight: 600">Our notes</label>
+        <textarea id="rcNotes" rows="3" placeholder="Tweaks for next time" style="box-sizing: border-box; width: 100%; border: 0; border-radius: 16px; background: {{t.surface}}; color: {{t.text}}; padding: 13px 16px; font-size: 16px; line-height: 1.45; resize: none; outline: none"></textarea>
+      </div>
+
+      <div style="background: {{t.surface}}; border-radius: 18px; overflow: hidden">
+        <button type="button" style="width: 100%; min-height: 54px; border: 0; background: transparent; color: inherit; display: flex; align-items: center; gap: 12px; padding: 0 14px; text-align: left"><span aria-hidden="true" style="display: flex; width: 26px; justify-content: center; color: {{t.dim}}"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.5 3.8a2.3 2.3 0 0 1 3.2 3.2L7.6 19.1 3.5 20.5l1.4-4.1z"></path></svg></span><span style="flex: 1; font-size: 15px">Edit details</span><span style="font-size: 14px; color: {{t.dim}}">Linnea’s idea · Us</span></button>
+        <div style="position: relative"><div aria-hidden="true" style="position: absolute; left: 52px; right: 0; top: 0; height: 1px; background: {{t.line}}"></div>
+        <button type="button" style="width: 100%; min-height: 54px; border: 0; background: transparent; color: inherit; display: flex; align-items: center; gap: 12px; padding: 0 14px; text-align: left"><span aria-hidden="true" style="display: flex; width: 26px; justify-content: center; color: {{t.dim}}"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13.5a4.5 4.5 0 0 0 6.4.4l2.8-2.8a4.5 4.5 0 0 0-6.4-6.4l-1.4 1.4"></path><path d="M14 10.5a4.5 4.5 0 0 0-6.4-.4l-2.8 2.8a4.5 4.5 0 0 0 6.4 6.4l1.4-1.4"></path></svg></span><span style="flex: 1; font-size: 15px">Read the link again</span></button></div>
+        <div style="position: relative"><div aria-hidden="true" style="position: absolute; left: 52px; right: 0; top: 0; height: 1px; background: {{t.line}}"></div>
+        <button type="button" style="width: 100%; min-height: 54px; border: 0; background: transparent; color: {{t.warn}}; display: flex; align-items: center; gap: 12px; padding: 0 14px; text-align: left"><span aria-hidden="true" style="display: flex; width: 26px; justify-content: center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9.5 7V5h5v2M6.5 7l.9 12a1.5 1.5 0 0 0 1.5 1.4h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7"></path></svg></span><span style="flex: 1; font-size: 15px">Delete</span></button></div>
+      </div>
+
+      <div style="position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 10px; padding: 24px 16px 28px; background: linear-gradient(180deg, transparent 0%, {{t.sheet}} 30%)">
+        <button type="button" style="min-height: 56px; border: 0; border-radius: 18px; background: {{t.raised}}; color: {{t.text}}; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 18px; font-size: 15.5px; font-weight: 600"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"></rect><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"></path></svg>Plan it</button>
+        <a href="Cook.dc.html" style="flex: 1; min-height: 56px; border-radius: 18px; background: {{t.accent}}; color: {{t.onAccent}}; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 16.5px; font-weight: 700"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"></path></svg>Start cooking</a>
+      </div>
+    </section>
+  </div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme": {"editor": "enum", "default": "dusk", "options": ["dusk", "forest"]}, "$preview": {"width": 390, "height": 2360}}'>
+class Component extends DCLogic {
+  theme(key) {
+    var P = {
+      dusk: { bg: '#17131A', card: '#211C26', card2: '#2B2430', line: '#332B3A', ink: '#F4EEE9', ink2: '#CBBFC6', dim: '#948A9C', faint: '#6B6274', accent: '#F2845C', sage: '#8FB9A8', warn: '#E0714F', onAccent: '#2A1206', onSage: '#10251D', rose: '#E0708A' },
+      forest: { bg: '#111A15', card: '#18241D', card2: '#213027', line: '#2D3F34', ink: '#EDF1E7', ink2: '#C6D1C4', dim: '#93A69A', faint: '#627569', accent: '#E8A658', sage: '#93CFA0', warn: '#E07A5F', onAccent: '#2A1705', onSage: '#0D2416', rose: '#E08A92' }
+    };
+    var p = P[key] || P.dusk;
+    function hex(h) { var n = parseInt(String(h).replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+    function toHex(c) { return '#' + c.map(function (v) { var s = Math.round(Math.max(0, Math.min(255, v))).toString(16); return s.length < 2 ? '0' + s : s; }).join('').toUpperCase(); }
+    function mix(a, b, w) { return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w, a[2] + (b[2] - a[2]) * w]; }
+    function lum(c) { var r = c.map(function (v) { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r[0] + 0.7152 * r[1] + 0.0722 * r[2]; }
+    function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    function ensure(c, ref, min, toward) { var x = c; for (var i = 0; i < 20 && ratio(x, ref) < min; i++) x = mix(x, toward, 0.06); return x; }
+    function rgba(c, a) { return 'rgba(' + Math.round(c[0]) + ', ' + Math.round(c[1]) + ', ' + Math.round(c[2]) + ', ' + a + ')'; }
+    var bg = hex(p.bg), card = hex(p.card), card2 = hex(p.card2), ink = hex(p.ink), acc = hex(p.accent), sage = hex(p.sage);
+    var dim = ensure(hex(p.dim), card2, 4.5, ink);
+    return {
+      key: p === P.forest ? 'forest' : 'dusk',
+      bg: p.bg, surface: p.card, raised: p.card2, line: p.line,
+      sheet: toHex(mix(bg, card, 0.5)),
+      text: p.ink, text2: p.ink2, dim: toHex(dim), faint: p.faint,
+      accent: p.accent, accentTint: rgba(acc, 0.16), onAccent: p.onAccent,
+      sage: p.sage, sageTint: rgba(sage, 0.16), onSage: p.onSage,
+      warn: p.warn, rose: p.rose,
+      scrim: rgba(mix(bg, [0, 0, 0], 0.5), 0.7),
+      glass: rgba(mix(bg, card, 0.5), 0.86),
+      mapLand: toHex(mix(bg, card, 0.6)),
+      mapWater: toHex(mix(bg, [70, 118, 160], 0.3)),
+      mapPark: toHex(mix(mix(bg, card, 0.6), sage, 0.13)),
+      mapRoad: toHex(mix(bg, ink, 0.1)),
+      mapMajor: toHex(mix(bg, ink, 0.18)),
+      mapLabel: toHex(mix(bg, ink, 0.5))
+    };
+  }
+  lead(title) {
+    var m = /^((?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:️|⃣|\p{Emoji_Modifier}|\p{Regional_Indicator}|‍\p{Extended_Pictographic})*)\s*/u.exec(title);
+    if (!m) return { emoji: '', rest: title };
+    return { emoji: m[1], rest: title.slice(m[0].length) };
+  }
+
+  recipe() {
+    return {
+      base: 4,
+      ing: [
+        { id: 'chk', q: 1.5, u: 'lb', n: 'boneless chicken thighs', mine: true, hers: false },
+        { id: 'flr', q: 0.25, u: 'cup', n: 'all-purpose flour', mine: true, hers: true },
+        { id: 'oil', q: 2, u: 'tbsp', n: 'olive oil', mine: true, hers: true },
+        { id: 'gar', q: 4, u: 'cloves', n: 'garlic, minced', mine: true, hers: true },
+        { id: 'sdt', q: 0.5, u: 'cup', n: 'sun-dried tomatoes, chopped', mine: false, hers: true },
+        { id: 'brt', q: 1, u: 'cup', n: 'chicken broth', mine: true, hers: false },
+        { id: 'crm', q: 0.75, u: 'cup', n: 'heavy cream', mine: false, hers: true },
+        { id: 'par', q: 0.5, u: 'cup', n: 'grated parmesan', mine: false, hers: true },
+        { id: 'thy', q: 1, u: 'tsp', n: 'dried thyme', mine: true, hers: true },
+        { id: 'rpf', q: 0.5, u: 'tsp', n: 'red pepper flakes', mine: true, hers: false },
+        { id: 'bas', q: 0, u: '', n: 'fresh basil, to serve', mine: true, hers: true }
+      ],
+      steps: [
+        { t: 'Pat the chicken dry, season it with salt and pepper, and dust it with the flour.', use: ['chk', 'flr'] },
+        { t: 'Heat the oil in a large skillet over medium-high. Sear the chicken until golden, about 5 minutes a side, then move it to a plate.', use: ['oil', 'chk'], timer: 300, tl: 'Sear' },
+        { t: 'Lower the heat to medium. Add the garlic and sun-dried tomatoes and cook until fragrant, about 2 minutes.', use: ['gar', 'sdt'], timer: 120, tl: 'Garlic' },
+        { t: 'Pour in the broth and cream, add the thyme and pepper flakes, and bring it to a gentle simmer.', use: ['brt', 'crm', 'thy', 'rpf'] },
+        { t: 'Stir in the parmesan, return the chicken, and simmer until the sauce thickens and the chicken is cooked through, about 10 minutes.', use: ['par', 'chk'], timer: 600, tl: 'Simmer' },
+        { t: 'Tear the basil over the top and serve.', use: ['bas'] }
+      ]
+    };
+  }
+  amount(q, scale) {
+    if (!q) return '';
+    var v = q * scale, w = Math.floor(v + 1e-9), f = v - w;
+    var F = [[0, ''], [0.125, '⅛'], [0.25, '¼'], [0.333, '⅓'], [0.5, '½'], [0.667, '⅔'], [0.75, '¾'], [1, '']];
+    var best = F[0];
+    F.forEach(function (x) { if (Math.abs(x[0] - f) < Math.abs(best[0] - f)) best = x; });
+    if (best[0] === 1) { w += 1; best = F[0]; }
+    return (w ? String(w) : '') + best[1] || '0';
+  }
+  clock(s) { s = Math.max(0, Math.round(s)); var m = Math.floor(s / 60), r = s % 60; return m + ':' + (r < 10 ? '0' : '') + r; }
+
+  renderVals() {
+    var self = this;
+    var t = this.theme(this.props.theme ?? 'dusk');
+    var st = this.state || {};
+    var R = this.recipe();
+    var serves = st.serves || R.base;
+    var scale = serves / R.base;
+    var kitchen = st.kitchen || 'mine';
+    var flip = st.flip || {};
+    var added = !!st.added;
+    var have = 0;
+    var ing = R.ing.map(function (g, i) {
+      var h = (kitchen === 'mine' ? g.mine : g.hers) !== !!flip[kitchen + g.id];
+      if (h) have++;
+      return {
+        amt: (self.amount(g.q, scale) + (g.u ? ' ' + g.u : '')).trim(), n: g.n,
+        sep: i === 0 ? 'transparent' : t.line,
+        ring: h ? t.sage : t.dim, fill: h ? t.sage : 'transparent', check: h ? 1 : 0, color: h ? t.text2 : t.text2,
+        pressed: h ? 'true' : 'false', aria: (h ? 'Have it: ' : 'Need it: ') + g.n,
+        toggle: function () { var f = Object.assign({}, flip); f[kitchen + g.id] = !f[kitchen + g.id]; self.setState({ flip: f }); }
+      };
+    });
+    var missing = R.ing.length - have;
+    function k(id, label) { var on = kitchen === id; return { label: label, pressed: on ? 'true' : 'false', bg: on ? t.raised : 'transparent', fg: on ? t.text : t.dim, pick: function () { self.setState({ kitchen: id, added: false }); } }; }
+    return {
+      t: t, serves: serves,
+      less: function () { self.setState({ serves: Math.max(1, serves - 1) }); },
+      more: function () { self.setState({ serves: Math.min(16, serves + 1) }); },
+      times: [{ k: 'Prep', v: '10 min' }, { k: 'Cook', v: '30 min' }, { k: 'Total', v: '40 min' }],
+      kitchens: [k('mine', 'Mine'), k('hers', 'Linnea’s')],
+      haveLine: kitchen === 'mine' ? 'In your kitchen' : 'In Linnea’s kitchen',
+      haveCount: have + ' of ' + R.ing.length, havePct: Math.round(100 * have / R.ing.length) + '%',
+      anyMissing: missing > 0,
+      addLabel: added ? 'On the list' : 'Add ' + missing + ' to the list',
+      addBg: added ? t.sageTint : t.accentTint, addFg: added ? t.sage : t.accent,
+      addMissing: function () { self.setState({ added: true }); },
+      ing: ing,
+      steps: R.steps.map(function (s, i) { return { n: i + 1, t: s.t, hasTimer: !!s.timer, timer: s.timer ? (s.timer / 60) + ' min timer' : '' }; })
+    };
+  }
+}
+</script>
+</body>
+</html>
