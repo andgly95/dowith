@@ -21,6 +21,7 @@ import { S } from './state.js';
 import { $, esc, toast, openSheet, closeSheet } from './util.js';
 import { haptic } from './motion.js';
 import { get, post } from './api.js';
+import { roomHtml, bindRoom, roomDoorLine, resetRoom, zoneQuery, refreshQuestion } from './question.js';
 
 let data = null;          // last answer from the server
 let view = 'door';        // 'door' | 'body' | 'try' | 'both' | 'list'
@@ -60,6 +61,7 @@ const I = {
   shuffle: svg('<path d="M4 7h3.2c2.4 0 3.6 1.4 4.8 5s2.4 5 4.8 5H20M4 17h3.2c1.6 0 2.6-.6 3.4-1.8M13.4 8.8c.8-1.2 1.8-1.8 3.4-1.8H20M17.6 4.6 20 7l-2.4 2.4M17.6 14.6 20 17l-2.4 2.4"/>', 20),
   undo: svg('<path d="M9 14 4.5 9.5 9 5"/><path d="M4.8 9.5H14a5.5 5.5 0 0 1 0 11h-3"/>', 20),
   plus: svg('<path d="M12 5.5v13M5.5 12h13"/>', 22, 2.2),
+  today: svg('<path d="M5.2 17.4A8 8 0 1 1 8 19.6l-3.6 1 .8-3.2z"/><path d="M10.2 9.6a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.3M12 15.4v.1"/>'),
 };
 
 /* ── which matches you have seen — per device, a convenience ─────────────── */
@@ -85,7 +87,7 @@ export async function peekRose() {
   $('spaceRose').classList.remove('fresh');
   if (!S.space || !S.space.isPair) return;
   try {
-    const d = await get(`/api/space/${id}/pleasure`);
+    const d = await get(`/api/space/${id}/pleasure${zoneQuery()}`);
     if (S.spaceId !== id) return;
     data = d;
     paintDot();
@@ -113,6 +115,8 @@ function doorHtml() {
     <button type="button" class="rs-door" data-rs="try"><i>${I.cards}</i>
       <span><b>Things to try</b><small>${done} of ${total} answered${total - done ? ` · ${total - done} left` : ''}</small></span>
       <span class="rs-ring" style="--p:${Math.round((done / Math.max(total, 1)) * 100)}%" aria-hidden="true"></span>${I.chev}</button>
+    ${data.question ? `<button type="button" class="rs-door" data-rs="question"><i>${I.today}</i>
+      <span><b>Today’s question</b><small>${esc(roomDoorLine(data.question, data.partner))}</small></span>${I.chev}</button>` : ''}
     <button type="button" class="rs-door" data-rs="ask"><i>${I.ask}</i>
       <span><b>Ask your own</b><small>A question for the two of you</small></span>${I.chev}</button>
     <p class="rs-lock">${I.lock}<span>Only the two of you can open this. Things to try show up only when you both lean yes,
@@ -307,7 +311,9 @@ function paint(keepScroll = false) {
   const top = scroller().scrollTop;
   $('rsHead').innerHTML = head();
   $('rsBody').innerHTML = view === 'door' ? doorHtml() : view === 'body' ? bodyHtml()
-    : view === 'try' ? tryHtml() : view === 'both' ? bothHtml() : listHtml();
+    : view === 'try' ? tryHtml() : view === 'both' ? bothHtml() : view === 'question' ? roomHtml(data.question) : listHtml();
+  // Today's question, a Spicy day: drawn and bound by question.js, sent here.
+  if (view === 'question') bindRoom($('rsBody'), data.question, sendQuestion, () => paint(true));
   scroller().scrollTop = keepScroll ? top : 0;
   // Only "You both want" marks the matches seen — it is the screen that shows them.
   if (view === 'both') markSeen();
@@ -321,6 +327,20 @@ function go(to) {
 }
 
 /* ── answering ───────────────────────────────────────────────────────────── */
+
+// A Spicy question's answer, reaction or reply: the rose's own route, and the
+// only one it travels on. Resolves to the new question view, or null.
+async function sendQuestion(body) {
+  if (busy) return null;
+  busy = true;
+  try {
+    data = await post(`/api/space/${S.spaceId}/pleasure`, { question: body });
+    return data.question;
+  } catch (e) {
+    toast(e.status === 409 ? `${data.partner} already answered, so yours is final` : 'Could not send that');
+    return null;
+  } finally { busy = false; }
+}
 
 async function send(body) {
   if (busy) return false;
@@ -445,14 +465,17 @@ function bloom(label) {
 
 // Always onto the front door — never straight onto the matches, which would
 // put names on screen the moment the sheet opens. The "new" chip invites.
-export async function openRose() {
+// `to`: 'question' opens straight onto today's question — from the list's
+// card on a Spicy day, which names nothing itself.
+export async function openRose(to = 'door') {
   if (!S.space || !S.space.isPair) return;
   try {
-    data = await get(`/api/space/${S.spaceId}/pleasure`);
+    data = await get(`/api/space/${S.spaceId}/pleasure${zoneQuery()}`);
   } catch (_) { return toast('Could not open that'); }
+  resetRoom();
   const seen = seenSet();
   fresh = new Set(data.matches.filter(m => !seen.has(m.id)).map(m => m.id));
-  view = 'door';
+  view = to === 'question' && data.question ? 'question' : 'door';
   bodyView = 'together';
   side = 'front';
   part = 'neck';
@@ -472,12 +495,12 @@ async function addOwn() {
 }
 
 export function initRose() {
-  $('rsClose').addEventListener('click', () => { closeSheet('roseSheet'); paintDot(); });
+  $('rsClose').addEventListener('click', () => { closeSheet('roseSheet'); paintDot(); refreshQuestion(); });
   $('roseSheet').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.target.id === 'rsNew') addOwn();
   });
   $('roseSheet').addEventListener('click', async (e) => {
-    if (e.target === $('roseSheet')) { closeSheet('roseSheet'); return paintDot(); }
+    if (e.target === $('roseSheet')) { closeSheet('roseSheet'); refreshQuestion(); return paintDot(); }
     const t = e.target.closest('[data-rs],[data-go],[data-view],[data-side],[data-part],[data-level],[data-mode],[data-skip],[data-back],[data-pick],[data-remove],#rsAdd');
     if (!t || !data) return;
     if (t.dataset.rs) return go(t.dataset.rs);

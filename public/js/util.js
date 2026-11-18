@@ -11,7 +11,7 @@ export const calm = () => !!(window.matchMedia && window.matchMedia('(prefers-re
 // How deep a screen is, so moving between them has a direction: further in
 // arrives from the right, back out arrives from the left. A screen not listed
 // counts as the list.
-const DEPTH = { 'scr-auth': 0, 'scr-shelf': 0, 'scr-space': 1, 'scr-kitchen': 2, 'scr-cook': 2, 'scr-made': 3 };
+const DEPTH = { 'scr-auth': 0, 'scr-shelf': 0, 'scr-space': 1, 'scr-kitchen': 2, 'scr-questions': 2, 'scr-cook': 2, 'scr-made': 3 };
 const depth = (el) => (el && el.id in DEPTH ? DEPTH[el.id] : 1);
 
 // The switch itself is synchronous — `.active` moves before this returns, so

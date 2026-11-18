@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 187 tests + a headless-chromium check
+- **Tests:** `npm test` — 195 tests + a headless-chromium check
 
 ## The model
 
@@ -37,6 +37,8 @@ mod.recipe = { name, site, image, yield, prep, cook, total, ingredients[], steps
 cooked    = [{ at, by, again, tweaks }]                          // see Recipes
 swaps     = { [ingredientIndex]: { use, amount, ratio, needs[], note, why, suggested, of, by, at } } // see Swaps
 state.kitchens[uid] = { pantry: { [key]: { name, state, aisle, by, at } }, buy: [...] }
+state.questions[pairKey] = { zone, decks: {[uid]: kinds}, remind: {[uid]: 'HH:MM'}, paused, pauses, startedOn,
+                             days: { 'YYYY-MM-DD': { qid, kind, answers: {[uid]: {text|pick, at}}, reacts, replies } } } // see Today's question
 state.timers = [{ id, uid, itemId, step, label, endsAt }]
 ```
 
@@ -796,6 +798,62 @@ The privacy rules are the feature, and they live in `pleasure.view()`, pure and 
 - Two routes and nowhere else: no push, no digest, nothing on `/api/state`, no third
   party. The catalogue is server-side and an id outside it is refused.
 
+## Today's question (`lib/questions.js`, `public/js/question.js`)
+
+One question a day, the same for both of you, on a **pair** list: **you answer it to see
+theirs.** Every day you both answer adds to a streak, and an answer can become a thing to
+do. Built from the handoff on `design/daily-question` (PR #4); like the earlier handoffs,
+the mockups stay on that branch and never come into master.
+
+- **Their answer is not sent until you have answered.** Not blurred, not hidden in the
+  DOM: absent. `dayView` gives `{ answered: true|false }` and nothing else of theirs, so
+  the locked card's two bars are a drawing. A truth table dumps every combination to
+  JSON and searches it for their text.
+- **Once both have answered, neither can change theirs** (409) — or the second could
+  read the first and the first rewrite theirs to match. Before that yours replaces, and
+  keeps the time you FIRST answered, because that is the day the streak counts.
+- **Your kinds are yours.** Friends, Romance, Spicy: each of you turns them on for
+  yourself, and a kind comes up once you both have. The wire carries your own list and
+  the intersection, **never theirs** — "I wanted romance questions and you didn't" is not
+  a message this app delivers, for any of the three. Asserted for every combination by
+  searching the JSON for a kind only they turned on. Friends is on by default, so a pair
+  list has a card from the day this shipped.
+- **Spicy keeps to the rose.** Its text, answers, reactions and replies travel only on
+  `/api/space/:id/pleasure` (`roomView`); on the list's route a Spicy day is `justUs: true`
+  and two answered flags, and the list's answer route refuses one (404). Never on
+  `/api/state`, never in the history, never in a push. The card goes rose and says
+  *Today's is one for just the two of you*; **Open** lands in the rose on the question, and
+  the rose's front door gains a fourth door that names nothing (*Waiting for you*,
+  *You both answered*). The day still counts toward the streak — a number says nothing.
+- **A day is a calendar date in the pair's zone**, never an instant, like `item.when`. The
+  zone is the first phone's that says (`?zone=` from `Intl`), and a record made where
+  nobody said (the rose, a reminder) is corrected by the first phone that does. The day's
+  question is **picked once and stored**, so changing the kinds changes tomorrow.
+- **Which question:** the kinds in play take turns by the day's index since the pair
+  started; within a kind, the next not yet asked in an order shuffled once per pair (so
+  two pairs don't march through the same list); used up, it starts again.
+- **The streak** is worked out, never stored: a day counts when both answered ON it, in
+  the pair's zone. Today not done yet never breaks it; a missed day does once it is over
+  (decided without Andrew — a weekly free day or an earned freeze would be a change to
+  `streak()` alone). A catch-up shows in the history and unlocks theirs but does not mend
+  it. Paused days (`pauses`, closed ranges; resuming today starts counting today) neither
+  count nor break.
+- **Add to Activities** puts the answer in the composer on the Activities tab, selected to
+  trim; an answer of theirs is credited to them once added (`ideaBy`, which the author
+  may set). `✓ On your list` is remembered per device. Never in the rose.
+- **Nudges carry no question text, on any day** (`questions.nudge`, the one place they are
+  worded; a test holds every one against every question): *Sam answered today's question
+  · Answer to see theirs*, *Sam answered · See what they said*, and the reminder. At most
+  one of each per person per day (`nudged`). The reminder is checked once a minute in each
+  pair's zone, picks the day if nobody has opened the app, and is **8 PM unless you change
+  it** (Andrew's call). Never set is the default; turned off is stored as `null` and stays
+  off (`remindOf`).
+- **Pairs only, keyed by the pair of people** (`pleasure.pairKey`), and deleted when
+  either leaves the pair, in the same line as the rose's answers. Every route is 404 on a
+  group list.
+- `/api/state` carries `question: { streak, waiting }` per pair space for the shelf — a
+  number and a flag. The card loads with the list (`loadQuestion`, beside the items).
+
 ## The record
 
 Done items leave the to-do list and appear under **Done together**, newest first,
@@ -1249,7 +1307,7 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `POST /api/item/:id/when` | put it on a day `{date, time?}` or `{clear:true}` — anyone who can see it |
 | `POST /api/item/:id/visit` | `{book?, again?, memory?}` — anyone who can see it; `again`/`memory` only once done (409) |
 | `GET /api/item/:id/place` | a place's hours, website, address — live from OSM by its id; 404 if you can't see it |
-| `GET`·`POST /api/space/:id/pleasure` | the rose — pairs only; partner's try answers appear only as matches |
+| `GET`·`POST /api/space/:id/pleasure` | the rose — pairs only; partner's try answers appear only as matches; `question` is today's Spicy one, answered here with `{ question: {date, text\|pick\|react\|reply} }` |
 | `GET /api/square/status` · `POST /api/square/import` | the bridge (501) |
 | `GET /share` | share target / Shortcut / bookmarklet — serves the shell |
 | `POST /api/space/:id/geocode` | resolve place names you can see, batched — not called by the client since the Map view went |
@@ -1261,6 +1319,10 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `GET`·`POST /api/item/:id/cooking` | where the others are in the recipe — memory only |
 | `POST /api/item/:id/swap/suggest {i, kitchen?, picks?, musts?}` | what to use instead of one line — asks Claude, **saves nothing**; `{ok, verdict, suggestions}` or `{ok:false, why}` |
 | `POST /api/item/:id/swap {i, use, amount?, ratio?, needs?, note?}` · `{i, clear}` | use something instead — anyone who can see it |
+| `GET /api/space/:id/question?zone=` | today's question from your side, the streak, your kinds and reminder — pairs only |
+| `POST /api/space/:id/question/answer {date, text\|pick}` · `/react {date, emoji\|null}` · `/reply {date, text}` | not a Spicy day (404); react and reply only once both answered (409); answer final once both have |
+| `POST /api/space/:id/question/settings {decks?, remind?, zone?, paused?}` | your own kinds and reminder; the pause is both of yours |
+| `GET /api/space/:id/question/history?before=` | every question so far, newest first — **never a Spicy day** |
 | `GET /api/kitchen/:uid` · `POST …/pantry` · `POST …/buy` | a kitchen — yours or a pair partner's, else 404 |
 | `GET /api/img/:name` | a recipe photo, signed in, immutable |
 | `POST /api/push/subscribe` · `/unsubscribe` · `/test` | nudges |

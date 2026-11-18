@@ -160,6 +160,14 @@
     </div>
   </section>
 
+  <!-- ───────────── EVERY QUESTION SO FAR ─────────────
+       Today's question, kept: the streak, and every day you answered. -->
+  <section id="scr-questions" class="screen">
+    <header class="topbar"><button class="icon-btn" id="dqBack" aria-label="Back"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button></header>
+    <div class="dq-hhd"><h1 class="big">Your questions</h1><p>Every one you’ve answered together</p></div>
+    <div class="scroll"><div class="dq-hist" id="dqHist"></div><div class="pad"></div></div>
+  </section>
+
   <!-- ───────────── KITCHEN ─────────────
        A pushed screen, not a sheet: you stand in front of a fridge with it. -->
   <section id="scr-kitchen" class="screen">
@@ -358,6 +366,9 @@
     <div class="modal-hd"><div class="hd-t"><b id="ssTitle">List</b><span id="ssWho"></span></div><button type="button" class="x" id="ssCancel" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
     <label class="fld" id="ssNameFld"><span>Name this list <em>groups only</em></span>
       <input id="ssName" type="text" maxlength="60" placeholder="Ski trip crew"></label>
+    <div class="box rows" id="ssQuestionBox" hidden><button type="button" class="crow" id="ssQuestion">
+      <i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.2 17.4A8 8 0 1 1 8 19.6l-3.6 1 .8-3.2z"/><path d="M10.2 9.6a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.3M12 15.4v.1"/></svg></i>
+      <span class="cb"><b>Today’s question</b><small id="ssQuestionSub">Which kinds come up, and a reminder</small></span></button></div>
     <div class="invite-box">
       <div class="ib-hd">Invite someone</div>
       <p class="ib-note">They'll get an account when they open the link. It works once, and expires in a fortnight.</p>
@@ -365,6 +376,22 @@
       <div id="ssLink" class="ib-link" hidden></div>
     </div>
     <button class="danger" id="ssLeave">Leave this list</button>
+  </div>
+</div>
+
+<!-- today's question: answering it, then both answers (lib/questions.js) -->
+<div id="dqSheet" class="modal" hidden>
+  <div class="modal-in dq-in">
+    <div class="modal-hd"><div class="hd-t"><b>Today’s question</b><span id="dqSub"></span></div><button type="button" class="x" id="dqClose" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
+    <div class="dq" id="dqBody"></div>
+  </div>
+</div>
+
+<!-- which questions come up, the reminder, the pause -->
+<div id="dqSetSheet" class="modal" hidden>
+  <div class="modal-in">
+    <div class="modal-hd"><div class="hd-t"><b>Today’s question</b><span id="dqSetSub"></span></div><button type="button" class="x" id="dqSetClose" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
+    <div class="dq-set" id="dqSetBody"></div>
   </div>
 </div>
 

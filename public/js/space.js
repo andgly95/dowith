@@ -14,6 +14,7 @@ import { isPlaceKind, renderPlaces, initPlaces, openPlace, placesTyping, leavePl
 import { tilesHtml, cardHtml as recipeCardHtml, bindRecipes, initRecipes, openRead, urlIn } from './recipes.js';
 import { openRecipe, initRecipe } from './recipe.js';
 import { initSwap } from './swap.js';
+import { loadQuestion, questionCardHtml, bindQuestionCard, initQuestion, openQuestionSettings } from './question.js';
 import { initKitchen } from './kitchen.js';
 import { initCook } from './cook.js';
 import { haptic, fadeIn, skeleton } from './motion.js';
@@ -76,7 +77,8 @@ export async function refresh({ arrived = false } = {}) {
   const sid = S.spaceId;
   const before = arrived && S.items ? new Set(S.items.map(i => i.id)) : null;
   try {
-    const b = await get(`/api/space/${sid}/items`);
+    // Today's question comes with it, so the card is there on the first paint.
+    const [b] = await Promise.all([get(`/api/space/${sid}/items`), loadQuestion(sid)]);
     if (S.spaceId !== sid) return;   // moved to another list meanwhile
     S.space = b.space;
     S.items = b.items;
@@ -359,9 +361,12 @@ export function render() {
     // Split by whose idea it was whenever there is anyone to split it with. A
     // single heading is still worth having: "all four recipes are Linnea's" is
     // exactly the kind of thing this is for.
-    list.innerHTML = (cook ? tilesHtml() : '') + (!shown.length ? `<div class="empty">${esc(emptyLine())}</div>`
+    // Today's question sits at the top of a pair list, above whose idea
+    // everything was, on every tab but Places and Done together.
+    list.innerHTML = questionCardHtml() + (cook ? tilesHtml() : '') + (!shown.length ? `<div class="empty">${esc(emptyLine())}</div>`
       : together ? byIdea(shown).map(g => whoseHd(g) + rows(g.items)).join('')
         : rows(shown));
+    bindQuestionCard(list);
     if (cook) bindRecipes(list);
   }
 
@@ -419,6 +424,8 @@ export const currentTab = () => tab;
 function syncComposer() {
   const typed = $('newItem').value.trim();
   $('visRow').hidden = !typed;
+  // Emptied by hand: whatever comes next is not the answer it was holding.
+  if (!typed) credit = null;
   // The + inside the pill fills in once there is something for it to add.
   $('newItem').closest('.comp-in').classList.toggle('has', !!typed);
   // Ask for what you are looking at. "Something to do together…" under the
@@ -784,10 +791,29 @@ export function openPick(id, auto = false) {
 
 /* ── writing ────────────────────────────────────────────────────────────── */
 
+// An answer to today's question, turned into a thing to do: the Activities tab,
+// the answer in the composer and selected so it can be trimmed, and — if it was
+// theirs — credited to them once it is added (the author may; see Whose idea).
+let credit = null;   // { uid, done }
+export function composeFrom(text, creditTo, done) {
+  tab = 'open';
+  kindTab = defaultKind();
+  render();
+  enter(0);
+  const input = $('newItem');
+  input.value = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  syncComposer();
+  credit = { uid: creditTo || null, done: done || null };
+  input.focus();
+  input.select();
+}
+
 async function add() {
   const input = $('newItem');
   const title = input.value.trim();
   if (!title) return;
+  const c = credit;
+  credit = null;
   // Under Recipes, a link is read first: the sheet shows what it found and
   // saves only when asked. Words around the link are the title; a bare link
   // takes the recipe's own name.
@@ -811,6 +837,10 @@ async function add() {
       kind: kindTab || defaultKind(),
     });
     applyWire(b.state);
+    if (c && b.item) {
+      if (c.uid) { try { await patch(`/api/item/${b.item.id}`, { ideaBy: c.uid }); } catch (_) { /* still added, as yours */ } }
+      if (c.done) c.done();
+    }
     await refresh();
     onChange();
     // A film or a show: ask which one straight away, while you still have it in
@@ -1208,6 +1238,8 @@ function openSettings() {
   $('ssNameFld').hidden = sp.isPair;
   $('ssName').value = sp.name || '';
   $('ssLink').hidden = true;
+  // Today's question is a pair's; a group has none yet.
+  $('ssQuestionBox').hidden = !sp.isPair;
   openSheet('spaceSheet');
 }
 
@@ -1287,8 +1319,10 @@ export function initSpace(changeHandler, backHandler) {
   initCook();
   initKitchen(() => { showScreen('scr-space'); render(); });
   $('spaceSettings').addEventListener('click', openSettings);
-  $('spaceRose').addEventListener('click', openRose);
+  $('spaceRose').addEventListener('click', () => openRose());
   initRose();
+  initQuestion({ repaint: () => { if (S.space) render(); }, compose: composeFrom, openRose: (to) => openRose(to) });
+  $('ssQuestion').addEventListener('click', () => { closeSheet('spaceSheet'); openQuestionSettings(); });
   $('btnAdd').addEventListener('click', add);
 
   // The Where field.

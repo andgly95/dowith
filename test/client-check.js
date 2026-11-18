@@ -23,6 +23,9 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const AUTH = require('../lib/auth');
 const SECRET = 'dowith-client-check-secret-0123456';
 const A = 'u-andrew', L = 'u-linnea';
+// A second pair, nothing to do with Andrew's, for a Spicy day: both chose only
+// Spicy before any day was picked, so today's question is one.
+const J = 'u-jo', K = 'u-kit';
 
 function connectCdp(wsUrl) {
   return new Promise((resolve, reject) => {
@@ -55,8 +58,11 @@ function connectCdp(wsUrl) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dw-cc-'));
   const person = (id, name) => ({ id, email: `${name.toLowerCase()}@x.com`, name, createdAt: 1, lastSeen: 1 });
   fs.writeFileSync(path.join(dir, 'store.json'), JSON.stringify({
-    users: { [A]: person(A, 'Andrew'), [L]: person(L, 'Linnea') },
-    spaces: [{ id: 'sp1', name: null, memberIds: [A, L], createdBy: A, createdAt: 1 }],
+    users: { [A]: person(A, 'Andrew'), [L]: person(L, 'Linnea'), [J]: person(J, 'Jo'), [K]: person(K, 'Kit') },
+    spaces: [{ id: 'sp1', name: null, memberIds: [A, L], createdBy: A, createdAt: 1 },
+      { id: 'sp9', name: null, memberIds: [J, K], createdBy: J, createdAt: 1 }],
+    questions: { [[J, K].sort().join('|')]: { zone: 'Europe/London', decks: { [J]: ['spicy'], [K]: ['spicy'] }, remind: {}, paused: null,
+      pauses: [], startedOn: '2026-01-01', days: {}, nudged: {} } },
     items: [], invites: [], seq: 100,
   }));
   // A stand-in for Photon (place suggestions) and Nominatim (the lookup the map
@@ -1643,6 +1649,99 @@ function connectCdp(wsUrl) {
         return h; })()`);
       check(got === 0, `${sel} ignores [hidden] — an author display rule is beating it (${got})`);
     }
+
+    // ── today's question ────────────────────────────────────────────────
+    // A card at the top of the pair list. Linnea answers first; his sheet shows
+    // hers locked — absent, not hidden — until he answers, and then at once,
+    // with the streak moment drawing. Her answer becomes a thing to do, under
+    // her ideas.
+    const asApi = (uid, method, p, body) => fetch(`${BASE}${p}`, { method,
+      headers: { 'content-type': 'application/json', cookie: `${AUTH.COOKIE}=${encodeURIComponent(AUTH.sign(uid, SECRET))}` },
+      body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+    const reopen = async () => {
+      await evalJs(`document.getElementById('spaceBack').click()`);
+      await sleep(500);
+      await evalJs(`document.querySelector('#shelfList [data-sp="sp1"]').click()`);
+      await sleep(1200);
+    };
+    await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
+    await sleep(400);
+    if (await evalJs(`document.getElementById('tabDone').classList.contains('on')`)) { await evalJs(`document.getElementById('tabDone').click()`); await sleep(400); }
+    check(await visible('#dqCard') && await evalJs(`document.getElementById('dqCard').dataset.state`) === 'a'
+      && await evalJs(`document.getElementById('itemList').firstElementChild.id`) === 'dqCard', 'today\'s question sits at the top of the pair list');
+    check(await evalJs(`(() => { const b = document.querySelector('#dqCard .dq-go').getBoundingClientRect();
+      const e = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return !!(e && e.closest('.dq-go')); })()`), 'and its Answer button takes the tap');
+    const lq = await asApi(L, 'GET', '/api/space/sp1/question');
+    const HERS = 'A pottery class, with truly terrible mugs';
+    await asApi(L, 'POST', '/api/space/sp1/question/answer', { date: lq.today.date, text: HERS });
+    await reopen();
+    check(/Linnea answered/.test(await evalJs(`document.getElementById('dqCard').innerText`)), 'the card says she answered');
+    await evalJs(`document.querySelector('#dqCard .dq-go').click()`);
+    await sleep(600);
+    check(await visible('#dqSheet .modal-in') && await visible('#dqBody .dq-bars'), 'answering, with hers locked');
+    check(!(await evalJs(`document.getElementById('dqSheet').textContent`)).includes(HERS), 'and nothing of hers is on the page');
+    await evalJs(`(() => { const t = document.getElementById('dqText'); t.value = 'Night swimming somewhere warm'; t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    check(!(await evalJs(`document.getElementById('dqSend').disabled`)), 'the button wakes once there is something to send');
+    await evalJs(`document.getElementById('dqSend').click()`);
+    await sleep(350);
+    const moment = await evalJs(`(() => { const d = document.querySelector('#dqBody .dq-disc');
+      return { disc: !!d, sparks: d ? [...d.querySelectorAll('.fx-spark')].filter(s => s.getAnimations().length).length : 0 }; })()`);
+    check(moment.disc && moment.sparks > 0, `the streak moment draws, caught mid-flight: ${JSON.stringify(moment)}`);
+    check((await evalJs(`document.getElementById('dqBody').innerText`)).includes(HERS), 'and answering shows hers at once');
+    await evalJs(`document.querySelector('#dqBody [data-dq-add="theirs"]').click()`);
+    await sleep(700);
+    check(!(await visible('#dqSheet .modal-in')) && await evalJs(`document.getElementById('newItem').value`) === HERS,
+      'Add to Activities puts her answer in the composer');
+    await evalJs(`document.getElementById('btnAdd').click()`);
+    await sleep(1500);
+    check(await evalJs(`fetch('/api/space/sp1/items').then(r => r.json()).then(b => b.items.some(i => i.title === ${JSON.stringify(HERS)} && i.ideaBy === '${L}'))`),
+      'and it lands as her idea');
+    check(await evalJs(`document.getElementById('dqCard').dataset.state`) === 'c' && /You both answered/.test(await evalJs(`document.getElementById('dqCard').innerText`)),
+      'the card is a slim row once both are in');
+    await evalJs(`document.querySelector('#dqCard .dq-slim-go').click()`);
+    await sleep(600);
+    check(await visible('#dqBody .dq-added'), 'and the sheet remembers it went on the list');
+    await evalJs(`document.getElementById('dqClose').click()`);
+    await sleep(400);
+    await evalJs(`document.querySelector('#dqCard .dq-flame').click()`);
+    await sleep(900);
+    check(await visible('#scr-questions') && (await evalJs(`document.getElementById('dqHist').innerText`)).includes(HERS),
+      'every question so far, with both answers');
+    await evalJs(`document.getElementById('dqBack').click()`);
+    await sleep(500);
+    // Which questions: from the list's settings, your own switches.
+    await evalJs(`document.getElementById('spaceSettings').click()`);
+    await sleep(400);
+    await evalJs(`document.getElementById('ssQuestion').click()`);
+    await sleep(600);
+    check(await visible('#dqSetSheet .modal-in') && await evalJs(`document.querySelector('#dqSetBody [data-deck="friends"]').checked`)
+      && !(await evalJs(`document.querySelector('#dqSetBody [data-deck="spicy"]').checked`)), 'which questions: Friends on, the rest off');
+    await evalJs(`document.querySelector('#dqSetBody [data-deck="romance"]').click()`);
+    await sleep(700);
+    check(/Waiting on Linnea/.test(await evalJs(`document.getElementById('dqSetBody').innerText`)), 'turning one on says it waits on her');
+    check(!JSON.stringify(await asApi(L, 'GET', '/api/space/sp1/question')).includes('romance'), 'and she is never told');
+    await evalJs(`document.getElementById('dqSetClose').click()`);
+    await sleep(400);
+
+    // A Spicy day: the list names nothing, and Open lands in the rose with it.
+    const SPICY = require('../lib/questions').catalogue().filter(q => q.kind === 'spicy').map(q => q.text);
+    await asApi(K, 'GET', '/api/space/sp9/question');
+    const kr = await asApi(K, 'GET', '/api/space/sp9/pleasure');
+    await asApi(K, 'POST', '/api/space/sp9/pleasure', { question: { date: kr.question.today.date, text: 'KIT SAID THIS' } });
+    await asUser(J);
+    check(await visible('#dqCard.rose') && /just the two of you/.test(await evalJs(`document.getElementById('dqCard').innerText`)),
+      'on a Spicy day the card goes rose and names nothing');
+    const listText = await evalJs(`document.getElementById('scr-space').innerText`);
+    check(!SPICY.some(t => listText.includes(t)), 'no Spicy question anywhere on the list');
+    await evalJs(`document.querySelector('#dqCard .dq-go').click()`);
+    await sleep(900);
+    check(await visible('#roseSheet .modal-in') && (await evalJs(`document.getElementById('rsBody').innerText`)).includes(kr.question.today.text),
+      'Open lands in the rose, on the question');
+    check(!(await evalJs(`document.getElementById('rsBody').innerText`)).includes('KIT SAID THIS'), 'with Kit\'s answer still locked');
+    await evalJs(`(() => { const t = document.querySelector('#rsBody .dq-text'); t.value = 'Jo too'; t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await evalJs(`document.querySelector('#rsBody .dq-send').click()`);
+    await sleep(900);
+    check((await evalJs(`document.getElementById('rsBody').innerText`)).includes('KIT SAID THIS'), 'and answering it there shows Kit\'s');
 
     if (errors.length) throw new Error(`page errors:\n${errors.join('\n')}`);
     console.log('client-check: ok — gate, mirroring, share-in, the record, and a private thing staying private');

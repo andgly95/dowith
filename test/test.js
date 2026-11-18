@@ -1366,6 +1366,9 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const AUTH = require('../lib/auth');
 const SECRET = 'dowith-test-secret-0123456789abcd';
 const A = 'u-andrew', L = 'u-linnea', S = 'u-sam';
+// A pair of their own for Today's question on a Spicy day: both chose only
+// Spicy before any day was picked, so today's question is one.
+const J = 'u-jo', K = 'u-kit';
 const cookieFor = (uid) => `${AUTH.COOKIE}=${encodeURIComponent(AUTH.sign(uid, SECRET))}`;
 
 // Sessions are signed with exactly the code the server verifies with — no
@@ -1385,8 +1388,11 @@ async function server() {
   const cfgFile = path.join(dir, 'config.json');
   const person = (id, name) => ({ id, email: `${name.toLowerCase()}@x.com`, name, createdAt: 1, lastSeen: 1 });
   fs.writeFileSync(dataFile, JSON.stringify({
-    users: { [A]: person(A, 'Andrew'), [L]: person(L, 'Linnea'), [S]: person(S, 'Sam') },
+    users: { [A]: person(A, 'Andrew'), [L]: person(L, 'Linnea'), [S]: person(S, 'Sam'), [J]: person(J, 'Jo'), [K]: person(K, 'Kit') },
+    questions: { [[J, K].sort().join('|')]: { zone: 'America/New_York', decks: { [J]: ['spicy'], [K]: ['spicy'] }, remind: {}, paused: null,
+      pauses: [], startedOn: '2026-01-01', days: {}, nudged: {} } },
     spaces: [
+      { id: 'sp9', name: null, memberIds: [J, K], createdBy: J, createdAt: 1 },
       { id: 'sp1', name: null, memberIds: [A, L], createdBy: A, createdAt: 1 },
       { id: 'sp2', name: null, memberIds: [A, S], createdBy: A, createdAt: 1 },
       // A group: Linnea and Sam know each other only from this. A group list
@@ -1652,6 +1658,90 @@ async function server() {
     assert.strictEqual(JSON.stringify(look.body).includes('record shopping'), false);
   });
 
+  await t("today's question: theirs is not sent until you answer, and then neither can change", async () => {
+    const Q = '/api/space/sp1/question';
+    const a0 = (await api('GET', `${Q}?zone=America/New_York`, null, A)).body;
+    const l0 = (await api('GET', Q, null, L)).body;
+    assert.ok(a0.today && a0.today.text && a0.today.kind === 'friends', 'Friends is on by default, so there is a question');
+    assert.deepStrictEqual([l0.today.date, l0.today.text], [a0.today.date, a0.today.text], 'the same one for both of you');
+    assert.strictEqual(a0.zone, 'America/New_York', 'in the zone of whoever first asked');
+    assert.strictEqual(a0.partner, 'Linnea');
+    const date = a0.today.date;
+    const say = (as, b) => api('POST', `${Q}/answer`, { date, ...b }, as);
+    const answerOf = (t) => (a0.today.type === 'pick' ? { pick: 1 } : { text: t });
+    const HIS = 'HIS ANSWER, NOT FOR HER EYES YET';
+    const sent = await say(A, answerOf(HIS));
+    assert.strictEqual(sent.status, 200, JSON.stringify(sent.body));
+    assert.deepStrictEqual(sent.body.today.theirs, { answered: false });
+    const hers = (await api('GET', Q, null, L)).body;
+    assert.deepStrictEqual(hers.today.theirs, { answered: true }, 'she knows he answered');
+    assert.ok(!JSON.stringify(hers).includes('NOT FOR HER EYES'), 'and nothing of what he said is in the response');
+    assert.strictEqual(hers.today.reacts, null, 'no reactions or replies before both are in');
+    assert.strictEqual((await api('POST', `${Q}/react`, { date, emoji: '❤️' }, L)).status, 409);
+    assert.strictEqual((await say(A, answerOf('changed my mind'))).status, 200, 'his can still change, until she answers');
+    const both = (await say(L, a0.today.type === 'pick' ? { pick: 1 } : { text: 'Hers' })).body;
+    assert.ok(both.today.final && both.today.theirs.answered && (a0.today.type === 'pick' ? both.today.theirs.pick === 1 : both.today.theirs.text === 'changed my mind'),
+      'answering shows her his, at once');
+    assert.strictEqual((await say(A, answerOf('again'))).status, 409, 'once both are in, neither can change');
+    assert.strictEqual(both.streak.current, 1, 'and the day counts');
+    assert.strictEqual((await api('POST', `${Q}/react`, { date, emoji: '🙃' }, L)).status, 400, 'four reactions, no others');
+    await api('POST', `${Q}/react`, { date, emoji: '❤️' }, L);
+    const replied = (await api('POST', `${Q}/reply`, { date, text: '  ha  ' }, A)).body;
+    assert.deepStrictEqual([replied.today.reacts.theirs, replied.today.replies.map(r => [r.mine, r.text])], ['❤️', [[true, 'ha']]]);
+    assert.strictEqual((await api('POST', `${Q}/answer`, { date: '2020-01-01', text: 'x' }, A)).status, 404, 'no such day');
+    // On the shelf: a number and a flag.
+    const sum = (await api('GET', '/api/state', null, A)).body.spaces.find(x => x.id === 'sp1').question;
+    assert.deepStrictEqual(sum, { streak: 1, waiting: false });
+    const hist = (await api('GET', `${Q}/history`, null, L)).body;
+    assert.deepStrictEqual(hist.days.map(d => d.date), [date], 'every question so far');
+  });
+
+  await t("today's question: pairs only, your kinds are yours, and the settings are checked", async () => {
+    const Q = '/api/space/sp1/question';
+    for (const [path, as] of [[Q, S], ['/api/space/sp3/question', A], [`${Q}/history`, S], [`${Q}/answer`, S]]) {
+      assert.strictEqual((await api(path.endsWith('answer') ? 'POST' : 'GET', path, path.endsWith('answer') ? { date: 'x' } : null, as)).status, 404, path);
+    }
+    const mine = (await api('POST', `${Q}/settings`, { decks: ['friends', 'romance', 'spicy'] }, A)).body;
+    assert.deepStrictEqual([mine.decks, mine.inPlay], [['friends', 'romance', 'spicy'], ['friends']], 'his own list, and what is in play');
+    const hers = JSON.stringify((await api('GET', Q, null, L)).body);
+    assert.ok(!/romance|spicy/.test(hers), `she is never told what he turned on: ${hers}`);
+    assert.strictEqual((await api('POST', `${Q}/settings`, { decks: ['friends', 'bogus'] }, A)).status, 400);
+    assert.strictEqual((await api('POST', `${Q}/settings`, { remind: '25:00' }, A)).status, 400);
+    assert.strictEqual((await api('POST', `${Q}/settings`, { remind: '20:00', zone: 'Mars/Olympus' }, A)).status, 400, 'checked whole');
+    assert.strictEqual((await api('GET', Q, null, A)).body.remind, '20:00', 'and nothing of a refused one lands: still the 8 PM default');
+    assert.strictEqual((await api('POST', `${Q}/settings`, { remind: '21:30' }, A)).body.remind, '21:30');
+    assert.strictEqual((await api('POST', `${Q}/settings`, { remind: null }, A)).body.remind, null, 'turned off stays off');
+    const paused = (await api('POST', `${Q}/settings`, { paused: true }, L)).body;
+    assert.deepStrictEqual([paused.today, paused.paused], [null, { mine: true, byName: null }]);
+    assert.deepStrictEqual((await api('GET', Q, null, A)).body.paused, { mine: false, byName: 'Linnea' }, 'paused for both, saying who');
+    assert.ok((await api('POST', `${Q}/settings`, { paused: false }, A)).body.today, 'either can resume');
+    await api('POST', `${Q}/settings`, { decks: ['friends'] }, A);
+  });
+
+  await t("today's question: a Spicy day keeps to the rose", async () => {
+    const texts = (await api('GET', '/api/space/sp9/pleasure', null, J)).body;
+    const today = texts.question && texts.question.today;
+    assert.ok(today && today.kind === 'spicy' && today.text, 'on the rose\'s route, the question itself');
+    const SPICY = require('../lib/questions').catalogue().filter(q => q.kind === 'spicy').map(q => q.text);
+    const clean = (what, body) => assert.ok(!SPICY.some(x => JSON.stringify(body).includes(x)), `no Spicy question in ${what}`);
+    const listed = (await api('GET', '/api/space/sp9/question', null, J)).body;
+    assert.deepStrictEqual(Object.keys(listed.today).sort(), ['date', 'final', 'justUs', 'mine', 'theirs'], 'on the list: justUs and two flags');
+    clean('/question', listed);
+    clean('/api/state', (await api('GET', '/api/state', null, J)).body);
+    assert.strictEqual((await api('POST', '/api/space/sp9/question/answer', { date: today.date, text: 'x' }, J)).status, 404,
+      'and it is never answered from the list');
+    const P = '/api/space/sp9/pleasure';
+    const jo = (await api('POST', P, { question: { date: today.date, text: 'JO SAID THIS' } }, J)).body;
+    assert.deepStrictEqual(jo.question.today.theirs, { answered: false });
+    const kit = (await api('GET', P, null, K)).body;
+    assert.ok(kit.question.today.theirs.answered && !JSON.stringify(kit).includes('JO SAID THIS'), 'the rose keeps the same rule');
+    const kit2 = (await api('POST', P, { question: { date: today.date, text: 'Kit too' } }, K)).body;
+    assert.strictEqual(kit2.question.today.theirs.text, 'JO SAID THIS');
+    clean('/question/history', (await api('GET', '/api/space/sp9/question/history', null, J)).body);
+    assert.deepStrictEqual((await api('GET', '/api/space/sp9/question/history', null, J)).body.days, [], 'and it is not in the history');
+    assert.strictEqual((await api('GET', '/api/state', null, J)).body.spaces.find(x => x.id === 'sp9').question.streak, 1, 'though it counts');
+  });
+
   await t('leaving takes you out without deleting what the others kept', async () => {
     const before = (await api('GET', '/api/space/sp2/items', null, A)).body.items.length;
     await api('POST', '/api/space/sp2/pleasure', { kind: 'try', id: 'toys', level: 'yes' }, S);
@@ -1661,6 +1751,7 @@ async function server() {
     const disk = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
     assert.ok(!Object.keys(disk.pleasure || {}).some(k => k.split('|').includes(S)),
       'leaving a pair takes the rose answers with it');
+    assert.ok(!Object.keys(disk.questions || {}).some(k => k.split('|').includes(S)), 'and today\'s question with it');
     const after = await api('GET', '/api/space/sp2/items', null, A);
     assert.strictEqual(after.status, 200, 'Andrew still has it');
     assert.strictEqual(after.body.items.length, before);
@@ -2648,6 +2739,128 @@ async function recipes() {
     assert.deepStrictEqual(K.bought(buy, K.key('puff pastry')).map(b => b.name), ['gluten-free puff pastry'],
       'plain puff pastry bought never clears the gluten-free row');
     assert.deepStrictEqual(K.bought(buy, K.key('Gluten free puff pastry')), [], 'and the gluten-free one clears both');
+  });
+
+  await t("today's question: theirs only once you have answered, for every combination", () => {
+    const Qs = require('../lib/questions');
+    const open1 = Qs.catalogue().find(q => q.type === 'open');
+    for (const me of [false, true]) for (const them of [false, true]) {
+      const rec = Qs.blank('UTC', '2026-11-01');
+      rec.days['2026-11-01'] = { qid: open1.id, kind: open1.kind, answers: {}, reacts: {}, replies: [] };
+      if (me) Qs.answer(rec, '2026-11-01', 'a', 'b', { text: 'MINE' }, Date.UTC(2026, 10, 1, 12));
+      if (them) Qs.answer(rec, '2026-11-01', 'b', 'a', { text: 'THEIRS' }, Date.UTC(2026, 10, 1, 13));
+      const v = JSON.stringify(Qs.dayView(rec, '2026-11-01', 'a', 'b'));
+      assert.strictEqual(v.includes('THEIRS'), me && them, `me ${me}, them ${them}: ${v}`);
+      assert.strictEqual(JSON.parse(v).theirs.answered, them);
+      assert.strictEqual(Qs.answer(rec, '2026-11-01', 'a', 'b', { text: 'AGAIN' }, 1).error === 409, me && them, 'final once both are in');
+    }
+    const rec = Qs.blank('UTC', '2026-11-01');
+    rec.days['2026-11-01'] = { qid: open1.id, kind: open1.kind, answers: {}, reacts: {}, replies: [] };
+    Qs.answer(rec, '2026-11-01', 'a', 'b', { text: 'one' }, 100);
+    Qs.answer(rec, '2026-11-01', 'a', 'b', { text: 'two' }, 999);
+    assert.deepStrictEqual([rec.days['2026-11-01'].answers.a.text, rec.days['2026-11-01'].answers.a.at], ['two', 100],
+      'before then it replaces, keeping when you first answered');
+    assert.strictEqual(Qs.answer(rec, '2026-11-01', 'a', 'b', { text: '   ' }, 1).error, 400);
+    assert.strictEqual(Qs.react(rec, '2026-11-01', 'a', 'b', '❤️').error, 409, 'no reactions before both are in');
+  });
+
+  await t("today's question: your kinds are never in their view, and Spicy never in a push", () => {
+    const Qs = require('../lib/questions');
+    const subsets = [[], ['friends'], ['romance'], ['spicy'], ['friends', 'romance'], ['friends', 'spicy'], ['romance', 'spicy'], ['friends', 'romance', 'spicy']];
+    for (const mine of subsets) for (const theirs of subsets) {
+      const rec = Qs.blank('UTC', '2026-11-01');
+      rec.decks = { a: mine, b: theirs };
+      const v = Qs.listView(rec, 'a', 'b', '2026-11-01');
+      assert.deepStrictEqual(v.decks, mine);
+      assert.deepStrictEqual(v.inPlay, Qs.KINDS.filter(k => mine.includes(k) && theirs.includes(k)));
+      const s = JSON.stringify(v);
+      for (const k of theirs.filter(k => !mine.includes(k))) assert.ok(!s.includes(k), `${k} only they turned on, in ${s}`);
+    }
+    const texts = Qs.catalogue().map(q => q.text);
+    for (const kind of ['answered-first', 'answered-after', 'remind']) {
+      const n = JSON.stringify(Qs.nudge(kind, { name: 'Sam', streak: 12 }));
+      assert.ok(!texts.some(t => n.includes(t)), `no question text in a push: ${n}`);
+    }
+    const spicy = Qs.catalogue().find(q => q.kind === 'spicy');
+    const rec = Qs.blank('UTC', '2026-11-01');
+    rec.days['2026-11-01'] = { qid: spicy.id, kind: 'spicy', answers: { a: { text: 'x', at: Date.UTC(2026, 10, 1) } }, reacts: {}, replies: [] };
+    const off = Qs.dayView(rec, '2026-11-01', 'a', 'b');
+    assert.ok(off.justUs && !JSON.stringify(off).includes(spicy.text), 'off the rose, a Spicy day is two flags');
+    assert.strictEqual(Qs.dayView(rec, '2026-11-01', 'a', 'b', { room: true }).text, spicy.text, 'in the rose, the question');
+    assert.deepStrictEqual(Qs.history(rec, 'a', 'b').days, [], 'never in the history');
+  });
+
+  await t("today's question: picked once, the same for a pair and a day, no repeats until a kind is used up", () => {
+    const Qs = require('../lib/questions');
+    const run = (key) => { const rec = Qs.blank('UTC', '2026-01-01'); const out = [];
+      for (let i = 0; i < 40; i++) out.push(Qs.ensureDay(rec, Qs.addDays('2026-01-01', i), key, 'a', 'b').qid); return out; };
+    const one = run('a|b');
+    assert.deepStrictEqual(run('a|b'), one, 'deterministic');
+    assert.notDeepStrictEqual(run('c|d'), one, 'two pairs do not march through the same order');
+    const friends = Qs.catalogue().filter(q => q.kind === 'friends').length;
+    assert.strictEqual(new Set(one.slice(0, friends)).size, friends, 'every Friends question before any comes again');
+    const rec = Qs.blank('UTC', '2026-01-01');
+    rec.decks = { a: ['friends', 'romance'], b: ['friends', 'romance'] };
+    const k = [0, 1, 2, 3].map(i => Qs.ensureDay(rec, Qs.addDays('2026-01-01', i), 'a|b', 'a', 'b').kind);
+    assert.deepStrictEqual(k, ['friends', 'romance', 'friends', 'romance'], 'two kinds alternate');
+    const was = rec.days['2026-01-04'].qid;
+    rec.decks = { a: ['spicy'], b: ['spicy'] };
+    assert.strictEqual(Qs.ensureDay(rec, '2026-01-04', 'a|b', 'a', 'b').qid, was, 'changing the kinds changes tomorrow, never today');
+    assert.strictEqual(Qs.ensureDay(rec, '2026-01-05', 'a|b', 'a', 'b').kind, 'spicy');
+    rec.decks = { a: ['friends'], b: [] };
+    assert.strictEqual(Qs.ensureDay(rec, '2026-01-06', 'a|b', 'a', 'b'), null, 'nothing in play, no question');
+  });
+
+  await t("today's question: the streak — on the day, in the pair's zone, paused days skipped", () => {
+    const Qs = require('../lib/questions');
+    const NY = 'America/New_York';
+    const rec = Qs.blank(NY, '2026-11-01');
+    const day = (date) => { rec.days[date] = { qid: 'fr-week', kind: 'friends', answers: {}, reacts: {}, replies: [] }; };
+    // Noon in New York on a date, as an instant.
+    const noon = (date, plusDays = 0) => Date.parse(`${Qs.addDays(date, plusDays)}T17:00:00Z`);
+    const both = (date, late = 0) => { day(date); rec.days[date].answers = { a: { text: 'x', at: noon(date) }, b: { text: 'y', at: noon(date, late) } }; };
+    both('2026-11-01'); both('2026-11-02'); both('2026-11-03');
+    assert.deepStrictEqual(Qs.streak(rec, 'a', 'b', '2026-11-03'), { current: 3, longest: 3, together: 3, since: '2026-11-01' });
+    day('2026-11-04');
+    assert.strictEqual(Qs.streak(rec, 'a', 'b', '2026-11-04').current, 3, 'today not done yet does not break it');
+    assert.strictEqual(Qs.streak(rec, 'a', 'b', '2026-11-05').current, 0, 'a missed day does, once it is over');
+    both('2026-11-04', 1);
+    const s = Qs.streak(rec, 'a', 'b', '2026-11-05');
+    assert.deepStrictEqual([s.current, s.together], [0, 4], 'a catch-up counts as answered together, but does not mend it');
+    // 11:30 PM in New York is the next day in UTC; it is still that day here.
+    const r2 = Qs.blank(NY, '2026-11-10');
+    r2.days['2026-11-10'] = { qid: 'fr-week', kind: 'friends', reacts: {}, replies: [],
+      answers: { a: { text: 'x', at: Date.parse('2026-11-11T04:30:00Z') }, b: { text: 'y', at: Date.parse('2026-11-10T15:00:00Z') } } };
+    assert.strictEqual(Qs.streak(r2, 'a', 'b', '2026-11-10').current, 1, 'a date boundary in the pair\'s zone, on a server in UTC');
+    // Paused for two days in the middle: they neither count nor break.
+    const r3 = Qs.blank('UTC', '2026-11-01');
+    const day3 = (d) => { r3.days[d] = { qid: 'fr-week', kind: 'friends', reacts: {}, replies: [], answers: { a: { text: 'x', at: Date.parse(`${d}T12:00:00Z`) }, b: { text: 'y', at: Date.parse(`${d}T12:00:00Z`) } } }; };
+    day3('2026-11-01'); day3('2026-11-02');
+    Qs.settings(r3, 'a', { paused: true }, '2026-11-03', 1);
+    Qs.settings(r3, 'b', { paused: false }, '2026-11-05', 2);
+    day3('2026-11-05');
+    assert.deepStrictEqual(r3.pauses, [{ from: '2026-11-03', to: '2026-11-04' }]);
+    assert.strictEqual(Qs.streak(r3, 'a', 'b', '2026-11-05').current, 3, 'paused days are skipped');
+    assert.deepStrictEqual(Qs.settings(r3, 'a', { decks: ['nope'] }, '2026-11-05', 3), { error: 400 });
+  });
+
+  await t("today's question: the reminder — 8 PM in the pair's zone unless changed, once a day, never once answered", () => {
+    const Qs = require('../lib/questions');
+    const key = 'a|b';
+    const rec = Qs.blank('America/New_York', '2026-11-18');
+    const state = { spaces: [{ id: 'p', memberIds: ['a', 'b'] }, { id: 'g', name: 'Group', memberIds: ['a', 'b', 'c'] }], questions: { [key]: rec } };
+    const at = (iso) => Date.parse(iso);
+    const due = (iso) => Qs.remindersDue(state, (x, y) => [x, y].sort().join('|'), at(iso)).map(r => r.uid).sort();
+    assert.deepStrictEqual(due('2026-11-18T23:00:00Z'), [], '6 PM in New York: not yet');
+    assert.deepStrictEqual(due('2026-11-19T01:05:00Z'), ['a', 'b'], '8:05 PM there (1 AM UTC): both, by default');
+    assert.ok(rec.days['2026-11-18'], 'picking the day if nobody had opened the app');
+    assert.deepStrictEqual(due('2026-11-19T01:30:00Z'), [], 'once a day');
+    const q19 = Qs.catalogue().find(q => q.id === Qs.ensureDay(rec, '2026-11-19', key, 'a', 'b').qid);
+    assert.ok(Qs.answer(rec, '2026-11-19', 'a', 'b', q19.type === 'pick' ? { pick: 0 } : { text: 'x' }, at('2026-11-19T22:00:00Z')).ok);
+    Qs.settings(rec, 'b', { remind: null }, '2026-11-19', 1);
+    assert.deepStrictEqual(due('2026-11-20T01:05:00Z'), [], 'not once you have answered, and not when turned off');
+    const pushed = Qs.remindersDue({ ...state, questions: { [key]: Qs.blank('UTC', '2026-11-18') } }, (x, y) => [x, y].sort().join('|'), at('2026-11-18T20:00:00Z'));
+    assert.ok(pushed.length && pushed.every(r => !Qs.catalogue().some(q => JSON.stringify(r.payload).includes(q.text))), 'and no question text in it');
   });
 
   await t("a kitchen opens to its owner and to pair partners — not to a group, not to strangers", () => {
