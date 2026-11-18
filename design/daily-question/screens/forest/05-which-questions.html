@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Which questions, and the reminder (Forest)</title>
+<!-- Static render of the Do With "Today’s question" mockup. Generated, not hand-written:
+     edit ../mockup-src/ and re-render rather than patching this file. -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0C0A0D}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+input,textarea{font:inherit}
+input::placeholder,textarea::placeholder{color:#9A90A2;opacity:1}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+</style>
+<style>html,body{margin:0;background:#111A15}body{display:flex;justify-content:center}</style>
+</head>
+<body>
+<div style="position: relative; width: 390px; height: 860px; overflow: hidden; background: #111A15; color: #EDF1E7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; padding: 14px 20px 0">
+    <div style="display: flex; justify-content: space-between; align-items: center; height: 44px; margin-left: -8px; color: #EDF1E7"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg><span style="display: flex; color: #93A69A"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5.2c0 3.3 2.2 5.8 5 5.8s5-2.5 5-5.8c-1.4.9-2.7.9-3.6 0-.6-.6-1-1.5-1.4-2.7-.4 1.2-.8 2.1-1.4 2.7-.9.9-2.2.9-3.6 0z" /><path d="M9.8 6.9c.6.8 1.4 1.2 2.2 1.2s1.6-.4 2.2-1.2" /><path d="M12 11v10" /><path d="M12 16.2c-1.9-.2-3.5-1.3-4.1-3.2 2 0 3.5 1 4.1 3.2z" /><path d="M12 18.6c1.9-.2 3.5-1.3 4.1-3.2-2 0-3.5 1-4.1 3.2z" /></svg></span></div>
+    <div style="margin-top: 14px; font-size: 13px; color: #93A69A">To do with</div>
+    <div style="font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 34px; line-height: 1.1; font-weight: 600">Sam</div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(9, 13, 11, 0.7)"></div>
+  <section role="dialog" aria-modal="true" aria-label="Today’s question settings" style="position: absolute; left: 0; right: 0; top: 64px; bottom: 0; box-sizing: border-box; border-radius: 28px 28px 0 0; background: #151F19; box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.35); padding: 8px 16px 26px; display: flex; flex-direction: column; gap: 18px">
+    <div aria-hidden="true" style="align-self: center; width: 38px; height: 5px; border-radius: 3px; background: #2D3F34"></div>
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-top: -4px">
+      <div style="display: flex; flex-direction: column; gap: 3px; padding: 4px 0 0 4px">
+        <h2 style="margin: 0; font-family: 'Iowan Old Style', 'Source Serif 4', Palatino, 'Book Antiqua', Georgia, serif; font-size: 26px; line-height: 1.15; font-weight: 600; letter-spacing: -0.01em">Today’s question</h2>
+        <span style="font-size: 13.5px; color: #93A69A">On this list, with Sam</span>
+      </div>
+      <a href="DQ-List.dc.html" aria-label="Close" style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 22px; background: #213027; color: #C6D1C4; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" /></svg></a>
+    </div>
+    <section aria-label="Kinds of question" style="display: flex; flex-direction: column; gap: 10px">
+      <h3 style="margin: 0; padding: 0 4px; font-size: 15px; font-weight: 600">Kinds of question</h3>
+      <div style="border-radius: 20px; background: #18241D; overflow: hidden">
+        <button type="button" role="switch" aria-checked="true" style="position: relative; width: 100%; min-height: 72px; border: 0; background: transparent; color: inherit; display: flex; align-items: center; gap: 14px; padding: 12px 14px; text-align: left">
+          
+          <span aria-hidden="true" style="width: 38px; height: 38px; flex-shrink: 0; border-radius: 12px; background: rgba(232, 166, 88, 0.16); color: #E8A658; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.7 5.1a2 2 0 0 0 1.3 1.3l5.1 1.7-5.1 1.7a2 2 0 0 0-1.3 1.3L12 19.8l-1.7-5.2a2 2 0 0 0-1.3-1.3L3.9 11.6l5.1-1.7a2 2 0 0 0 1.3-1.3z" /></svg></span>
+          <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 16.5px; font-weight: 600">Friends</span><span style="font-size: 13.5px; line-height: 1.38; color: #93A69A">Easy ones. Food, memories, this or that.</span></span>
+          <span aria-hidden="true" style="position: relative; width: 51px; height: 31px; flex-shrink: 0; border-radius: 16px; background: #E8A658"><span style="position: absolute; top: 2px; left: 22px; width: 27px; height: 27px; border-radius: 14px; background: #FFFFFF; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3)"></span></span>
+        </button>
+        <button type="button" role="switch" aria-checked="true" style="position: relative; width: 100%; min-height: 72px; border: 0; background: transparent; color: inherit; display: flex; align-items: center; gap: 14px; padding: 12px 14px; text-align: left">
+          <span aria-hidden="true" style="position: absolute; left: 66px; right: 0; top: 0; height: 1px; background: #2D3F34"></span>
+          <span aria-hidden="true" style="width: 38px; height: 38px; flex-shrink: 0; border-radius: 12px; background: rgba(232, 166, 88, 0.16); color: #E8A658; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg></span>
+          <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 16.5px; font-weight: 600">Romance</span><span style="font-size: 13.5px; line-height: 1.38; color: #93A69A">About the two of you, and how it feels.</span></span>
+          <span aria-hidden="true" style="position: relative; width: 51px; height: 31px; flex-shrink: 0; border-radius: 16px; background: #E8A658"><span style="position: absolute; top: 2px; left: 22px; width: 27px; height: 27px; border-radius: 14px; background: #FFFFFF; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3)"></span></span>
+        </button>
+        <button type="button" role="switch" aria-checked="true" style="position: relative; width: 100%; min-height: 72px; border: 0; background: transparent; color: inherit; display: flex; align-items: center; gap: 14px; padding: 12px 14px; text-align: left">
+          <span aria-hidden="true" style="position: absolute; left: 66px; right: 0; top: 0; height: 1px; background: #2D3F34"></span>
+          <span aria-hidden="true" style="width: 38px; height: 38px; flex-shrink: 0; border-radius: 12px; background: rgba(224, 138, 146, 0.16); color: #E3A4A7; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5.2c0 3.3 2.2 5.8 5 5.8s5-2.5 5-5.8c-1.4.9-2.7.9-3.6 0-.6-.6-1-1.5-1.4-2.7-.4 1.2-.8 2.1-1.4 2.7-.9.9-2.2.9-3.6 0z" /><path d="M9.8 6.9c.6.8 1.4 1.2 2.2 1.2s1.6-.4 2.2-1.2" /><path d="M12 11v10" /><path d="M12 16.2c-1.9-.2-3.5-1.3-4.1-3.2 2 0 3.5 1 4.1 3.2z" /><path d="M12 18.6c1.9-.2 3.5-1.3 4.1-3.2-2 0-3.5 1-4.1 3.2z" /></svg></span>
+          <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 16.5px; font-weight: 600">Spicy</span><span style="font-size: 13.5px; line-height: 1.38; color: #93A69A">Intimate ones. They open in Just us, never on the list.</span><span style="font-size: 13px; line-height: 1.38; font-weight: 600; color: #E3A4A7">Waiting on Sam. They won’t be told you turned it on.</span></span>
+          <span aria-hidden="true" style="position: relative; width: 51px; height: 31px; flex-shrink: 0; border-radius: 16px; background: #E08A92"><span style="position: absolute; top: 2px; left: 22px; width: 27px; height: 27px; border-radius: 14px; background: #FFFFFF; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3)"></span></span>
+        </button>
+      </div>
+      <p style="margin: 0; padding: 0 4px; font-size: 13px; line-height: 1.45; color: #93A69A">You each choose for yourselves. A kind comes up once you’ve both turned it on.</p>
+    </section>
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 18px; background: #213027">
+      <span style="font-size: 13px; font-weight: 600; color: #93A69A">Questions come from</span>
+      <span style="font-size: 16px; font-weight: 600">Friends · Romance</span>
+    </div>
+    <section aria-label="Reminder" style="display: flex; flex-direction: column; gap: 10px">
+      <h3 style="margin: 0; padding: 0 4px; font-size: 15px; font-weight: 600">Reminder</h3>
+      <div style="border-radius: 20px; background: #18241D; overflow: hidden">
+        <div style="display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 10px 14px">
+          <span aria-hidden="true" style="width: 38px; height: 38px; flex-shrink: 0; border-radius: 12px; background: #213027; color: #C6D1C4; display: flex; align-items: center; justify-content: center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6.5 2.5 8 2.5 8h-17S6 15.5 6 9z" /><path d="M10.3 20.5a1.9 1.9 0 0 0 3.4 0" /></svg></span>
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 16.5px; font-weight: 600">Nudge me at</span><span style="font-size: 13.5px; color: #93A69A">Only if I haven’t answered yet</span></span>
+          <label for="dqTime" class="sr">Reminder time</label>
+          <input id="dqTime" type="time" value="20:00" style="min-height: 40px; border: 0; border-radius: 12px; background: #213027; color: #EDF1E7; padding: 0 10px; font-size: 16px">
+        </div>
+      </div>
+    </section>
+    <button type="button" style="align-self: center; min-height: 44px; border: 0; background: transparent; color: #C6D1C4; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 15px; font-weight: 600"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.2" /><rect x="14" y="5" width="4" height="14" rx="1.2" /></svg>Pause questions on this list</button>
+  </section>
+</div>
+</body>
+</html>
