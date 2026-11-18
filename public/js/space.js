@@ -839,6 +839,21 @@ function celebrate(row) {
   }
   row.classList.add('celebrating');
 
+  // A poster or a recipe card is a tile in a grid: it has no height to collapse
+  // that would close the grid up. It shrinks away instead, a little later so
+  // the art has visibly stepped back first, and hands over where every tile
+  // was, so the shelf can glide shut once it has re-rendered (closeUp).
+  if (row.matches('.card, .rcard')) {
+    return new Promise((done) => {
+      setTimeout(() => {
+        const was = new Map([...$('itemList').querySelectorAll('[data-it]')]
+          .map(el => [el.dataset.it, el.getBoundingClientRect()]));
+        row.classList.add('leaving');
+        setTimeout(() => done(was), 280);
+      }, 560);
+    });
+  }
+
   return new Promise((done) => {
     setTimeout(() => {
       // Collapse from its real height, so the list closes up rather than snapping
@@ -852,6 +867,22 @@ function celebrate(row) {
       });
       setTimeout(done, 280);
     }, 420);
+  });
+}
+
+// The tiles that stayed glide from where they were to where they are now
+// (first, last, invert, play), so a shelf closes up the way a list does
+// instead of jumping a poster to the left.
+function closeUp(was) {
+  if (calm()) return;
+  $('itemList').querySelectorAll('[data-it]').forEach((el) => {
+    const a = was.get(el.dataset.it);
+    if (!a || !el.animate) return;
+    const b = el.getBoundingClientRect();
+    const dx = a.left - b.left, dy = a.top - b.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+      { duration: 380, easing: 'cubic-bezier(.2,.8,.2,1)' });
   });
 }
 
@@ -871,10 +902,11 @@ export async function toggle(id) {
   if (!finishing) render();   // un-ticking is a state change, not an occasion
 
   try {
-    const [b] = await Promise.all([sent, shown]);
+    const [b, was] = await Promise.all([sent, shown]);
     applyWire(b.state);
     await refresh();
     onChange();
+    if (was) closeUp(was);
     if (finishing) doneLanded();
   } catch (e) {
     await shown;              // let it finish rather than yanking it mid-flight

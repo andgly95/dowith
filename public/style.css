@@ -385,19 +385,19 @@ input,textarea{font:inherit;color:var(--ink)}
   animation:tick-pop .44s cubic-bezier(.2,1.5,.4,1) forwards;
 }
 .it.celebrating .tick svg path{animation:tick-draw .26s ease .13s forwards}
-.it.celebrating .ripple{
+.celebrating .ripple{
   position:absolute;inset:-2px;border-radius:50%;
   border:2px solid var(--accent2);pointer-events:none;
   animation:ripple .55s ease-out forwards;
 }
-.it.celebrating .spark{
+.celebrating .spark{
   position:absolute;top:50%;left:50%;width:4px;height:4px;margin:-2px 0 0 -2px;
   border-radius:50%;background:var(--accent2);pointer-events:none;
   transform-origin:center;
   animation:spark .55s cubic-bezier(.2,.75,.3,1) forwards;
 }
 /* Every other spark in coral, so it reads as a flourish rather than a status. */
-.it.celebrating .spark:nth-child(even){background:var(--accent)}
+.celebrating .spark:nth-child(even){background:var(--accent)}
 /* The strike fades in rather than sweeping across.
    A sweeping pseudo-element was the prettier idea and it was wrong: on a title
    that wraps to two lines it renders as a stub in the gap between them, because
@@ -423,10 +423,10 @@ input,textarea{font:inherit;color:var(--ink)}
 @media (prefers-reduced-motion: reduce){
   .it.celebrating .tick,
   .it.celebrating .tick svg path,
-  .it.celebrating .ripple,
-  .it.celebrating .spark,
+  .celebrating .ripple,
+  .celebrating .spark,
   .it.leaving{animation:none}
-  .it.celebrating .ripple,.it.celebrating .spark{display:none}
+  .celebrating .ripple,.celebrating .spark{display:none}
   .it.celebrating .tick svg path{stroke-dashoffset:0}
   .it.celebrating .it-bd b{animation:none;color:var(--faint);text-decoration-color:var(--faint)}
 }
@@ -1604,10 +1604,39 @@ img.fade.now{transition:none}
 .skel .group{animation:skel 1.4s ease-in-out infinite}
 @keyframes skel{50%{opacity:.55}}
 
+/* Posters and recipe cards finish too. The celebration was written for list
+   rows (`.it.celebrating`), so a film or a recipe ticked off sat there for
+   0.7 s and then vanished: the class and the sparks went in, and no rule drew
+   them. The same beats, shaped for a tile: the ring fills and draws its mark,
+   the sparks go out, the art steps back the way a seen poster does, and then
+   the tile shrinks away while the shelf closes up behind it (space.js
+   closeUp). After the shelf rules, so ties go to this. */
+:is(.card,.rcard).celebrating .tick{
+  border-color:var(--accent2);background:var(--accent2);color:var(--on-accent2);
+  animation:tick-pop .44s cubic-bezier(.2,1.5,.4,1) forwards;
+}
+:is(.card,.rcard).celebrating .tick svg{opacity:1}
+:is(.card,.rcard).celebrating .tick svg path{stroke-dashoffset:24;animation:tick-draw .26s ease .13s forwards}
+.card.celebrating .art img,.card.celebrating .noart,.rcard.celebrating .rtile>:not(.tick){
+  filter:grayscale(1) brightness(.5);transition:filter .45s ease .12s;
+}
+:is(.card,.rcard).leaving{animation:tile-go .28s cubic-bezier(.4,0,1,1) forwards}
+@keyframes tile-go{to{opacity:0;transform:scale(.9)}}
+
+/* A tile's mark is SHOWN once done. The shared `.tick svg path` hides it until
+   it is drawn on, and only a row ever put it back — so a finished film was a
+   sage disc with nothing in it, and an unfinished one lost its faint hint. */
+.card .tick svg path{stroke:currentColor;stroke-dashoffset:0}
+.rcard.done .tick svg path{stroke:var(--on-accent2);stroke-dashoffset:0}
+.rcard.celebrating .tick svg path{stroke:var(--on-accent2)}
+
 @media (prefers-reduced-motion: reduce){
   .fx,.arrived::after{display:none}
   .went.going .went-i svg,.ck-timer.soon,.tray.soon,.ck-timer.ringing,.tray.ringing,
-  .epin.drop,.npin.drop,.skel .group{animation:none}
+  .epin.drop,.npin.drop,.skel .group,
+  :is(.card,.rcard).celebrating .tick,:is(.card,.rcard).celebrating .tick svg path,
+  :is(.card,.rcard).leaving{animation:none}
+  :is(.card,.rcard).celebrating .tick svg path{stroke-dashoffset:0}
   img.fade{transition:none}
   .pl-top.snapping{transition:none}
 }

@@ -593,7 +593,19 @@ the list closes up.
 - **`prefers-reduced-motion` gets the state change and nothing else** — not a
   shortened version of the same thing.
 - `client-check.js` catches it mid-flight at 160ms, because an assertion made
-  after it finishes would pass just as well with no animation at all.
+  after it finishes would pass just as well with no animation at all. **It asserts
+  what is DRAWN** — running animations, the ring's computed colour — not what is in
+  the DOM: for a while posters and recipe cards got the class and the sparks with no
+  rule to draw them (every selector was `.it.celebrating`), so a film ticked off sat
+  still for 0.7 s and vanished, and a DOM-only check passed.
+- **Posters and recipe cards** get the same beats shaped for a tile: the ring fills
+  and draws its mark, the sparks go out, the art steps back the way a seen poster does,
+  and the tile shrinks away. A grid cell has no height to collapse, so instead the
+  tiles that stay **glide from where they were** (`closeUp`, first-last-invert-play).
+  The tile rules sit after the shelf's own, which they have to beat on ties.
+- **A tile's mark is shown once done.** The shared `.tick svg path` hides the mark
+  until it is drawn on, and only rows ever put it back — a seen film was a sage disc
+  with nothing in it, and an unseen one lost its faint hint.
 - **The Done together count gives a small spring** once the list has closed up
   (`doneLanded()`), so the row that left has somewhere it went to. Made it does the same.
 - **Made it and We went here get the same moment** (below): they are this app's other

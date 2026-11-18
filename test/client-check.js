@@ -296,6 +296,10 @@ function connectCdp(wsUrl) {
       'completing something should be an occasion, not a silent reflow');
     check(await evalJs(`document.querySelectorAll('#itemList .it.celebrating .spark').length`) === 6,
       'with the flourish actually in the DOM');
+    // And DRAWN. Elements in the DOM are not an animation: posters once got the
+    // class and the sparks with no rule to draw them, and this check passed.
+    check(await evalJs(`[...document.querySelectorAll('#itemList .it.celebrating .spark')].every(e => e.getAnimations().length)`),
+      'and each spark actually animating');
     await sleep(1100);
     check(await evalJs(`document.querySelectorAll('#itemList .it').length`) === beforeOpen - 1,
       'it leaves the to-do list rather than sitting there struck through');
@@ -1144,8 +1148,33 @@ function connectCdp(wsUrl) {
 
     // The tick sits INSIDE the poster, which is also a way to open the item.
     // Without stopping the click there, marking something seen would open it.
+    // And a poster finishes the way a row does — measured as drawn: the ring
+    // sage, the mark drawing on, the sparks moving, the art stepping back.
+    const sageIs = await evalJs(`(() => { const p = document.createElement('i'); p.style.color = 'var(--accent2)';
+      document.body.appendChild(p); const c = getComputedStyle(p).color; p.remove(); return c; })()`);
     await evalJs(`document.querySelector('#itemList .card [data-tick]').click()`);
-    await sleep(1400);
+    await sleep(200);
+    const poster = await evalJs(`(() => { const c = document.querySelector('#itemList .card.celebrating');
+      if (!c) return null;
+      const t = c.querySelector('.tick');
+      const art = c.querySelector('.art img, .noart');
+      return { ring: getComputedStyle(t).backgroundColor, ringMoves: t.getAnimations().length,
+        mark: t.querySelector('path').getAnimations().length,
+        sparks: [...c.querySelectorAll('.spark')].filter(e => e.getAnimations().length).length,
+        art: getComputedStyle(art).filter }; })()`);
+    check(poster && poster.ring === sageIs && poster.ringMoves && poster.mark && poster.sparks === 6 && /grayscale/.test(poster.art),
+      `ticking off a film is a moment too, actually drawn: ${JSON.stringify(poster)} (sage ${sageIs})`);
+    await sleep(500);
+    check(await evalJs(`!!document.querySelector('#itemList .card.leaving')`), 'and the poster shrinks away');
+    await sleep(900);
+    // Done, its mark is shown: the shared rule hid it until drawn on, and only
+    // rows ever put it back, so a seen film was a sage disc with nothing in it.
+    await evalJs(`document.getElementById('tabDone').click()`);
+    await sleep(400);
+    check(await evalJs(`getComputedStyle(document.querySelector('#itemList .card.done .tick path')).strokeDashoffset`) === '0px',
+      'a seen film shows its mark');
+    await evalJs(`document.getElementById('tabDone').click()`);
+    await sleep(400);
     check(!(await visible('#itemSheet .modal-in')),
       'ticking a card must not also open it');
     await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
