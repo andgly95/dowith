@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 178 assertions + a headless-chromium check
+- **Tests:** `npm test` — 187 tests + a headless-chromium check
 
 ## The model
 
@@ -35,6 +35,7 @@ mod.place = { name, lat, lon, address, area?, what?, osm? }   // area/what/osm o
 visit     = { book, again: 'soon'|'maybe'|'once'|null, memory } // see Places
 mod.recipe = { name, site, image, yield, prep, cook, total, ingredients[], steps[], from, readAt, readBy }
 cooked    = [{ at, by, again, tweaks }]                          // see Recipes
+swaps     = { [ingredientIndex]: { use, amount, ratio, needs[], note, why, suggested, of, by, at } } // see Swaps
 state.kitchens[uid] = { pantry: { [key]: { name, state, aisle, by, at } }, buy: [...] }
 state.timers = [{ id, uid, itemId, step, label, endsAt }]
 ```
@@ -945,6 +946,110 @@ guard, immutable. A daily sweep deletes what no item references and is a day old
 - **The kitchen** is a pushed screen: pantry by aisle (a small table; a wrong aisle is
   cosmetic) with Have → Low → Out; To buy grouped by recipe plus *Running low*. A ticked
   row is struck through and becomes Have **when you leave the screen** (or the app).
+- **Have takes it off the list to buy** (`kitchen.bought`), wherever it is marked: a ring
+  ticked on a recipe, the pantry cycled, a row ticked in the shop (which clears the same
+  thing listed for other recipes too). "The same thing" is the matcher's test either way
+  round, head noun agreeing: a ring on "A handful of parsley" clears a row saying
+  "parsley", "garlic" clears "garlic cloves", and "chicken" never clears "chicken broth"
+  nor "garlic" "garlic powder". Low is not Have; it stays listed.
+- **A promise on a label holds** (`covers`): an ingredient that says *gluten-free*, *dairy-free*,
+  *vegan* (any "X free") is had only from an entry that says it too — for somebody who cannot
+  eat gluten, gluten-free puff pastry is not the puff pastry in the freezer. The other way
+  round is fine: gluten-free flour is flour. Bought, the gluten-free one clears a "puff pastry"
+  row; plain puff pastry never clears the gluten-free row.
+
+### Swaps — what goes in instead (`lib/swap.js`, `public/js/swap.js`)
+
+Every ingredient line on a recipe's page has a swap button. The sheet offers **your own**
+(type what you are using) and, with a key, **a suggestion**: tick or add the options you
+are weighing — **things you have OR things you would buy** — and it says which works best
+*in this recipe*, so you know which one to get; tick none and it looks through the whole
+kitchen, then things worth buying. A suggestion that is not in the kitchen is chosen with
+**Use · add to list**, which also puts what it needs on the list to buy, for this recipe.
+
+The first cut said "Something else you **have**", and the only options it offered came
+from the pantry — so a "gluten free flour or cornstarch" to weigh was typed into the
+pantry, where it sat as one Out thing on the list to buy. Options to buy are first-class
+now, and the pantry is not where a question goes.
+
+**A line that offers a choice** ("2 tbsp gluten free all purpose flour or corn starch",
+`kitchen.alternatives`) is shown with **Which?** instead of the swap icon, and the wire
+carries its options (`choices`). The sheet opens as *Which one?*: each option to **take
+in one tap** (a swap to it, at the recipe's amount), and the same options already ticked
+to ask which works best — the prompt says the recipe offers the choice. Until one is
+chosen, the line is had when **either** option is (the matcher), its **ring asks which**
+rather than writing the whole phrase into the pantry, and a "this or that" row ticked in
+the shop comes off the list without becoming a pantry entry — you bought one of them,
+not which. "1 or 2 cloves" is a range, "or more" is not a choice, and "chicken or
+vegetable broth" is two broths.
+
+**What it has to be.** "gluten free" typed into the options box is not an option — nobody
+buys *a* gluten free — it is a **rule** every suggestion must keep. The sheet reads it in its
+usual spellings (`requirement()` in `public/js/swap.js`: "GF", "gluten-free", "no dairy",
+"must be vegan", "low sodium") and shows it apart, in sage, under **Has to be**; anything
+else stays an option, so "gluten free flour" is still a thing you could buy. It goes as
+`musts` and the prompt says *It has to be: gluten-free*, with a system rule to name the kind
+to buy where the usual one does not keep it ("gluten-free puff pastry"). Kept per device
+(`dw-swap-musts`), because a kitchen that cooks gluten free does so every night; one tap
+takes it off. Typed into **Your own**, it asks rather than swapping the line for the words.
+
+The first cut threw it away: **text typed into the box and not entered was lost** when the
+button was tapped, because asking repaints the sheet. On a phone the button IS the next tap,
+so asking now takes whatever is in the box first. The real API was then asked for a
+gluten-free swap for a Wellington's puff pastry and answered with gluten-free puff pastry to
+buy, a gluten-free rough puff and a shortcrust — where the same ask without the rule had
+offered flour, phyllo and pie crust. That run is also why `amount` is asked for under 60
+characters and `needs` as two or three words (a 52-character need ending in "xanthan gum"
+has "gum" for a head noun and never matches the pantry), and why a long line is clipped to a
+whole word and never inside a bracket it opened (`clip`).
+
+- **Choosing, not guessing.** `POST /api/item/:id/swap/suggest` returns a shortlist and
+  **saves nothing**; a swap exists only once somebody taps *Use this* or writes their own
+  (`POST /api/item/:id/swap`, `{ i, clear: true }` to go back to the original).
+- **A swap belongs to the recipe**, beside `visit` and for the same reasons: anyone who
+  can see the recipe may set one (deciding what to cook with is doing it together), `by`
+  says whose, and a PATCH can neither set nor lose it. It is keyed by the line's index
+  **and its text** (`of`): a swap whose line has been reworded is dropped on the way out
+  (`swap.live`), and reading the recipe again clears them all, since its lines may move.
+- **A swapped line is what it now is, everywhere**: the page shows it with "instead of …"
+  under it, cook mode cooks it, the kitchen check reads its `needs` (`swap.ready`), its
+  ring writes those, and *Add to the list* lists them.
+- **Never guess an amount, again.** `ratio` (the swap's amount relative to the original,
+  in the original's unit) is the only thing that scales. A line typed with its own amount
+  ("½ cup oat milk") or a suggestion's measured line with no ratio is shown as written,
+  and says which servings it was written for. A bare name for a measured ingredient means
+  the same amount (ratio 1), which is what anyone means by "use oat milk instead".
+- **The model:** `claude-opus-5-5` through the official SDK, adaptive thinking at
+  `medium` effort, **structured outputs** (a fixed JSON schema), and **refusal fallbacks**
+  (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`) so a classifier
+  false positive becomes a retry on another model rather than a failure. One request per
+  tap, nothing streamed: it is a short judgement, and the sheet shows placeholder rows
+  while it thinks.
+- **What comes back goes through a gate** (`cleanSuggestions`), like any input: at most
+  three, every string bounded, a ratio outside (0, 4] dropped, "uses" only names that are
+  in the kitchen, and **"In this kitchen" is worked out here** with the same matcher as
+  the recipe — not taken on the model's word. The recipe came from a web page, so the
+  system prompt says its text is data, not instructions; the worst a hostile page can do
+  is a bad suggestion, which nobody has to choose.
+- **The key is `anthropicKey` in `config.local.json`, read live, and nothing else.** The
+  SDK would happily use an `ANTHROPIC_API_KEY` from whatever shell started the server; a
+  feature that quietly bills a key nobody gave it is not one to ship. No key: the wire
+  says `swap.suggest: false`, the sheet offers only your own, and the route answers
+  `why: 'off'` without calling anything. `anthropicBaseUrl` lets the suites point the SDK
+  at a stand-in; **no test calls Anthropic**.
+- **What is sent:** the recipe, the one line, the names of what the kitchen being cooked
+  from has (Have or Low, never Out), the alternatives ticked, and what it has to be. A kitchen the caller may
+  not open (`kitchen.canUse`) is never sent; their own goes instead. 20 asks an hour per
+  person, in memory, because each one costs money. It is the same kind of trade as TMDB
+  and Nominatim, with recipe text as well as names.
+- **Checked against the real API on Nov 18** with a made-up pancake recipe: 10–15 s an ask
+  at `medium`, and it judged as hoped (buttermilk's acid is what the soda needs, so yogurt
+  or soured milk over plain milk). That run is why the prompt asks for `needs` in the
+  kitchen's OWN names ("Lemons", not "lemon juice"): the matcher would not count lemons
+  as lemon juice, and a swap made from what you have said *not in this kitchen*. And
+  for `name` in lower case, since it reads after an amount ("2 cups plain milk").
+- **Not labelled as AI** (see *Open threads*): the button says *Suggest a swap*. The SDK
+  sends the key as a bearer token (1.10), which the suite accepts in either form.
 - **Class names are global, a third time.** The kitchen's state button was `.pill` — the
   nav's travelling marker — and gave it a 64px minimum width; the browser check caught
   the marker settling 10px wide. It is `.kstate`. Recipe cards are `.rcard`, not `.card`.
@@ -1154,6 +1259,8 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `POST /api/item/:id/cooked` | made it `{again?, tweaks?}`, and ticks it off |
 | `POST /api/item/:id/timer` · `DELETE /api/timer/:id` | a cooking timer the server will push when due; only yours to stop |
 | `GET`·`POST /api/item/:id/cooking` | where the others are in the recipe — memory only |
+| `POST /api/item/:id/swap/suggest {i, kitchen?, picks?, musts?}` | what to use instead of one line — asks Claude, **saves nothing**; `{ok, verdict, suggestions}` or `{ok:false, why}` |
+| `POST /api/item/:id/swap {i, use, amount?, ratio?, needs?, note?}` · `{i, clear}` | use something instead — anyone who can see it |
 | `GET /api/kitchen/:uid` · `POST …/pantry` · `POST …/buy` | a kitchen — yours or a pair partner's, else 404 |
 | `GET /api/img/:name` | a recipe photo, signed in, immutable |
 | `POST /api/push/subscribe` · `/unsubscribe` · `/test` | nudges |

@@ -63,9 +63,30 @@ function connectCdp(wsUrl) {
   // makes for names typed without a pick). The suite must never need the
   // internet, and the map is the one screen that would otherwise reach for it.
   const asked = [];
+  const claudeAsked = [];
   const fake = require('http').createServer((req, res) => {
     res.setHeader('content-type', 'application/json');
     asked.push(new URL(req.url, 'http://x'));
+    // A stand-in for Claude, for swap suggestions: the Messages API's shape,
+    // and an answer that judges the alternatives it was given.
+    if (req.method === 'POST' && req.url.startsWith('/v1/messages')) {
+      let raw = '';
+      req.on('data', (c) => { raw += c; });
+      req.on('end', () => {
+        const b = JSON.parse(raw);
+        claudeAsked.push(b.messages[0].content);
+        const says = {
+          verdict: /butter/i.test(JSON.stringify(b.messages)) ? 'Of the two, butter works best here.' : 'Butter would do it.',
+          suggestions: [
+            { name: 'Butter', amount: '2 tbsp butter', ratio: 1, uses: ['butter'], needs: ['butter'], why: 'Richer, and it browns the chicken well.', adjust: 'Keep the heat at medium so it does not burn.', fit: 'great' },
+            { name: 'Bacon fat', amount: '2 tbsp bacon fat', ratio: 1, uses: [], needs: ['bacon fat'], why: 'Smoky.', adjust: '', fit: 'good' },
+          ],
+        };
+        res.end(JSON.stringify({ id: 'msg_cc', type: 'message', role: 'assistant', model: b.model, stop_reason: 'end_turn', stop_sequence: null,
+          content: [{ type: 'text', text: JSON.stringify(says) }], usage: { input_tokens: 1, output_tokens: 1 } }));
+      });
+      return;
+    }
     if (req.url.startsWith('/search')) return res.end('[]');   // Nominatim: nowhere by that name
     // A recipe page, written for the suite, and its photo.
     if (req.url === '/r/recipe.html') {
@@ -74,6 +95,14 @@ function connectCdp(wsUrl) {
         '@type': 'Recipe', name: 'Lemon Chicken', recipeYield: '4 servings', prepTime: 'PT10M', cookTime: 'PT20M', image: '/r/photo.jpg',
         recipeIngredient: ['1 1/2 lb chicken thighs', '2 tbsp olive oil', '3 cloves garlic, minced', 'A handful of parsley'],
         recipeInstructions: ['Season the chicken thighs.', 'Sear the chicken in the olive oil for 1 minute.', 'Add the garlic, then the parsley, and serve.'],
+      })}</script></head></html>`);
+    }
+    if (req.url === '/r/gravy.html') {
+      res.setHeader('content-type', 'text/html');
+      return res.end(`<html><head><script type="application/ld+json">${JSON.stringify({
+        '@type': 'Recipe', name: 'Gravy', recipeYield: '4 servings',
+        recipeIngredient: ['2 cups stock', '2 tbsp gluten free all purpose flour or corn starch'],
+        recipeInstructions: ['Whisk the thickener into cold stock, then simmer until thick.'],
       })}</script></head></html>`);
     }
     if (req.url === '/r/photo.jpg') {
@@ -101,6 +130,7 @@ function connectCdp(wsUrl) {
     // Andrew is an admin here, as he is on the real box: full edit on anything
     // he can see. Linnea is not, which is what the read-only checks rely on.
     admins: [A],
+    anthropicKey: 'test-key', anthropicBaseUrl: FAKE,
   }));
 
   const server = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
@@ -1318,6 +1348,56 @@ function connectCdp(wsUrl) {
     check(await evalJs(`fetch('/api/kitchen/' + encodeURIComponent('${A}')).then(r => r.json()).then(k => k.pantry.some(e => e.key === 'garlic' && e.state === 'have'))`),
       'in his pantry, on the server');
 
+    // And a ring ticked takes it off the list to buy: the parsley he meant to
+    // pick up is ticked here instead, and the list lets go of it.
+    await evalJs(`fetch('/api/kitchen/' + encodeURIComponent('${A}') + '/buy', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ add: [{ name: 'parsley' }] }) })`);
+    await evalJs(`${ringOf('/parsley/')}.click()`);
+    await sleep(1200);
+    check(await evalJs(`fetch('/api/kitchen/' + encodeURIComponent('${A}')).then(r => r.json()).then(k => !k.buy.some(b => /parsley/.test(b.name)))`),
+      'ticking an ingredient takes it off the list to buy');
+
+    // ── swapping an ingredient ──────────────────────────────────────────
+    // Every line has a swap button. The sheet offers what the kitchen has to
+    // tick, asks, shows a shortlist — and nothing changes until one is chosen.
+    await evalJs(`fetch('/api/kitchen/' + encodeURIComponent('${A}') + '/pantry', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Butter', state: 'have' }) })`);
+    await sleep(300);
+    const swapOf = (re) => `[...document.querySelectorAll('#rpBody .ig')].find(e => ${re}.test(e.innerText)).querySelector('[data-swap]')`;
+    await evalJs(`${swapOf('/olive oil/')}.click()`);
+    await sleep(700);
+    check(await visible('#swapSheet .modal-in') && /Instead of olive oil/.test(await evalJs(`document.getElementById('swTitle').innerText`)),
+      'a line\'s swap button opens the swap sheet for it');
+    check(await evalJs(`[...document.querySelectorAll('#swBody [data-pick]')].some(b => b.dataset.pick === 'Butter')`),
+      'offering what is in the kitchen to tick');
+    await evalJs(`[...document.querySelectorAll('#swBody [data-pick]')].find(b => b.dataset.pick === 'Butter').click()`);
+    await sleep(150);
+    check(/Will it work here/.test(await evalJs(`document.getElementById('swAsk').innerText`)), 'one ticked: will it work here?');
+    await evalJs(`document.getElementById('swAsk').click()`);
+    await sleep(1200);
+    check(await evalJs(`document.querySelectorAll('#swBody .sw-card').length`) === 2, 'a shortlist comes back');
+    check(/butter works best/i.test(await evalJs(`document.querySelector('#swBody .sw-verdict').innerText`)), 'with a verdict on what was ticked');
+    check(/In this kitchen/.test(await evalJs(`document.querySelector('#swBody .sw-card').innerText`)), 'and which ones this kitchen can make');
+    check(/3 tbsp Butter/.test(await evalJs(`document.querySelector('#swBody .sw-card .sw-amt').innerText`)),
+      'its amount scaled to tonight, like the line it would replace');
+    check(await evalJs(`fetch('/api/space/sp1/items').then(r => r.json()).then(b => !b.items.find(i => i.title === 'Tuesday chicken').swaps)`),
+      'nothing is saved by asking');
+    await evalJs(`document.querySelector('#swBody .sw-card [data-use]').click()`);
+    await sleep(1300);
+    check(!(await visible('#swapSheet .modal-in')), 'choosing one closes the sheet');
+    const swapped = await evalJs(`(() => { const r = [...document.querySelectorAll('#rpBody .ig')].find(e => /Butter/.test(e.innerText));
+      return r ? { text: r.innerText, on: r.querySelector('[data-swap]').classList.contains('on'), swapped: r.classList.contains('swapped') } : null; })()`);
+    check(swapped && swapped.on && swapped.swapped && /tbsp Butter/.test(swapped.text) && /instead of 2 tbsp olive oil/.test(swapped.text),
+      `and the line is what goes in now, scaled, with what it replaced: ${JSON.stringify(swapped)}`);
+    // Your own, written in.
+    await evalJs(`${swapOf('/handful of parsley/')}.click()`);
+    await sleep(600);
+    await evalJs(`document.getElementById('swOwnIn').value = 'Basil'`);
+    await evalJs(`document.querySelector('#swOwn button').click()`);
+    await sleep(1300);
+    check(/Basil[\s\S]*instead of A handful of parsley/.test(await evalJs(`document.getElementById('rpBody').innerText`)),
+      'a swap of your own, written in, reads the same way');
+
     // Cook mode: big type, its own ingredients scaled, a timer, no screen-lock claim it cannot keep.
     await evalJs(`Object.defineProperty(navigator, 'wakeLock', { value: undefined, configurable: true })`);
     check(await evalJs(`(() => { document.getElementById('rpCook').click();
@@ -1330,6 +1410,7 @@ function connectCdp(wsUrl) {
     await evalJs(`document.getElementById('ckNext').click()`);
     await sleep(300);
     check(/2¼ lb chicken thighs/.test(await evalJs(`document.querySelector('.ck-uses').innerText`)), "the step's own ingredients, scaled");
+    check(/3 tbsp Butter/.test(await evalJs(`document.querySelector('.ck-uses').innerText`)), 'with the swap cooked as what it is, scaled');
     await evalJs(`document.querySelector('#ckBody [data-run]').click()`);
     await sleep(800);
     check(await evalJs(`fetch('/api/item/' + [...document.querySelectorAll('#itemList .rcard')].find(x => /Tuesday chicken/.test(x.innerText)).dataset.it + '/cooking').then(r => r.status)`) === 200,
@@ -1369,6 +1450,103 @@ function connectCdp(wsUrl) {
     await evalJs(`document.getElementById('kiBack').click()`);
     await sleep(500);
     check(await visible('#scr-space'), 'back to the list');
+
+    // ── a line that offers a choice ─────────────────────────────────────
+    // "2 tbsp gluten free all purpose flour or corn starch": the line asks
+    // which, its options are on the table, one tap takes one — or ask which
+    // works best here, and the one you would have to buy goes on the list.
+    await evalJs(`document.querySelector('#kindNav [data-kind="recipe"]').click()`);
+    await sleep(400);
+    await evalJs(`(async () => {
+      const r = await (await fetch('/api/recipe/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: '${FAKE}/r/gravy.html' }) })).json();
+      await fetch('/api/space/sp1/item', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'Sunday gravy', kind: 'recipe', mod: { link: { url: '${FAKE}/r/gravy.html' }, recipe: r.recipe } }) });
+      document.dispatchEvent(new Event('visibilitychange')); })()`);
+    await sleep(1200);
+    await evalJs(`[...document.querySelectorAll('#itemList .rcard')].find(x => /Sunday gravy/.test(x.innerText)).querySelector('[data-open]').click()`);
+    await sleep(800);
+    const choiceBtn = `[...document.querySelectorAll('#rpBody .ig')].find(e => /corn starch/.test(e.innerText)).querySelector('[data-swap]')`;
+    check(await evalJs(`${choiceBtn}.innerText.trim()`) === 'Which?', 'a line offering a choice asks which');
+    await evalJs(`[...document.querySelectorAll('#rpBody .ig')].find(e => /corn starch/.test(e.innerText)).querySelector('.ring').click()`);
+    await sleep(700);
+    check(await visible('#swapSheet .modal-in') && await evalJs(`document.getElementById('swTitle').innerText`) === 'Which one?',
+      'and so does its ring, rather than putting "flour or corn starch" in the pantry');
+    check(await evalJs(`[...document.querySelectorAll('#swBody [data-take]')].map(b => b.dataset.take).join('|')`) === 'gluten free all purpose flour|corn starch',
+      'its options, to take one straight away');
+    check(await evalJs(`[...document.querySelectorAll('#swBody [data-pick].on')].length`) === 2
+      && /Which of these 2 works best/.test(await evalJs(`document.getElementById('swAsk').innerText`)), 'and already ticked, to ask which');
+    await evalJs(`document.querySelector('#swBody [data-take="corn starch"]').click()`);
+    await sleep(1300);
+    check(/2 tbsp corn starch[\s\S]*instead of 2 tbsp gluten free all purpose flour or corn starch/.test(await evalJs(`document.getElementById('rpBody').innerText`)),
+      'one tap takes one, at the recipe\'s amount');
+    // Back to the choice, and ask — with something from the shop added.
+    await evalJs(`${choiceBtn}.click()`);
+    await sleep(600);
+    await evalJs(`document.getElementById('swOriginal').click()`);
+    await sleep(1300);
+    await evalJs(`${choiceBtn}.click()`);
+    await sleep(600);
+    await evalJs(`(() => { const i = document.getElementById('swExtra'); i.value = 'arrowroot'; i.form.requestSubmit(); })()`);
+    await sleep(150);
+    await evalJs(`document.getElementById('swAsk').click()`);
+    await sleep(1300);
+    const lastAsk = claudeAsked[claudeAsked.length - 1] || '';
+    check(/offers a choice on this line: gluten free all purpose flour or corn starch/.test(lastAsk) && /would buy\): .*arrowroot/.test(lastAsk),
+      'asking says the recipe offers the choice, with the option from the shop');
+    check(/Use · add to list/.test(await evalJs(`[...document.querySelectorAll('#swBody .sw-card')][1].innerText`)),
+      'one not in the kitchen offers to go on the list');
+    await evalJs(`[...document.querySelectorAll('#swBody .sw-card')][1].querySelector('[data-use]').click()`);
+    await sleep(1500);
+    check(await evalJs(`fetch('/api/kitchen/' + encodeURIComponent('${A}')).then(r => r.json()).then(k => k.buy.some(b => b.name === 'bacon fat' && b.forTitle === 'Sunday gravy'))`),
+      'and choosing it puts it on the list to buy, for this recipe');
+    check(/Bacon fat|bacon fat/.test(await evalJs(`document.getElementById('rpBody').innerText`)), 'as well as on the line');
+    check(await evalJs(`fetch('/api/kitchen/' + encodeURIComponent('${A}')).then(r => r.json()).then(k => !k.pantry.some(e => / or /.test(e.name)))`),
+      'and nothing named "this or that" ever went into the pantry');
+
+    // ── what it has to be ───────────────────────────────────────────────
+    // "gluten free" in the options box is a RULE, not an option to weigh — and
+    // tapping the button with it still in the box asks with it. It used to be
+    // thrown away by the repaint, and the shortlist came back full of wheat.
+    const reqs = await evalJs(`(async () => {
+      const base = document.querySelector('script[type=module]').src.replace(/app\\.js.*$/, '');
+      const { requirement } = await import(base + 'swap.js');
+      return ['gluten free', 'GF', 'no dairy', 'must be vegan', 'Low sodium', 'gluten free flour', 'free range eggs', 'butter'].map(requirement); })()`);
+    check(JSON.stringify(reqs) === JSON.stringify(['gluten-free', 'gluten-free', 'dairy-free', 'vegan', 'low-sodium', null, null, null]),
+      `what it has to be is read in its usual spellings, and a thing to buy is still a thing: ${JSON.stringify(reqs)}`);
+    await evalJs(`${choiceBtn}.click()`);
+    await sleep(600);
+    const nAsked = claudeAsked.length;
+    await evalJs(`document.getElementById('swExtra').value = 'gluten free'`);
+    await evalJs(`document.getElementById('swAsk').click()`);
+    await sleep(1300);
+    const ruled = claudeAsked[claudeAsked.length - 1] || '';
+    check(claudeAsked.length === nAsked + 1 && /\nIt has to be: gluten-free\.\n/.test(ruled) && !/(: |, )gluten free(, |\n|$)/.test(ruled),
+      `typed and not entered, it still goes — as a rule, not as an option: ${ruled.split('\n').slice(-3).join(' | ')}`);
+    check(await evalJs(`(document.querySelector('#swBody [data-must="gluten-free"]') || {}).innerText`) === 'Gluten-free',
+      'and the sheet shows it, apart from the options');
+    await evalJs(`for (let b; (b = document.querySelector('#swBody [data-pick].on'));) b.click()`);
+    await sleep(150);
+    check(/Suggest a gluten-free swap/.test(await evalJs(`document.getElementById('swAsk').innerText`)), 'nothing ticked: it asks for a gluten-free swap');
+    await evalJs(`document.getElementById('swClose').click()`);
+    await sleep(500);
+    await evalJs(`${choiceBtn}.click()`);
+    await sleep(600);
+    check(await evalJs(`!!document.querySelector('#swBody [data-must="gluten-free"]')`), 'kept on this phone for the next swap');
+    await evalJs(`document.querySelector('#swBody [data-must="gluten-free"]').click()`);
+    await sleep(150);
+    check(await evalJs(`!document.querySelector('#swBody [data-must]') && localStorage.getItem('dw-swap-musts') === '[]'`), 'one tap takes it off');
+    // Written into "Your own", it is the question, not a thing to cook with.
+    await evalJs(`document.getElementById('swOwnIn').value = 'dairy free'`);
+    await evalJs(`document.querySelector('#swOwn button').click()`);
+    await sleep(1300);
+    check(/\nIt has to be: dairy-free\.\n/.test(claudeAsked[claudeAsked.length - 1] || '') && await visible('#swapSheet .modal-in')
+      && !/dairy free[\s\S]*instead of/.test(await evalJs(`document.getElementById('rpBody').innerText`)),
+      '"dairy free" as your own asks for one rather than swapping the line for the words');
+    await evalJs(`document.querySelector('#swBody [data-must="dairy-free"]').click()`);
+    await evalJs(`document.getElementById('swClose').click()`);
+    await sleep(500);
+    await evalJs(`document.getElementById('rpClose').click()`);
+    await sleep(400);
 
     // ── the redesign, by layout ─────────────────────────────────────────
     // The emoji in a tile, the words beside it, the ring on the right — and the

@@ -1521,6 +1521,73 @@ button.crow:active{background:var(--card2)}
 .ki-note{color:var(--dim);font-size:13.5px;line-height:1.5;margin:14px 4px}
 #kiSend{display:flex;align-items:center;justify-content:center;gap:8px;margin:6px 0 4px}
 
+/* ─── swaps: what goes in instead ──────────────────────────────────────────
+   On a recipe's page each line carries a swap button on the right, 44px to hit.
+   A swapped line shows what is going in, and under it, quietly, what it
+   replaced. The sheet: what is in use now, alternatives to tick, the ask, the
+   shortlist, and your own. */
+.swapb{width:var(--tap);height:var(--tap);flex:none;display:grid;place-items:center;border-radius:50%;
+  color:var(--dim);margin-right:-8px}
+.swapb svg{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+.swapb.on{color:var(--accent);background:var(--accent-tint)}
+.swapb.which{width:auto;padding:0 13px;border-radius:22px;margin-right:-4px;color:var(--accent);
+  background:var(--accent-tint);font:600 13.5px/1 var(--sans)}
+.ig-was{display:block;color:var(--dim);font-size:13px;margin-top:1px}
+.sw-takes{display:flex;flex-direction:column;gap:8px;margin-bottom:4px}
+.sw-take{display:flex;align-items:center;gap:10px;min-height:50px;padding:0 14px;border-radius:var(--r-field);
+  background:var(--card);color:var(--ink2);text-align:left;font:400 15.5px/1.3 var(--sans)}
+.sw-take b{color:var(--ink);font-weight:600}
+.sw-take svg{flex:none;color:var(--dim)}
+.sw-use svg{fill:none;stroke:currentColor;vertical-align:-3px;margin-right:6px}
+.ig.swapped .ig-t{color:var(--ink)}
+.ck-use.swapped{box-shadow:inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent)}
+
+.sw-now{padding:14px 16px 6px;margin-bottom:6px;background:var(--accent-tint)}
+.sw-now small{display:block;color:var(--accent);font:600 13px/1.2 var(--sans);margin-bottom:5px}
+.sw-now>b{display:block;font:500 16.5px/1.35 var(--sans);color:var(--ink)}
+.sw-now>b b{font-weight:700}
+.sw-now p{margin:6px 0 0;color:var(--ink2);font-size:14px;line-height:1.4}
+.sw-now .ghost{margin-top:4px;text-align:left;padding-left:0}
+.sw-hint{color:var(--dim);font-size:13.5px;line-height:1.45;margin:-2px 2px 12px}
+.sw-off{margin-top:6px}
+.sw-picks{margin-bottom:10px}
+/* What it has to be: a rule, not an option, so sage rather than the pick's coral. */
+.sw-musts{align-items:center;margin-bottom:12px}
+.sw-musts>span{color:var(--dim);font:600 13.5px/1 var(--sans);margin:0 2px 0 2px}
+.chips.sw-musts button.on{background:var(--sage-tint);color:var(--accent2);gap:6px}
+.chips.sw-musts button svg{width:15px;height:15px}
+.sw-add input,.sw-own input{width:100%;min-height:48px;background:var(--card);border:1.5px solid transparent;
+  border-radius:var(--r-field);padding:11px 14px;outline:none;font-size:16px}
+.sw-add input:focus,.sw-own input:focus{border-color:var(--accent)}
+.sw-add{margin-bottom:12px}
+.sw-ask{display:flex;align-items:center;justify-content:center;gap:8px}
+.sw-ask svg{fill:none;stroke:currentColor;stroke-linejoin:round}
+.sw-ask[disabled]{opacity:.6}
+.sw-res{margin-top:14px}
+.sw-res:empty{display:none}
+.sw-wait{color:var(--ink2);font:italic 400 15px/1.5 var(--serif);margin:0 2px 10px}
+.sw-verdict{font:500 15.5px/1.45 var(--sans);color:var(--ink);margin:0 2px 12px}
+.sw-card{padding:14px 16px 10px;margin-bottom:10px}
+.sw-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.sw-top b{font:600 16.5px/1.3 var(--sans)}
+.sw-card .fit{flex:none;padding:3px 9px;border-radius:9px;font:600 12px/1.4 var(--sans);
+  background:var(--card2);color:var(--ink2)}
+.sw-card .fit.great{background:var(--sage-tint);color:var(--accent2)}
+.sw-card .fit.in-a-pinch{color:var(--dim)}
+.sw-card p{margin:6px 0 0;color:var(--ink2);font-size:14.5px;line-height:1.45}
+.sw-card .sw-amt{color:var(--ink);font-weight:600}
+.sw-card .sw-amt span{color:var(--dim);font-weight:400}
+.sw-card .sw-adj{color:var(--ink);padding-left:10px;border-left:2px solid var(--accent-tint)}
+.sw-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px}
+.sw-foot>span{display:inline-flex;align-items:center;gap:5px;color:var(--dim);font-size:13px}
+.sw-foot>span.have{color:var(--accent2)}
+.sw-foot svg{fill:none;stroke:currentColor}
+.sw-use{min-height:var(--tap);padding:0 16px;border-radius:22px;background:var(--accent);color:var(--on-accent);
+  font:600 14.5px/1 var(--sans)}
+.sw-own{display:flex;gap:8px}
+.sw-own .primary{width:auto;margin:0;padding:0 20px;height:48px;flex:none}
+.sw-own+.sw-hint{margin-top:8px}
+
 /* ─── motion: the things that make it feel in your hand ─────────────────────
    Decoration over a screen that is already right. Each has a reduced-motion
    line at the end of this section that leaves the state and drops the motion. */

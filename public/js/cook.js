@@ -12,7 +12,7 @@ import { haptic, burst } from './motion.js';
 import { get, post, del, applyWire } from './api.js';
 import { icon } from './icons.js';
 import { refresh, changed, doneLanded } from './space.js';
-import { servings, amount, openRecipe } from './recipe.js';
+import { servings, amount, openRecipe, swapLine } from './recipe.js';
 import { setPantry } from './kitchen.js';
 
 const SIX_HOURS = 6 * 60 * 60 * 1000;
@@ -156,11 +156,15 @@ function paint() {
   paintWake();
   paintOthers();
   paintTray();
-  const uses = (st.uses || []).map(i => r.ingredients[i]).filter(Boolean);
+  const uses = (st.uses || []).filter(i => r.ingredients[i]);
   $('ckBody').innerHTML = `<div class="ck-step">
       <span class="ck-n">${step + 1}</span>
       <p class="ck-text">${esc(st.text)}</p>
-      ${uses.length ? `<h3 class="ck-h">For this step</h3><div class="ck-uses">${uses.map((ing) => {
+      ${uses.length ? `<h3 class="ck-h">For this step</h3><div class="ck-uses">${uses.map((i) => {
+        const ing = r.ingredients[i];
+        // A swapped line is cooked as what it now is.
+        const sw = it.swaps && it.swaps[i];
+        if (sw) return `<span class="ck-use swapped">${swapLine(ing, sw, sv)}</span>`;
         const a = amount(ing.q, sv.scale, ing.unit, ing.q2);
         return `<span class="ck-use">${a ? `<b>${esc(a)}</b> ${esc(ing.name)}` : esc(ing.text)}</span>`;
       }).join('')}</div>` : ''}

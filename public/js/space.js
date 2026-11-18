@@ -13,6 +13,7 @@ import { iconFor, icon } from './icons.js';
 import { isPlaceKind, renderPlaces, initPlaces, openPlace, placesTyping, leavePlaces } from './pl.js';
 import { tilesHtml, cardHtml as recipeCardHtml, bindRecipes, initRecipes, openRead, urlIn } from './recipes.js';
 import { openRecipe, initRecipe } from './recipe.js';
+import { initSwap } from './swap.js';
 import { initKitchen } from './kitchen.js';
 import { initCook } from './cook.js';
 import { haptic, fadeIn, skeleton } from './motion.js';
@@ -1282,6 +1283,7 @@ export function initSpace(changeHandler, backHandler) {
   initPlaces();
   initRecipes();
   initRecipe();
+  initSwap();
   initCook();
   initKitchen(() => { showScreen('scr-space'); render(); });
   $('spaceSettings').addEventListener('click', openSettings);

@@ -14,6 +14,7 @@ import { openRead, leadRun } from './recipes.js';
 import { getKitchen, setPantry, addToBuy } from './kitchen.js';
 import { openCook, pickUp } from './cook.js';
 import { haptic, fadeIn } from './motion.js';
+import { openSwap } from './swap.js';
 
 /* ── amounts ────────────────────────────────────────────────────────────── */
 
@@ -70,6 +71,33 @@ export function ingredientHtml(ing, scale) {
   if (!a) return `<span class="ig-t">${esc(ing.text)}</span>`;
   return `<span class="ig-t"><b>${esc(a)}</b> ${esc(ing.name)}${ing.note ? `<span class="ig-n">, ${esc(ing.note)}</span>` : ''}</span>`;
 }
+
+// A swapped line: what is going in instead, and, under it, what it replaced.
+// Scaled only when the swap is the same amount (or a fraction of it) in the
+// original's unit — `ratio`. A measured line the app cannot read is shown as
+// it was written and says so, the same rule as an unreadable ingredient.
+export function swapLine(ing, sw, sv) {
+  if (sw.ratio !== null && sw.ratio !== undefined && typeof ing.q === 'number') {
+    const a = amount(ing.q * sw.ratio, sv.scale, ing.unit, ing.q2 ? ing.q2 * sw.ratio : null);
+    if (a) return `<b>${esc(a)}</b> ${esc(sw.use)}`;
+  }
+  if (sw.amount) {
+    return `${esc(sw.amount)}${sv.scale !== 1 ? `<span class="ig-n"> · ${esc(sv.base ? `for ${sv.base}, as written` : 'as written')}</span>` : ''}`;
+  }
+  return esc(sw.use);
+}
+export function lineHtml(it, i, sv) {
+  const ing = it.mod.recipe.ingredients[i];
+  const sw = it.swaps && it.swaps[i];
+  if (!sw) return ingredientHtml(ing, sv.scale);
+  return `<span class="ig-t">${swapLine(ing, sw, sv)}<span class="ig-was">instead of ${esc(ing.text)}</span></span>`;
+}
+// What a line needs from a kitchen: the swap's things, or the ingredient.
+const needsOf = (it, i) => {
+  const sw = it.swaps && it.swaps[i];
+  const ing = it.mod.recipe.ingredients[i];
+  return sw ? sw.needs : [ing.name || ing.text];
+};
 
 /* ── servings ───────────────────────────────────────────────────────────── */
 
@@ -128,6 +156,11 @@ export function openRecipe(id) {
 }
 
 export function repaintRecipe() { if (page && !$('recipeSheet').hidden) paint(); }
+// A line just changed (a swap chosen): it glows as it lands, like anything new.
+export function flashLine(i) {
+  const row = $('rpBody').querySelector(`.ig[data-i="${Number(i)}"]`);
+  if (row) row.classList.add('arrived');
+}
 
 function paint() {
   const it = itemNow();
@@ -154,7 +187,7 @@ function paint() {
     const missing = ready ? r.ingredients.map((ing, i) => (ready[i] ? null : { ing, i })).filter(Boolean) : [];
     const kit = S.kitchens && S.kitchens[cookIn];
     const listed = new Set(((kit && kit.buy) || []).filter(b => b.for === it.id).map(b => keyish(b.name)));
-    const onList = missing.length && missing.every(m => listed.has(keyish(m.ing.name || m.ing.text)));
+    const onList = missing.length && missing.every(m => needsOf(it, m.i).every(n => listed.has(keyish(n))));
     const whose = kitchens.find(k => k.id === cookIn);
     ingredients = `<div class="rp-sec"><h3>Ingredients</h3>${kitchens.length > 1 ? `<div class="segs small" id="rpWho">${
       kitchens.map(k => `<button type="button" data-k="${esc(k.id)}" class="${k.id === cookIn ? 'on' : ''}" aria-pressed="${k.id === cookIn}">${
@@ -167,10 +200,15 @@ function paint() {
       </div>` : ''}
       <div class="box rows ings">${r.ingredients.map((ing, i) => {
         const has = ready ? !!ready[i] : false;
-        const what = ing.name || ing.text;
-        return `<div class="ig${has ? ' has' : ''}">
+        const sw = it.swaps && it.swaps[i];
+        const what = sw ? sw.use : (ing.name || ing.text);
+        // A line offering a choice asks which, until one is chosen.
+        const alts = !sw && it.choices && it.choices[i];
+        return `<div class="ig${has ? ' has' : ''}${sw ? ' swapped' : ''}" data-i="${i}">
           <button type="button" class="ring" data-ing="${i}" aria-pressed="${has}" aria-label="${esc(`${has ? 'Have it' : 'Need it'}: ${what}`)}">${icon('tick', 14, 3)}</button>
-          ${ingredientHtml(ing, sv.scale)}</div>`;
+          ${lineHtml(it, i, sv)}
+          <button type="button" class="swapb${sw ? ' on' : ''}${alts ? ' which' : ''}" data-swap="${i}" aria-label="${esc(sw ? `Swapped: ${what}. Change it`
+            : alts ? `Which one: ${alts.join(' or ')}?` : `Swap ${what}`)}">${alts ? 'Which?' : icon('swap', 18)}</button></div>`;
       }).join('')}</div>`;
   } else if (!r) {
     ingredients = `<div class="box rp-empty">
@@ -249,9 +287,12 @@ function bind(it) {
     const r = it.mod.recipe;
     const ready = (it.ready && it.ready[cookIn]) || [];
     const sv = servings(it);
-    const rows = r.ingredients.map((ing, i) => (ready[i] ? null : {
-      name: ing.name || ing.text, amount: amount(ing.q, sv.scale, ing.unit, ing.q2), for: it.id,
-    })).filter(Boolean);
+    // A swapped line goes on the list as what it now is.
+    const rows = r.ingredients.flatMap((ing, i) => {
+      if (ready[i]) return [];
+      if (it.swaps && it.swaps[i]) return it.swaps[i].needs.map(name => ({ name, amount: null, for: it.id }));
+      return [{ name: ing.name || ing.text, amount: amount(ing.q, sv.scale, ing.unit, ing.q2), for: it.id }];
+    });
     try { await addToBuy(cookIn, rows); paint(); toast('On the list to buy'); } catch (_) { toast('Could not add those'); }
   });
   box.querySelectorAll('#rpWho [data-k]').forEach(b => b.addEventListener('click', async () => {
@@ -259,19 +300,29 @@ function bind(it) {
     paint();
     try { await getKitchen(cookIn); paint(); } catch (_) {}
   }));
-  // Tapping a ring writes that kitchen's pantry: need → Have, have → Out.
+  // Tapping a ring writes that kitchen's pantry: need → Have, have → Out —
+  // for a swapped line, the things the swap uses. Have also takes it off the
+  // list to buy, on the server (kitchen.bought).
   box.querySelectorAll('[data-ing]').forEach(b => b.addEventListener('click', async () => {
-    const ing = it.mod.recipe.ingredients[Number(b.dataset.ing)];
+    const i = Number(b.dataset.ing);
+    // "Flour or cornstarch": having it (or running out) means ONE of them, so
+    // until one is chosen the ring asks which, rather than writing the whole
+    // phrase into the pantry as if it were a thing you could own.
+    if (!(it.swaps && it.swaps[i]) && it.choices && it.choices[i]) {
+      openSwap(it.id, i, cookIn);
+      return;
+    }
     const has = b.getAttribute('aria-pressed') === 'true';
     haptic('tick');
     b.setAttribute('aria-pressed', String(!has));
     b.closest('.ig').classList.toggle('has', !has);
     try {
-      await setPantry(cookIn, ing.name || ing.text, has ? 'out' : 'have');
+      for (const name of needsOf(it, i)) await setPantry(cookIn, name, has ? 'out' : 'have');
       await refresh();
       paint();
     } catch (_) { toast('Could not change that'); paint(); }
   }));
+  box.querySelectorAll('[data-swap]').forEach(b => b.addEventListener('click', () => openSwap(it.id, Number(b.dataset.swap), cookIn)));
   box.querySelectorAll('[data-cook]').forEach(b => b.addEventListener('click', () => {
     closeSheet('recipeSheet');
     openCook(it.id, { step: Number(b.dataset.cook), kitchen: cookIn });
