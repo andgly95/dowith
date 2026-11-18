@@ -7,6 +7,7 @@ import { S } from './state.js';
 import { $, esc, toast, showScreen } from './util.js';
 import { get, post } from './api.js';
 import { icon } from './icons.js';
+import { haptic, skeleton } from './motion.js';
 
 const enc = encodeURIComponent;
 const me = () => S.wire && S.wire.me && S.wire.me.id;
@@ -69,7 +70,7 @@ function paint() {
   $('kiTabs').innerHTML = `<button type="button" data-t="pantry" class="${tab === 'pantry' ? 'on' : ''}" aria-pressed="${tab === 'pantry'}">Pantry <span class="n">${pc}</span></button>
     <button type="button" data-t="buy" class="${tab === 'buy' ? 'on' : ''}" aria-pressed="${tab === 'buy'}">To buy <span class="n">${bc}</span></button>`;
   const body = $('kiBody');
-  if (!k) { body.innerHTML = '<p class="ki-note">Opening…</p>'; bindTop(); return; }
+  if (!k) { body.innerHTML = skeleton(5); bindTop(); return; }
   if (tab === 'pantry') {
     const groups = AISLES.map(a => [a, k.pantry.filter(e => (e.aisle || 'Other') === a)]).filter(([, xs]) => xs.length);
     body.innerHTML = `<form class="ki-add" id="kiAdd"><span>${icon('plus', 20)}</span>
@@ -128,6 +129,7 @@ function bindBody(k) {
   });
   $('kiBody').querySelectorAll('[data-cycle]').forEach(b => b.addEventListener('click', async () => {
     const next = NEXT[b.dataset.state] || 'have';
+    haptic('tick');
     b.className = `kstate ${next}`;
     b.textContent = LABEL[next];
     b.dataset.state = next;
@@ -138,6 +140,7 @@ function bindBody(k) {
   $('kiBody').querySelectorAll('[data-got]').forEach(b => b.addEventListener('click', () => {
     const id = b.dataset.got;
     if (ticked.has(id)) ticked.delete(id); else ticked.set(id, true);
+    haptic('tick');
     b.classList.toggle('got', ticked.has(id));
     b.setAttribute('aria-pressed', String(ticked.has(id)));
   }));

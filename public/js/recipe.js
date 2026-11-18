@@ -13,6 +13,7 @@ import { refresh, changed, kindOf, kindOrDefault, ideaLine, openItem } from './s
 import { openRead, leadRun } from './recipes.js';
 import { getKitchen, setPantry, addToBuy } from './kitchen.js';
 import { openCook, pickUp } from './cook.js';
+import { haptic, fadeIn } from './motion.js';
 
 /* ── amounts ────────────────────────────────────────────────────────────── */
 
@@ -141,7 +142,7 @@ function paint() {
   const emoji = leadRun(it.title);
 
   const hero = `<div class="rp-hero${r && r.image ? '' : ' bare'}">
-      ${r && r.image ? `<img src="${esc(imgSrc(r.image))}" alt="">` : `<span class="rp-emoji" aria-hidden="true">${esc(emoji || '🍳')}</span>`}
+      ${r && r.image ? `<img class="fade" src="${esc(imgSrc(r.image))}" alt="">` : `<span class="rp-emoji" aria-hidden="true">${esc(emoji || '🍳')}</span>`}
       ${link ? `<a class="site-chip" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(site || 'Original')} ↗</a>` : ''}
     </div>`;
 
@@ -226,6 +227,7 @@ function nameOf(uid) {
 
 function bind(it) {
   const box = $('rpBody');
+  fadeIn(box);
   const on = (id, fn) => { const el = box.querySelector(`#${id}`); if (el) el.addEventListener('click', fn); };
   on('rpLess', () => { stepServings(it, -1); paint(); });
   on('rpMore', () => { stepServings(it, 1); paint(); });
@@ -261,6 +263,7 @@ function bind(it) {
   box.querySelectorAll('[data-ing]').forEach(b => b.addEventListener('click', async () => {
     const ing = it.mod.recipe.ingredients[Number(b.dataset.ing)];
     const has = b.getAttribute('aria-pressed') === 'true';
+    haptic('tick');
     b.setAttribute('aria-pressed', String(!has));
     b.closest('.ig').classList.toggle('has', !has);
     try {

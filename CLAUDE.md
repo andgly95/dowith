@@ -356,7 +356,9 @@ mockups in `screens/`). Five rules did most of it, and they hold everywhere:
    ghosts are gone. The X keeps the old button's id (`isCancel`, `meCancel`…) so every
    close handler survived, and **a tap on any sheet's scrim clicks its X** (app.js), so
    whatever closing that sheet does — forget a share, repaint the rose's dot — happens
-   whichever way you leave.
+   whichever way you leave. **Pulling a sheet down by its grabber closes it the same
+   way**, and a sheet falls away when it closes rather than blinking out (see *Motion
+   and touch*).
 5. **44px minimum hit targets** (`--tap`). The tick is 26px to look at and 48px to hit:
    its `::after` is the hit area, and a pseudo-element is part of the button.
 
@@ -376,7 +378,10 @@ row of pills.
 
 **The `[hidden]` trap is settled globally**: `[hidden]{display:none !important}`. It
 had fired three times (`.kindnav`, `.items`, the sheet's fields). The suite still
-asserts by layout, because a more specific rule can always win.
+asserts by layout, because a more specific rule can always win. **One rule wins on
+purpose**: `.modal.leaving[hidden]` keeps a closing sheet drawn for 0.22 s while it
+falls (see *Motion and touch*). It applies only while `.leaving` is on, which a timer
+takes off.
 
 **Class names are global — again.** The account's grouped rows were first called
 `.card` and every poster on the shelf grew a box behind it. They are `.box`.
@@ -589,6 +594,85 @@ the list closes up.
   shortened version of the same thing.
 - `client-check.js` catches it mid-flight at 160ms, because an assertion made
   after it finishes would pass just as well with no animation at all.
+- **The Done together count gives a small spring** once the list has closed up
+  (`doneLanded()`), so the row that left has somewhere it went to. Made it does the same.
+- **Made it and We went here get the same moment** (below): they are this app's other
+  two ways of finishing something, and both used to end in a toast or a plain redraw.
+
+## Motion and touch (`public/js/motion.js`, `util.js`)
+
+Added Nov 18 as one pass. **Every piece is decoration over a screen that is already
+correct.** State changes are synchronous and final before any animation runs, nothing
+that changes state awaits an animation, and reduced motion gets the state with none of
+the motion. Haptics are the exception: they are not motion, and the phone's own setting
+governs them.
+
+- **Sheets fall away when they close.** `closeSheet` sets `hidden` at once, so the app
+  and the suite read a closed sheet as closed the moment it returns. What you see is
+  `.leaving`: the sheet stays drawn for 0.22 s, takes no taps, and slides down from
+  wherever it was while the scrim clears. A timer takes the class off. A sheet can be
+  closed by two routes in one tap (its own scrim handler and the shared one through its
+  X); **the second call returns early**, or it would cut the first one's exit short.
+  The scrim also fades in now.
+- **Pull a sheet down to close it** (`sheetDrag`). Below a third of the way it springs
+  back; past a third, or with a flick, it closes **through its own X**, like a tap on
+  the scrim. It uses **touch events, not pointer events**, so the page can keep
+  scrolling. **The first move decides**: down, with nothing above it to scroll back to,
+  and the drag is the sheet's. After that it calls `preventDefault`; a later one is too
+  late on a phone that has already started scrolling. The sheet follows from where the
+  finger went DOWN: Chrome holds back moves inside its touch slop, and measuring from
+  the first move left the sheet that far behind the finger. Fields, the rose's deck and
+  any map that pans are left to their own gestures.
+- **Moving between screens** (`showScreen`) is still a synchronous switch of `.active`.
+  The screen you left keeps `.leaving` for about 0.12 s, fading out the way you came,
+  while the new one fades in from the other side. Going deeper (list → kitchen, cook,
+  Made it) comes from the right; going back comes from the left (`DEPTH` in util.js).
+  It is **two short fades, not a slide-over**, because a `.screen` carries no
+  background of its own (see the Safari 26 note) and a fade does not need one.
+- **Coming back to the app refreshes the open list.** It used to repaint only the
+  shelf (`if (S.spaceId) return`), so a list left open on the phone showed none of
+  Linnea's additions until you left it and came back. Now `refresh({ arrived: true })`
+  runs, and **what is new since the last draw glows as it lands** (`.arrived`, an
+  overlay on the row, poster or card). Something new on another tab springs that tab's
+  count instead. The refresh is skipped while a row is mid-celebration, since a repaint
+  would destroy it.
+- **Made it is a moment.** Reaching it from the last step springs the badge, draws its
+  mark and bursts eight sparks, and the rest of the page rises in behind it. **Done
+  answers where you tapped**: it turns sage and says Saved, then the screen goes back
+  to the list and the Done together count springs. The `Made it · Nov 17` toast is gone.
+- **We went here is a moment.** The button fills sage and its ring bursts. The page
+  then turns into the record: the **Been together** card blooms in, its chips arrive
+  one by one, and the sheet glides up to it, because "would you go back?" is the next
+  thing to say. In both cases the POST goes out at once.
+- **A burst** (`burst(el, { r, n, size })`) is the tick-off's ripple and sparks, sized
+  by `--r`, so one recipe serves a 26px ring, a 20px icon and an 88px badge.
+- **Haptics** (`haptic('tick' | 'snap' | 'success')`): ticking off, We went here, Made
+  it, the rose's deck (and a click as a card starts to lean), a match, Pick one, a
+  Places detent, a pulled sheet crossing its threshold, ingredient rings and pantry
+  taps. Android uses `navigator.vibrate`. **iOS has no vibrate at all**, but Safari 18
+  plays a system tick when an `<input type="checkbox" switch>` toggles, and a label
+  click toggles one. That is a workaround Apple could close, so a buzz never carries
+  meaning alone. It must run inside the tap's own handler on iOS. It is skipped until
+  the page has ever been tapped (`navigator.userActivation`), because Chrome refuses
+  and logs an error before then. The suite stubs `vibrate` after real touches and
+  checks that a detent buzzes.
+- **Pins drop into place once** (`createMap(…, { drop: true })`). A pin falls the
+  first time that map draws it and is simply there on every redraw after; a map
+  redraws on every pan, and pins that kept falling would look like a slot machine.
+  Redraws come in pairs (a render, then a focus), so **a redraw during the fall
+  carries it on with a negative `animation-delay`** instead of cutting it off. Without
+  that the first fall was never seen. The place page's snippet calls `resetDrops()`
+  each time it opens, so its one pin drops every time. The animation is on the CSS
+  `translate` property, because `transform` already positions the pin.
+- **Pictures fade in the first time they load** (`img.fade`, `fadeIn(root)`): posters,
+  recipe cards, the recipe page's photo. A picture already seen (or `complete` when
+  drawn) is just there. The list re-renders on every tick, and re-fading a shelf of
+  posters each time would be a flicker.
+- **Placeholder rows** (`skeleton()`) replace "Loading…" while a list or a kitchen is
+  on its way in.
+- **Cook-mode timers breathe in their last ten seconds** (`.soon`), so a glance across
+  the kitchen says "nearly" before the number does. They **ring for four seconds** when
+  they finish (`.ringing`, three pulses), and starting one gives a tick.
 
 ## Getting things in — the load-bearing feature
 
@@ -844,7 +928,8 @@ guard, immutable. A daily sweep deletes what no item references and is a day old
   minutes **in memory**, never pushed.
 - **Made it** (`POST /api/item/:id/cooked`, ≤20 kept) records would-you-again and tweaks
   and ticks it off; "Ran out" chips set those pantry entries Out. In Done together it
-  reads "Made Nov 17 · Can't wait"; un-ticking keeps the history.
+  reads "Made Nov 17 · Can't wait"; un-ticking keeps the history. Arriving at Made it,
+  and tapping Done, are both moments (see *Motion and touch*); there is no toast.
 - **The kitchen** is a pushed screen: pantry by aisle (a small table; a wrong aisle is
   cosmetic) with Have → Low → Out; To buy grouped by recipe plus *Running low*. A ticked
   row is struck through and becomes Have **when you leave the screen** (or the app).
@@ -866,6 +951,16 @@ manifest — drawn the way people think about places: where, how far, been or no
   on the tile's corner — no sections here, sorted **closest first** when the phone has
   said where it is, newest first when not; Been is most recent first and reads
   "Went Oct 4 · Can't wait to go back".
+- **The list is a sheet you can pull**, between three heights: mostly **map** (the
+  list's heading and a row), **half** (where it opens) and mostly **list** (the map a
+  strip under the floating buttons). Drag the heading anywhere. Drag the list down from
+  its top to see more map, or up while it is not yet full height to see more list; at
+  half, a swipe up grows the sheet before it scrolls, as a map app does. On release it
+  settles on the nearest height, or the one a flick was heading for. **The grabber is
+  a button** that steps between list and half, for anyone not dragging. Once it has
+  settled, the map is redrawn for its new size with `resized()`, which keeps what was
+  at the top where it was, so the map does not jump. The height is kept for the
+  visit, never stored.
 - **Tap a pin** and its row is highlighted and scrolled to; **tap it again** (or tap a
   row) and its page opens; **tap the map itself** and the selection goes. Pinch to zoom. The header, title and control row give way to back, the
   segmented control and the rose, floating over the map in `--glass`. **No backdrop

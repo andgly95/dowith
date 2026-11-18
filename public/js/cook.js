@@ -7,10 +7,11 @@
 // timer that dies with the screen is worse than none. The server keeps the
 // clock (it is sent a length, never an end) and pushes to whoever started it.
 import { S } from './state.js';
-import { $, esc, toast, showScreen, shortDate } from './util.js';
+import { $, esc, toast, showScreen } from './util.js';
+import { haptic, burst } from './motion.js';
 import { get, post, del, applyWire } from './api.js';
 import { icon } from './icons.js';
-import { refresh, changed } from './space.js';
+import { refresh, changed, doneLanded } from './space.js';
 import { servings, amount, openRecipe } from './recipe.js';
 import { setPantry } from './kitchen.js';
 
@@ -20,7 +21,9 @@ const AGAIN = [['soon', 'Can’t wait'], ['maybe', 'Maybe someday'], ['once', 'O
 let id = null;            // the recipe being cooked
 let step = 0;
 let kitchen = null;       // whose kitchen it is being cooked from
-const timers = new Map(); // `${itemId}:${step}:${i}` → { itemId, step, i, label, secs, remaining, endsAt, serverId, running, done }
+const timers = new Map(); // `${itemId}:${step}:${i}` → { itemId, step, i, label, secs, remaining, endsAt, serverId, running, done, doneAt }
+const SOON = 10 * 1000;   // the last ten seconds, a timer starts to breathe
+const RINGING = 4000;     // and for a few seconds after it is done, it rings
 let ticker = null;
 let poller = null;
 let wake = null;
@@ -138,6 +141,7 @@ function timerFor(s, i) {
   return timers.get(k);
 }
 const leftOf = (t) => (t.running ? t.endsAt - Date.now() : t.remaining);
+const ringing = (t) => t.done && t.doneAt && Date.now() - t.doneAt < RINGING;
 
 function paint() {
   const it = itemNow();
@@ -162,7 +166,7 @@ function paint() {
       }).join('')}</div>` : ''}
       ${st.timers.map((t, i) => {
         const tm = timerFor(step, i);
-        return `<div class="box ck-timer${tm.done ? ' done' : ''}" data-tk="${esc(keyOf(id, step, i))}">
+        return `<div class="box ck-timer${tm.done ? ' done' : ''}${ringing(tm) ? ' ringing' : ''}" data-tk="${esc(keyOf(id, step, i))}">
           <span class="cb"><small>${esc(t.label)} · ${esc(mmss(t.secs * 1000).replace(/^0:/, '0:'))}</small>
           <b class="left" data-left="${esc(keyOf(id, step, i))}">${tm.done ? 'Done' : esc(mmss(leftOf(tm)))}</b></span>
           <button type="button" class="go" data-run="${i}" aria-label="${tm.running ? `Pause the ${esc(t.label)} timer` : `Start the ${esc(t.label)} timer`}">${
@@ -179,7 +183,7 @@ function paint() {
 // Timers from OTHER steps, still running or just done. Tapping one jumps to it.
 function paintTray() {
   const list = [...timers.values()].filter(t => t.itemId === id && t.step !== step && (t.running || t.done));
-  $('ckTray').innerHTML = list.map(t => `<button type="button" class="tray${t.done ? ' done' : ''}" data-jump="${t.step}">${icon('timer', 17)}
+  $('ckTray').innerHTML = list.map(t => `<button type="button" class="tray${t.done ? ' done' : ''}${ringing(t) ? ' ringing' : ''}" data-jump="${t.step}">${icon('timer', 17)}
       <span>Step ${t.step + 1} · ${esc(t.label)}</span><b data-left="${esc(keyOf(t.itemId, t.step, t.i))}">${t.done ? 'done' : esc(mmss(leftOf(t)))}</b></button>`).join('');
   $('ckTray').hidden = !list.length;
   $('ckTray').querySelectorAll('[data-jump]').forEach(b => b.addEventListener('click', () => go(Number(b.dataset.jump))));
@@ -194,7 +198,8 @@ async function runToggle(s, i) {
     if (t.serverId) { del(`/api/timer/${t.serverId}`).catch(() => {}); t.serverId = null; }
     say(`${t.label} timer paused`);
   } else {
-    if (t.done) { t.done = false; t.remaining = t.secs * 1000; }
+    if (t.done) { t.done = false; t.doneAt = null; t.remaining = t.secs * 1000; }
+    haptic('tick');
     t.running = true;
     t.endsAt = Date.now() + t.remaining;
     say(`${t.label} timer started, ${Math.round(t.remaining / 60000) || 1} minutes`);
@@ -219,6 +224,7 @@ function ensureTicker() {
       if (left <= 0) {
         t.running = false;
         t.done = true;
+        t.doneAt = Date.now();
         t.remaining = 0;
         finished = true;
         say(`${t.label} is done`);
@@ -229,6 +235,10 @@ function ensureTicker() {
       }
       document.querySelectorAll(`[data-left="${CSS.escape(k)}"]`).forEach((el) => {
         el.textContent = t.done ? 'done' : mmss(Math.max(0, left));
+        // The last ten seconds breathe, so a glance across the kitchen says
+        // "nearly" before the number does.
+        const box = el.closest('.ck-timer, .tray');
+        if (box) box.classList.toggle('soon', t.running && left <= SOON);
       });
     }
     if (finished && $('scr-cook').classList.contains('active')) paint();
@@ -266,25 +276,63 @@ function openMade() {
   $('mdTweaks').value = '';
   showScreen('scr-made');
   $('scr-made').querySelector('.scroll').scrollTop = 0;
+  arrive();
 }
 
+// Finishing the last step is the moment, so the screen marks it: the badge
+// springs in, its mark draws itself and throws its sparks, and the rest of the
+// page rises in behind it. Reduced motion gets the page, already there.
+function arrive() {
+  haptic('success');
+  if (calm()) return;
+  const ok = $('scr-made').querySelector('.md-ok');
+  const mark = ok && ok.querySelector('path');
+  if (!ok || !ok.animate) return;
+  ok.animate([
+    { transform: 'scale(.3)', opacity: 0 },
+    { transform: 'scale(1.12)', opacity: 1, offset: 0.6 },
+    { transform: 'none', opacity: 1 },
+  ], { duration: 560, delay: 140, easing: 'cubic-bezier(.2,.9,.3,1)', fill: 'backwards' });
+  if (mark) {
+    mark.animate([{ strokeDashoffset: 24 }, { strokeDashoffset: 0 }],
+      { duration: 340, delay: 420, easing: 'ease-out', fill: 'backwards' });
+  }
+  setTimeout(() => burst(ok, { r: 46, n: 8, size: 6, ring: 1.5 }), 470);
+  [...$('scr-made').querySelectorAll('.md-in > :not(.md-ok)')].forEach((el, i) => el.animate([
+    { opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' },
+  ], { duration: 380, delay: 300 + Math.min(i, 6) * 55, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }));
+}
+
+// Done answers where you tapped it — it fills sage and says Saved — and then
+// the screen goes back to the list, where the Done together count takes it.
+// That replaced a "Made it · Nov 17" toast: the feedback should be the thing.
+// The POST goes at once; the moment runs beside it, never in front of it.
 async function madeIt() {
   const it = itemNow();
   if (!it) return;
-  $('mdDone').disabled = true;
+  const btn = $('mdDone');
+  btn.disabled = true;
+  haptic('success');
+  const sent = post(`/api/item/${it.id}/cooked`, { again, tweaks: $('mdTweaks').value });
+  btn.classList.add('saved');
+  btn.innerHTML = `${icon('check', 20)}Saved`;
+  const shown = calm() ? Promise.resolve() : new Promise(r => setTimeout(r, 600));
   try {
-    const b = await post(`/api/item/${it.id}/cooked`, { again, tweaks: $('mdTweaks').value });
+    const b = await sent;
     applyWire(b.state);
     // What ran out goes on the list to buy — it is Out in that kitchen.
     for (const name of ranOut) { try { await setPantry(kitchen, name, 'out'); } catch (_) {} }
     forget(it.id);
     for (const [k, t] of timers) if (t.itemId === it.id) { if (t.serverId) del(`/api/timer/${t.serverId}`).catch(() => {}); timers.delete(k); }
+    await shown;
     showScreen('scr-space');
     await refresh();
     changed();
-    toast(`Made it · ${shortDate(Date.now())}`);
+    doneLanded();
   } catch (_) { toast('Could not save that'); }
-  $('mdDone').disabled = false;
+  btn.disabled = false;
+  btn.classList.remove('saved');
+  btn.textContent = 'Done';
 }
 
 export function initCook() {

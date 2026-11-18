@@ -55,7 +55,7 @@ export function cardHtml(it, { sectioned = false } = {}) {
   const have = ready ? ready.filter(Boolean).length : null;
   return `<div class="rcard ${it.done ? 'done' : ''}" data-it="${esc(it.id)}">
     <div class="rtile${r && r.image ? ' photo' : ''}" data-open>
-      ${r && r.image ? `<img src="${esc(imgSrc(r.image))}" alt="" loading="lazy">` : `<span class="remoji" aria-hidden="true">${
+      ${r && r.image ? `<img class="fade" src="${esc(imgSrc(r.image))}" alt="" loading="lazy">` : `<span class="remoji" aria-hidden="true">${
         run ? esc(run) : iconFor(kindOrDefault(it), 40)}</span>`}
       ${r && r.image && r.site ? `<span class="rsite">${esc(r.site)}</span>` : ''}
       <button class="tick" data-tick aria-label="${it.done ? 'Not made after all' : 'Made it'}">

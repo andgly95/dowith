@@ -529,7 +529,19 @@ input,textarea{font:inherit;color:var(--ink)}
 .modal-in::before{content:'';display:block;width:38px;height:5px;border-radius:3px;
   background:var(--faint);margin:0 auto 10px}
 @keyframes sheet-up{from{transform:translateY(56px);opacity:.3}}
-@media (prefers-reduced-motion: reduce){ .modal-in{animation:none} }
+/* The scrim fades in with it, rather than the room going dark in one frame. */
+.modal{animation:scrim-in .26s ease}
+@keyframes scrim-in{from{background-color:transparent}}
+/* And out. `hidden` is already set — every check in the app reads it as closed
+   — but for a fifth of a second it stays drawn, untouchable, falling from
+   wherever it was (part-way down, after a drag) while the scrim clears. The
+   attribute selector out-ranks the global [hidden] rule, !important for
+   !important. */
+.modal.leaving[hidden]{display:flex !important;pointer-events:none;animation:scrim-out .22s ease forwards}
+.modal.leaving .modal-in{animation:sheet-down .22s cubic-bezier(.4,0,.9,.5) forwards}
+@keyframes scrim-out{to{background-color:transparent}}
+@keyframes sheet-down{to{transform:translateY(100%)}}
+@media (prefers-reduced-motion: reduce){ .modal,.modal-in{animation:none} }
 .modal-hd{display:flex;align-items:flex-start;gap:14px;margin:0 -8px 18px 0}
 .modal-hd .hd-t{flex:1;min-width:0;padding-top:6px}
 .modal-hd .hd-t b{display:block;font:600 25px/1.18 var(--serif);letter-spacing:-.015em;word-break:break-word}
@@ -748,7 +760,7 @@ button.crow:active{background:var(--card2)}
    rather than having to get to the end of the word before the number means
    anything. */
 .kindnav .n{
-  font:inherit;font-style:normal;font-weight:500;margin-right:4px;
+  display:inline-block;font:inherit;font-style:normal;font-weight:500;margin-right:4px;
   color:inherit;opacity:.7;font-variant-numeric:tabular-nums;
 }
 
@@ -914,7 +926,13 @@ button.crow:active{background:var(--card2)}
   border-radius:26px 26px 0 0;box-shadow:0 -12px 32px rgba(0,0,0,.35);
 }
 .pl-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 10px 4px}
-.pl-hd .grab{position:absolute;left:50%;top:8px;width:38px;height:5px;margin-left:-19px;border-radius:3px;background:var(--faint)}
+/* The grabber is a button: drag it, or tap it to step between list and map.
+   5px to look at; the ::after is a 44px target. */
+.pl-hd .grab{position:absolute;left:50%;top:8px;width:38px;height:5px;margin-left:-19px;border-radius:3px;
+  background:var(--faint);padding:0}
+.pl-hd .grab::after{content:'';position:absolute;left:-8px;right:-8px;top:-14px;bottom:-14px}
+.pl-hd{touch-action:none}
+.pl-top.snapping{transition:flex-basis .32s cubic-bezier(.2,.9,.3,1)}
 .items.pl-list{padding-top:22px}
 .pl-hd b{display:block;font:600 23px/1.15 var(--serif);letter-spacing:-.01em}
 .pl-hd small{display:block;font-size:13.5px;color:var(--dim);margin-top:2px}
@@ -1026,7 +1044,7 @@ button.crow:active{background:var(--card2)}
 .went{width:100%;height:52px;border-radius:26px;margin:16px 0;background:var(--sage-tint);color:var(--accent2);
   display:flex;align-items:center;justify-content:center;gap:9px;font:600 16px/1 var(--sans)}
 .went.quiet{background:none;height:var(--tap);color:var(--dim);font-weight:500;font-size:14.5px}
-.went.quiet svg{display:none}
+.went.quiet .went-i{display:none}
 .chips.mover{padding:4px 16px 14px 52px}
 
 
@@ -1467,7 +1485,7 @@ button.crow:active{background:var(--card2)}
 
 /* Made it. */
 .md-in{padding:6px 16px 30px;text-align:center}
-.md-ok{width:88px;height:88px;border-radius:50%;margin:8px auto 0;display:grid;place-items:center;
+.md-ok{position:relative;width:88px;height:88px;border-radius:50%;margin:8px auto 0;display:grid;place-items:center;
   background:var(--accent2);color:var(--on-accent2)}
 .md-in h1{margin:18px 0 6px;font:600 36px/1.1 var(--serif)}
 .md-title{margin:0;font-size:16.5px;color:var(--ink2)}
@@ -1502,3 +1520,94 @@ button.crow:active{background:var(--card2)}
 .ki-buy.got .ring svg{opacity:1}
 .ki-note{color:var(--dim);font-size:13.5px;line-height:1.5;margin:14px 4px}
 #kiSend{display:flex;align-items:center;justify-content:center;gap:8px;margin:6px 0 4px}
+
+/* ─── motion: the things that make it feel in your hand ─────────────────────
+   Decoration over a screen that is already right. Each has a reduced-motion
+   line at the end of this section that leaves the state and drops the motion. */
+
+/* A screen you just left stays drawn for a moment, fading the way you came
+   (util.js showScreen). It takes no taps while it goes. */
+.screen.leaving{display:flex;pointer-events:none}
+.screen.auth.leaving{display:grid}
+
+/* A burst: the ripple and sparks from ticking something off, sized by --r (the
+   radius the sparks leave from) so it serves a ring, a badge or an icon. */
+.fx{position:absolute;inset:0;pointer-events:none}
+.fx-ripple{position:absolute;inset:-2px;border-radius:50%;border:2px solid var(--accent2);
+  animation:fx-ripple .6s ease-out forwards}
+@keyframes fx-ripple{0%{transform:scale(.6);opacity:.55} 100%{transform:scale(var(--rs,2.6));opacity:0}}
+.fx-spark{position:absolute;top:50%;left:50%;width:var(--s,4px);height:var(--s,4px);
+  margin:calc(var(--s,4px) / -2) 0 0 calc(var(--s,4px) / -2);border-radius:50%;background:var(--accent2);
+  animation:fx-spark .62s cubic-bezier(.2,.75,.3,1) forwards}
+.fx-spark:nth-child(even){background:var(--accent)}
+@keyframes fx-spark{
+  0%{transform:rotate(var(--a)) translateX(calc(var(--r) * .8)) scale(.6);opacity:0}
+  25%{transform:rotate(var(--a)) translateX(var(--r)) scale(1);opacity:1}
+  100%{transform:rotate(var(--a)) translateX(calc(var(--r) * 2)) scale(.2);opacity:0}
+}
+
+/* Something that arrived while you were away glows as it lands, and then is
+   just a row. An overlay, so it works on a row, a poster or a recipe card. */
+.arrived{position:relative}
+.arrived::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:var(--accent-tint);box-shadow:inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent);
+  animation:arrived 2.6s ease-out forwards}
+@keyframes arrived{0%{opacity:0} 12%{opacity:1} 55%{opacity:1} 100%{opacity:0}}
+
+/* We went here: the button fills sage as you tap it, and its ring throws its
+   sparks; then the page turns into the record (pl.js bloomBeen). */
+.went{transition:background .2s ease,color .2s ease}
+.went-i{position:relative;display:grid;place-items:center}
+.went.going{background:var(--accent2);color:var(--on-accent2)}
+.went.going .went-i svg{animation:tick-pop .44s cubic-bezier(.2,1.5,.4,1)}
+
+/* Made it: the badge's mark is drawn on (cook.js arrive), and Done answers in
+   place before the screen goes. */
+.md-ok path{stroke-dasharray:24}
+.primary.saved{background:var(--accent2);color:var(--on-accent2);display:flex;align-items:center;
+  justify-content:center;gap:8px;transition:background .2s ease}
+.primary.saved svg{fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+
+/* A timer in its last ten seconds breathes; a timer that has just finished
+   rings for a few seconds — readable from across a kitchen before the number. */
+.ck-timer.soon,.tray.soon{animation:breathe 1s ease-in-out infinite}
+@keyframes breathe{50%{box-shadow:0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent)}}
+.ck-timer.ringing,.tray.ringing{animation:ring 1.1s ease-out 3}
+@keyframes ring{
+  0%{box-shadow:0 0 0 0 color-mix(in srgb, var(--accent2) 55%, transparent)}
+  100%{box-shadow:0 0 0 18px transparent}
+}
+
+/* A pin falls into place the first time it is drawn (map.js `drop`). On the
+   `translate` property, not `transform`, which already positions the pin. */
+.epin.drop{animation:pin-drop .5s cubic-bezier(.3,1.4,.5,1) var(--d,0ms) backwards}
+.npin.drop{animation:pin-pop .3s cubic-bezier(.3,1.5,.5,1) var(--d,0ms) backwards}
+@keyframes pin-drop{0%{translate:0 -26px;opacity:0} 60%{opacity:1} 100%{translate:0 0}}
+@keyframes pin-pop{0%{scale:.3;opacity:0} 100%{scale:1;opacity:1}}
+
+/* Posters and photos fade in the first time they load, rather than popping in
+   a row at a time (motion.js fadeIn). `.now` is a picture already seen. */
+img.fade{opacity:0;transition:opacity .4s ease}
+img.fade.in{opacity:1}
+img.fade.now{transition:none}
+
+/* Placeholder rows: the shape of a list before it has arrived. */
+.skel .group{pointer-events:none}
+.skel-row{display:flex;align-items:center;gap:12px;min-height:68px;padding:8px 11px 8px 12px;position:relative}
+.skel-row+.skel-row::before{content:'';position:absolute;left:68px;right:0;top:0;height:1px;background:var(--line)}
+.skel-row span{flex:1;display:flex;flex-direction:column;gap:8px}
+.skel-row i,.skel-row span i{display:block;background:var(--card2);border-radius:7px}
+.skel-row .skel-tile{width:44px;height:44px;border-radius:var(--r-tile);flex:none}
+.skel-row span i{height:12px;width:62%}
+.skel-row span i+i{height:9px;width:34%;opacity:.7}
+.skel-row .skel-ring{width:26px;height:26px;border-radius:50%;flex:none}
+.skel .group{animation:skel 1.4s ease-in-out infinite}
+@keyframes skel{50%{opacity:.55}}
+
+@media (prefers-reduced-motion: reduce){
+  .fx,.arrived::after{display:none}
+  .went.going .went-i svg,.ck-timer.soon,.tray.soon,.ck-timer.ringing,.tray.ringing,
+  .epin.drop,.npin.drop,.skel .group{animation:none}
+  img.fade{transition:none}
+  .pl-top.snapping{transition:none}
+}

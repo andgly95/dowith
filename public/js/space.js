@@ -15,6 +15,7 @@ import { tilesHtml, cardHtml as recipeCardHtml, bindRecipes, initRecipes, openRe
 import { openRecipe, initRecipe } from './recipe.js';
 import { initKitchen } from './kitchen.js';
 import { initCook } from './cook.js';
+import { haptic, fadeIn, skeleton } from './motion.js';
 
 let onChange = () => {};
 let onBack = () => {};
@@ -56,7 +57,8 @@ export async function openSpace(id) {
   kindTab = null;
   pillX = null;   // a new list starts on its first tab; nothing to travel from
   showScreen('scr-space');
-  $('itemList').innerHTML = '<div class="empty">Loading…</div>';
+  // The shape of a list, breathing, rather than the word "Loading…".
+  $('itemList').innerHTML = skeleton();
   await refresh();
   peekRose();   // a dot on the rose if there is a match you have not seen
 }
@@ -64,16 +66,38 @@ export async function openSpace(id) {
 // Somebody else's screen may need repainting too — the shelf's counts.
 export const changed = () => onChange();
 
-export async function refresh() {
+// `arrived`: coming back to the app. Whatever is new since the list was last
+// drawn glows as it lands — on this tab, or as a pop on the count of the tab it
+// went to — so "Linnea added something" is something you see, not something
+// you have to spot.
+export async function refresh({ arrived = false } = {}) {
   if (!S.spaceId) return;
+  const sid = S.spaceId;
+  const before = arrived && S.items ? new Set(S.items.map(i => i.id)) : null;
   try {
-    const b = await get(`/api/space/${S.spaceId}/items`);
+    const b = await get(`/api/space/${sid}/items`);
+    if (S.spaceId !== sid) return;   // moved to another list meanwhile
     S.space = b.space;
     S.items = b.items;
     S.groups = b.groups || [];
     S.tabs = b.tabs || [];
+    // A row mid-celebration would be destroyed by a repaint; its own refresh
+    // follows the moment it finishes.
+    if (arrived && $('itemList').querySelector('.celebrating')) return;
     render();
-  } catch (_) { toast('Could not load that list'); }
+    if (before) landed(S.items.filter(i => !before.has(i.id)));
+  } catch (_) { if (!arrived) toast('Could not load that list'); }
+}
+
+function landed(items) {
+  if (!items.length) return;
+  const tabs = new Set();
+  for (const it of items) {
+    const row = $('itemList').querySelector(`[data-it="${CSS.escape(it.id)}"]`);
+    if (row) row.classList.add('arrived');
+    else if (!it.done) tabs.add(kindOrDefault(it));
+  }
+  for (const k of tabs) pop($('kindNav').querySelector(`[data-kind="${CSS.escape(k)}"] .n`));
 }
 
 /* ── render ─────────────────────────────────────────────────────────────── */
@@ -372,6 +396,8 @@ export function render() {
     }, { once: true });
   });
 
+  fadeIn(list);
+
   visRow($('visRow'), () => S.compose, (v) => { S.compose = v; });
   syncComposer();
 }
@@ -455,7 +481,7 @@ function cardHtml(it) {
   return `<div class="card ${it.done ? 'done' : ''}" data-it="${esc(it.id)}">
     <div class="art" data-open>
       ${src
-    ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async">`
+    ? `<img class="fade" src="${esc(src)}" alt="" loading="lazy" decoding="async">`
     : `<div class="noart"><span>${esc(it.title)}</span></div>`}
       ${it.done ? '<div class="seen">Seen</div>' : ''}
       <button class="tick" data-tick aria-label="${it.done ? 'Not done after all' : 'Done'}">
@@ -639,6 +665,12 @@ function placePill(nav) {
     { transform: `translateX(${mid}px) scaleX(${stretch})`, offset: 0.45 },
     { transform: `translateX(${x}px) scaleX(1)` },
   ], { duration: 440, easing: 'cubic-bezier(.34,1.45,.55,1)' });
+}
+
+// Where a finished thing went: the Done together count gives the same small
+// spring, so the row leaving the list has somewhere to have gone.
+export function doneLanded() {
+  pop($('tabDone').querySelector('.n') || $('tabDone'));
 }
 
 // The icon you just chose gives a small spring, so the tap has an answer
@@ -832,6 +864,7 @@ export async function toggle(id) {
   // Optimistic, and in parallel: the animation and the request start together so
   // neither waits on the other.
   const sent = post(`/api/item/${id}/done`, { done: finishing });
+  if (finishing) haptic('success');
   const shown = finishing ? celebrate(row) : Promise.resolve();
 
   it.done = finishing;
@@ -842,6 +875,7 @@ export async function toggle(id) {
     applyWire(b.state);
     await refresh();
     onChange();
+    if (finishing) doneLanded();
   } catch (e) {
     await shown;              // let it finish rather than yanking it mid-flight
     it.done = !finishing;

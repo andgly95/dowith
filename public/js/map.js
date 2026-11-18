@@ -56,14 +56,17 @@ function fit(pts, w, h, { single = 13, pad = 0 } = {}) {
 /* ── the engine ──────────────────────────────────────────────────────────── */
 
 // opts:
-//   points()  [{ id?, lat, lon, cls, inner, tag?, fit? }] — what to draw.
+//   points()  [{ id?, key?, lat, lon, cls, inner, tag?, fit? }] — what to draw.
 //             `fit: false` points are drawn but not framed (the other set's dots).
+//             `key` names a point with no id, for `drop`.
 //   onPin(id) a tap on a point with an id.
 //   onBlank() a tap on the map itself, not on a point.
 //   empty()   HTML for a map with nothing to frame; null draws the world.
 //   pad       share of the height under something else.
 //   single    the zoom for a lone point.
 //   still     no pan or zoom (the snippet on a place's page).
+//   drop      a pin falls into place the first time it is drawn (`.drop`);
+//             `resetDrops()` lets them fall again.
 //
 // Zoom is CONTINUOUS. Tiles only come in whole zoom levels, so they are drawn
 // at the nearest one and scaled by what is left over (between ×0.71 and ×1.41).
@@ -76,6 +79,14 @@ const clampZ = (z) => Math.max(MIN_Z, Math.min(MAX_Z, z));
 export function createMap(canvas, opts = {}) {
   let view = { z: null, cx: 0, cy: 0 };   // z===null means "fit to the points"
   let moved = false;
+  let drawnH = 0;                          // the height the tiles were last laid out for
+  // Pins that have been drawn before, and when. With `drop`, a pin falls into
+  // place the FIRST time it appears and is simply there on every redraw after —
+  // a map redraws on every pan, and pins that kept falling would be a slot
+  // machine. A redraw DURING the fall (they come in twos: a render, then a
+  // focus) carries it on with a negative delay rather than cutting it off.
+  const dropped = new Map();   // key → { at, d }
+  const FALL = 700;
   const pts = () => (opts.points ? opts.points() : []).filter(onMap);
 
   const size = () => ({ w: canvas.clientWidth || 360, h: canvas.clientHeight || 400 });
@@ -99,6 +110,7 @@ export function createMap(canvas, opts = {}) {
       }
     }
     const f = current();
+    drawnH = h;
     const scale = TILE * 2 ** f.z;               // the world, in CSS pixels
     const tz = Math.max(0, Math.min(MAX_Z, Math.round(f.z)));
     const ts = TILE * 2 ** (f.z - tz);           // one tile at that level, on screen
@@ -122,13 +134,19 @@ export function createMap(canvas, opts = {}) {
           style="left:${tx * ts - ox}px;top:${ty * ts - oy}px;width:${sz}px;height:${sz}px">`);
       }
     }
+    let fell = 0;
+    const now = Date.now();
     const marks = all.map((p) => {
       const x = lonToX(p.lon) * scale - ox;
       const y = latToY(p.lat) * scale - oy;
       const tag = p.tag || (p.id ? 'button' : 'span');
-      return `<${tag} class="${esc(p.cls || '')}"${p.id ? ` data-pin="${esc(p.id)}"` : ''}${
+      const k = opts.drop && (p.key || p.id);
+      if (k && !dropped.has(k)) dropped.set(k, { at: now, d: Math.min(fell++, 8) * 45 });
+      const f = k && dropped.get(k);
+      const fresh = f && now - f.at < FALL + f.d;
+      return `<${tag} class="${esc(p.cls || '')}${fresh ? ' drop' : ''}"${p.id ? ` data-pin="${esc(p.id)}"` : ''}${
         tag === 'button' ? ' type="button"' : ''}${p.label ? ` aria-label="${esc(p.label)}"` : ''}
-        style="left:${x}px;top:${y}px">${p.inner || ''}</${tag}>`;
+        style="left:${x}px;top:${y}px${fresh ? `;--d:${f.d - (now - f.at)}ms` : ''}">${p.inner || ''}</${tag}>`;
     }).join('');
 
     canvas.innerHTML = `<div class="pan">${tiles.join('')}${marks}</div>
@@ -318,5 +336,17 @@ export function createMap(canvas, opts = {}) {
     zoomBy,
     focus,
     refit() { view = { z: null, cx: 0, cy: 0 }; render(); },
+    // The box changed height (the Places list settling). While the map frames
+    // its points it simply re-frames; once somebody has moved it, the view is
+    // shifted so what was at the TOP stays at the top — the tiles were laid out
+    // from there, and that is what the eye was holding on to.
+    resized() {
+      const { h } = size();
+      if (view.z !== null && drawnH && h !== drawnH) {
+        view = { ...view, cy: view.cy + (h - drawnH) / 2 / (TILE * 2 ** view.z) };
+      }
+      render();
+    },
+    resetDrops() { dropped.clear(); },
   };
 }

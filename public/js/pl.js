@@ -16,7 +16,8 @@
 //     never stored — not here, not on the server.
 //   · Rights are the server's answers (canEdit, canCredit…), never worked out here.
 import { S } from './state.js';
-import { $, esc, toast, openSheet, closeSheet, leadEmoji, initialOf, metres, distLabel, shortDate } from './util.js';
+import { $, esc, toast, openSheet, closeSheet, leadEmoji, initialOf, metres, distLabel, shortDate, calm } from './util.js';
+import { haptic, burst } from './motion.js';
 import { get, post, patch, del, applyWire } from './api.js';
 import { createMap } from './map.js';
 import { icon, iconFor } from './icons.js';
@@ -120,7 +121,8 @@ export function renderPlaces(list, { open, done, been }) {
   const items = sortPlaces(been ? done : open, been);
   const sp = S.space || {};
   const n = items.length;
-  const head = `<div class="pl-hd"><i class="grab" aria-hidden="true"></i><div>
+  const head = `<div class="pl-hd"><button type="button" class="grab" data-grab aria-label="${
+      detent === 'list' ? 'Show more of the map' : 'Show more of the list'}"></button><div>
       <b>${been ? `${n || 'Nowhere'} ${n ? (n === 1 ? 'place' : 'places') : ''} you’ve been`.replace('Nowhere  you’ve been', 'Nowhere yet')
         : `${n} ${n === 1 ? 'place' : 'places'} to go`}</b>
       <small>with ${esc(sp.title || 'this list')} · ${been ? 'most recent first' : here ? 'closest first' : 'newest first'}</small>
@@ -159,10 +161,106 @@ export function renderPlaces(list, { open, done, been }) {
   list.innerHTML = head + body;
 
   list.querySelector('[data-plcal]').addEventListener('click', () => $('tabCal').click());
+  // The grabber is a button too, for anyone not dragging: it steps between the
+  // list and the map rather than leaving a gesture as the only way.
+  list.querySelector('[data-grab]').addEventListener('click', () => snapTo(detent === 'half' ? 'list' : 'half'));
   list.querySelectorAll('[data-pred]').forEach(b => b.addEventListener('click', () => pinPrediction(Number(b.dataset.pred))));
   const undo = list.querySelector('[data-undo]');
   if (undo) undo.addEventListener('click', undoPin);
   drawBig();
+}
+
+/* ── the list is a sheet you can pull ─────────────────────────────────────
+   Three heights, the ones a map app has: mostly MAP (the list's heading and a
+   row showing), HALF (where it opens), and mostly LIST (the map a strip under
+   the floating buttons). Drag the heading anywhere; drag the list down when it
+   is at its top to see more map, or up while it is not yet as tall as it goes
+   to see more list. Let go and it settles on the nearest — or the one a flick
+   was heading for. Kept for the visit, not stored: it is how you are looking,
+   not a setting. */
+let detent = 'half';
+let snapT = null;
+
+function heights() {
+  const H = $('scr-space').clientHeight || window.innerHeight;
+  const fl = $('placesTop').querySelector('.pl-float');
+  // The sheet tucks up over the map by its own top margin (-26px), so the
+  // floor is that much lower or its edge slides under the floating buttons.
+  const tuck = -parseFloat(getComputedStyle($('spaceScroll')).marginTop) || 0;
+  const floor = (fl ? fl.offsetTop + fl.offsetHeight + 12 : 60) + tuck;
+  const below = ($('kindNav').offsetHeight || 0) + ($('spaceScroll').nextElementSibling.offsetHeight || 0);
+  const half = Math.round(Math.max(220, H * 0.44));
+  return { list: Math.round(floor), half, map: Math.round(Math.max(half, H - below - 150)) };
+}
+
+function setTop(h) {
+  const top = $('placesTop');
+  top.style.flexBasis = `${Math.round(h)}px`;
+  top.style.minHeight = '0px';
+}
+
+function snapTo(name) {
+  const top = $('placesTop');
+  const D = heights();
+  if (!(name in D)) name = 'half';
+  const changed = name !== detent;
+  detent = name;
+  clearTimeout(snapT);
+  if (!calm()) top.classList.add('snapping');
+  setTop(D[name]);
+  if (changed) haptic('snap');
+  const g = $('itemList').querySelector('[data-grab]');
+  if (g) g.setAttribute('aria-label', name === 'list' ? 'Show more of the map' : 'Show more of the list');
+  // The map is redrawn for its new size once it has one — keeping what was at
+  // the top where it was, so the map does not jump as the list settles.
+  snapT = setTimeout(() => { top.classList.remove('snapping'); if (big) big.resized(); }, calm() ? 0 : 330);
+}
+
+function listDrag() {
+  const sc = $('spaceScroll');
+  let g = null;
+  sc.addEventListener('touchstart', (e) => {
+    g = null;
+    if (!$('scr-space').classList.contains('places') || e.touches.length !== 1) return;
+    if (e.target.closest('input, textarea, select, [data-nodrag]')) return;
+    const p = e.touches[0];
+    g = { y0: p.clientY, x0: p.clientX, last: p.clientY, t: e.timeStamp, v: 0,
+      h0: $('placesTop').offsetHeight, head: !!e.target.closest('.pl-hd'), live: false };
+  }, { passive: true });
+  sc.addEventListener('touchmove', (e) => {
+    if (!g) return;
+    const p = e.touches[0];
+    if (!g.live) {
+      const dy = p.clientY - g.y0, dx = p.clientX - g.x0;
+      if (!dy && !dx) return;
+      const D = heights();
+      const ok = e.cancelable && Math.abs(dy) >= Math.abs(dx)
+        && (g.head || (dy > 0 && sc.scrollTop <= 0) || (dy < 0 && g.h0 > D.list + 4));
+      if (!ok) { g = null; return; }
+      g.live = true;
+      g.D = D;
+      clearTimeout(snapT);
+      $('placesTop').classList.remove('snapping');
+    }
+    e.preventDefault();
+    const { list: lo, map: hi } = g.D;
+    const raw = g.h0 + (p.clientY - g.y0);
+    // Past either end it gives, grudgingly.
+    setTop(raw < lo ? lo - (lo - raw) / 3 : raw > hi ? hi + (raw - hi) / 3 : raw);
+    const dt = Math.max(1, e.timeStamp - g.t);
+    g.v = 0.8 * ((p.clientY - g.last) / dt) + 0.2 * g.v;
+    g.last = p.clientY;
+    g.t = e.timeStamp;
+  }, { passive: false });
+  const end = () => {
+    if (!g || !g.live) { g = null; return; }
+    const { D, v } = g;
+    g = null;
+    const aim = $('placesTop').offsetHeight + v * 200;   // where a flick was heading
+    snapTo(['list', 'half', 'map'].reduce((a, b) => (Math.abs(D[b] - aim) < Math.abs(D[a] - aim) ? b : a)));
+  };
+  sc.addEventListener('touchend', end);
+  sc.addEventListener('touchcancel', end);
 }
 
 /* ── the map over the top ───────────────────────────────────────────────── */
@@ -309,6 +407,7 @@ export function openPlace(id) {
   renaming = false;
   if (pinOf(it) && sel !== id) sel = id;
   paintPage(it, { fresh: true });
+  if (snip) snip.resetDrops();
   openSheet('placeSheet');
   $('placeSheet').querySelector('.modal-in').scrollTop = 0;
   requestAnimationFrame(() => { if (snip) snip.refit(); });
@@ -380,7 +479,8 @@ function paintPage(it, { fresh = false } = {}) {
 
   const went = $('plWent');
   went.classList.toggle('quiet', been);
-  went.querySelector('span').textContent = been ? 'Not been after all' : 'We went here';
+  // By class: a burst drops its own <span> into the button while it plays.
+  went.querySelector('.went-t').textContent = been ? 'Not been after all' : 'We went here';
 
   $('plMore').hidden = !edit;
   $('plChange').querySelector('b').textContent = pin ? 'Change the place' : 'Find it on the map';
@@ -474,9 +574,49 @@ async function savePage() {
   } catch (_) { toast('Could not save that'); }
 }
 
+// We went here is the place's version of ticking it off, and gets the same
+// moment: the ring fills where you tapped and throws its sparks, and then the
+// page turns into the record — the Been together card blooms in and the sheet
+// glides up to it, because "would you go back?" is the next thing to say.
+// The POST goes at once; the moment is never what you are waiting on.
 async function setDoneHere(done) {
-  try { await afterWrite(await post(`/api/item/${page}/done`, { done })); } catch (e) {
+  const btn = $('plWent');
+  const sent = post(`/api/item/${page}/done`, { done });
+  let shown = Promise.resolve();
+  if (done) {
+    haptic('success');
+    if (!calm()) {
+      btn.classList.add('going');
+      burst(btn.querySelector('.went-i'), { r: 13, n: 6 });
+      shown = new Promise(r => setTimeout(r, 480));
+    }
+  }
+  try {
+    const [r] = await Promise.all([sent, shown]);
+    await afterWrite(r);
+    if (done) bloomBeen();
+  } catch (e) {
     toast(e.status === 403 ? 'That one is not yours to tick off' : 'Could not save that');
+  }
+  btn.classList.remove('going');
+}
+
+function bloomBeen() {
+  const box = $('plBeenBox');
+  if (box.hidden || calm()) return;
+  const panel = $('placeSheet').querySelector('.modal-in');
+  const top = box.getBoundingClientRect().top - panel.getBoundingClientRect().top + panel.scrollTop - 16;
+  if (panel.scrollTo) panel.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  const card = box.querySelector('.been');
+  if (card && card.animate) {
+    card.animate([
+      { opacity: 0, transform: 'scale(.94)', boxShadow: '0 0 0 0 color-mix(in srgb, var(--accent2) 45%, transparent)' },
+      { opacity: 1, transform: 'scale(1.02)', offset: 0.55 },
+      { opacity: 1, transform: 'none', boxShadow: '0 0 0 14px transparent' },
+    ], { duration: 620, delay: 120, easing: 'cubic-bezier(.2,.9,.3,1)', fill: 'backwards' });
+    [...card.querySelectorAll('.chips button')].forEach((b, i) => b.animate && b.animate(
+      [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }],
+      { duration: 280, delay: 420 + i * 60, easing: 'ease-out', fill: 'backwards' }));
   }
 }
 
@@ -544,6 +684,7 @@ async function pinPage(p) {
 export function initPlaces() {
   big = createMap($('plCanvas'), {
     points: bigPoints,
+    drop: true,
     pad: 0.08,
     single: 14,
     onPin: (id) => {
@@ -558,11 +699,12 @@ export function initPlaces() {
   });
   snip = createMap($('plSnip'), {
     still: true,
+    drop: true,
     single: 15,
     points: () => {
       const it = pageItem();
       const p = pinOf(it);
-      return p ? [{ lat: p.lat, lon: p.lon, cls: `epin ${it.done ? 'been' : 'go'} sel`, inner: bubble(it) }] : [];
+      return p ? [{ key: it.id, lat: p.lat, lon: p.lon, cls: `epin ${it.done ? 'been' : 'go'} sel`, inner: bubble(it) }] : [];
     },
     empty: () => {
       const it = pageItem();
@@ -644,5 +786,10 @@ export function initPlaces() {
     clearTimeout(wsTimer);
     wsTimer = setTimeout(searchWhere, 300);   // a keystroke is not a search
   });
-  window.addEventListener('resize', () => { if (!$('placesTop').hidden) drawBig({ force: true }); });
+  window.addEventListener('resize', () => {
+    if ($('placesTop').hidden) return;
+    if (detent !== 'half') setTop(heights()[detent]);
+    drawBig({ force: true });
+  });
+  listDrag();
 }

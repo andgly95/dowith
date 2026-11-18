@@ -6,8 +6,46 @@ export function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+export const calm = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+// How deep a screen is, so moving between them has a direction: further in
+// arrives from the right, back out arrives from the left. A screen not listed
+// counts as the list.
+const DEPTH = { 'scr-auth': 0, 'scr-shelf': 0, 'scr-space': 1, 'scr-kitchen': 2, 'scr-cook': 2, 'scr-made': 3 };
+const depth = (el) => (el && el.id in DEPTH ? DEPTH[el.id] : 1);
+
+// The switch itself is synchronous — `.active` moves before this returns, so
+// the DOM is final the instant a tap lands, as everywhere else. The motion is
+// laid over it: the screen you left stays drawn (`.leaving`, no pointer events)
+// just long enough to fade out the way you came, and the new one slides in a
+// beat behind it. Two short fades rather than a slide-over, because a screen
+// here carries no background of its own (Safari 26 samples one near the top
+// edge for the status-bar tint) and a fade needs none.
 export function showScreen(id) {
-  for (const el of document.querySelectorAll('.screen')) el.classList.toggle('active', el.id === id);
+  const from = document.querySelector('.screen.active');
+  for (const el of document.querySelectorAll('.screen')) {
+    if (el.classList.contains('leaving')) settle(el);
+    el.classList.toggle('active', el.id === id);
+  }
+  const to = $(id);
+  if (!from || !to || from === to || calm() || !to.animate) return;
+  const dir = depth(to) >= depth(from) ? 1 : -1;
+  from.classList.add('leaving');
+  from._leave = from.animate([
+    { opacity: 1, transform: 'none' },
+    { opacity: 0, transform: `translateX(${-dir * 24}px)` },
+  ], { duration: 120, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
+  from._leave.onfinish = () => settle(from);
+  from._leaveT = setTimeout(() => settle(from), 220);
+  to.animate([
+    { opacity: 0, transform: `translateX(${dir * 28}px)` },
+    { opacity: 1, transform: 'none' },
+  ], { duration: 300, delay: 60, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
+}
+function settle(el) {
+  clearTimeout(el._leaveT);
+  el.classList.remove('leaving');
+  if (el._leave) { el._leave.cancel(); el._leave = null; }
 }
 
 let toastTimer = null;
@@ -35,13 +73,38 @@ export function ago(ts) {
 // Closing a sheet has to put the viewport back: #app is fixed to the LAYOUT
 // viewport, so iOS scrolling the document to reveal a focused field leaves the
 // header above the fold with dead space where you tap.
+//
+// `hidden` is set at once — every check in the app, and in the suite, reads a
+// closed sheet as closed the moment this returns. What you SEE is `.leaving`:
+// the sheet drawn for a fifth of a second more, untouchable, sliding down from
+// wherever it was (a drag leaves it part-way, and it carries on from there)
+// while the scrim clears. Rising and not falling read as the sheet blinking out.
 export function closeSheet(id) {
-  $(id).hidden = true;
+  const m = $(id);
+  const was = !m.hidden;
+  m.hidden = true;
   const el = document.activeElement;
   if (el && el !== document.body && typeof el.blur === 'function') el.blur();
   resetViewport();
+  // Already closed: a tap on the scrim can arrive by two routes (a sheet's own
+  // handler and the shared one through its X), and the second must not cut
+  // the first one's exit short.
+  if (!was || calm()) return;
+  clearTimeout(m._leaveT);
+  m.classList.add('leaving');
+  m._leaveT = setTimeout(() => unleave(m), 240);
 }
-export function openSheet(id) { $(id).hidden = false; }
+export function openSheet(id) {
+  const m = $(id);
+  clearTimeout(m._leaveT);
+  unleave(m);
+  m.hidden = false;
+}
+function unleave(m) {
+  m.classList.remove('leaving');
+  const panel = m.querySelector('.modal-in');
+  if (panel) panel.style.transform = '';
+}
 
 // There was a fitViewport()/watchViewport() here that sized #app from
 // `visualViewport.height`. It is gone, and the reason is worth keeping: on the

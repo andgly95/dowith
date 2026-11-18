@@ -207,9 +207,15 @@ function connectCdp(wsUrl) {
     check(await visible('#scr-shelf'), 'the back arrow still reaches the shelf');
     check(/Linnea/.test(await evalJs(`document.getElementById('shelfList').innerText`)),
       'his one list is named after her');
-    await evalJs(`document.querySelector('#shelfList [data-sp]').click()`);
+    // On the way in, the list's shape rather than the word "Loading…".
+    check(await evalJs(`(() => { document.querySelector('#shelfList [data-sp]').click();
+      return !!document.querySelector('#itemList .skel .skel-row'); })()`), 'a list on its way in shows placeholder rows');
+    // And the screen you left is drawn a moment longer, fading the way you came.
+    check(await evalJs(`!!document.querySelector('#scr-shelf.leaving') && !!document.querySelector('#scr-space.active')`),
+      'the switch is immediate, with the old screen leaving over it');
     await sleep(1000);
     check(await visible('#scr-space'), 'and tapping it goes back in');
+    check(!(await evalJs(`document.querySelector('.screen.leaving')`)) && !(await visible('#scr-shelf')), 'and then it is gone');
 
     // Write one of each visibility through the real composer.
     // Type FIRST, then say who it is for: the visibility row is a question about
@@ -331,7 +337,7 @@ function connectCdp(wsUrl) {
       'somebody else’s wording is theirs');
     check(!(await visible('#isSave')), 'and there is nothing to save');
     await evalJs(`document.getElementById('isCancel').click()`);
-    await sleep(300);
+    await sleep(400);
     check(!(await visible('#itemSheet .modal-in')), 'the sheet closes');
     check(await evalJs(`window.scrollY`) === 0, 'and the viewport goes back to the top');
 
@@ -808,6 +814,14 @@ function connectCdp(wsUrl) {
       require('fs').writeFileSync(process.env.SHOT_PLACES, Buffer.from(data, 'base64'));
     }
     await evalJs(`document.querySelector('#itemList .pred').click()`);
+    // A new pin falls into place, once — caught as soon as it is drawn.
+    let fell = null;
+    for (let i = 0; i < 30 && fell === null; i++) {
+      await sleep(50);
+      fell = await evalJs(`(() => { const p = [...document.querySelectorAll('#plCanvas .epin')].find(e => e.innerText.includes('🍜'));
+        return p ? p.classList.contains('drop') : null; })()`);
+    }
+    check(fell === true, `a new pin drops into place (${fell})`);
     await sleep(1300);
     check(/pinned to the map/i.test(await evalJs(`document.getElementById('itemList').innerText`)), 'one tap pins it, and says so');
     check(await evalJs(`!!${rowOf('/Toki Underground/')}`), 'the row says which place it is');
@@ -848,8 +862,15 @@ function connectCdp(wsUrl) {
       .then(b => (b.items.find(i => ${re}.test(i.title)) || {}).visit)`);
     check(((await visitOf('/Toki/')) || {}).book === true, 'Book ahead saves as you flip it');
     await evalJs(`document.getElementById('plWent').click()`);
-    await sleep(1000);
+    await sleep(120);
+    check(await evalJs(`document.getElementById('plWent').classList.contains('going')
+      && document.querySelectorAll('#plWent .fx-spark').length === 6`), 'We went here fills where you tapped and throws its sparks');
+    await sleep(1200);
     check(await visible('#plBeenBox') && !(await visible('#plPlanBox')), 'We went here turns the plan into the record');
+    // Its label is found by class: the burst drops a <span> of its own into the
+    // button, and a bare querySelector('span') once wrote the label into that.
+    check(await evalJs(`document.getElementById('plWent').innerText.trim()`) === 'Not been after all',
+      `and the button offers the way back: ${await evalJs(`document.getElementById('plWent').innerText.trim()`)}`);
     await evalJs(`document.querySelector('#plAgain [data-again="soon"]').click()`);
     await sleep(900);
     check(((await visitOf('/Toki/')) || {}).again === 'soon', 'and "would you go back" is kept');
@@ -928,10 +949,64 @@ function connectCdp(wsUrl) {
     check(Math.hypot(p4.x - p2.x, p4.y - p2.y) < 1.5, `still without moving the map: ${JSON.stringify({ p2, p4 })}`);
     await tap({ x: p4.x, y: p4.y - 24 });
     check(await visible('#placeSheet .modal-in'), 'and a second tap opens its page');
+    check(await evalJs(`document.querySelectorAll('#plCanvas .epin.drop').length`) === 0,
+      'pins fall once, not on every redraw of a map that redraws on every pan');
+
+    // ── pulling a sheet down ────────────────────────────────────────────
+    // Every sheet has a grabber, and a grabber is a promise. Pulled a little it
+    // springs back; pulled past a third of the way it closes, through its own X.
+    // Real touches again, at a finger's pace.
+    const at = (type, pts) => S('Input.dispatchTouchEvent', { type, touchPoints: pts.map((p, i) => ({ x: p.x, y: p.y, id: i })) });
+    const pull = async (from, dy, { steps = 8, gap = 30, end = true } = {}) => {
+      await at('touchStart', [from]);
+      for (let k = 1; k <= steps; k++) { await at('touchMove', [{ x: from.x, y: from.y + (dy * k) / steps }]); await sleep(gap); }
+      if (end) await at('touchEnd', []);
+    };
+    const grip = await evalJs(`(() => { const r = document.getElementById('plTitle').getBoundingClientRect();
+      return { x: Math.round(r.left + 30), y: Math.round(r.top + r.height / 2) }; })()`);
+    await pull(grip, 70, { end: false });
+    const mid = await evalJs(`document.querySelector('#placeSheet .modal-in').style.transform`);
+    check(/translateY\((6\d|7\d)(\.\d+)?px\)/.test(mid), `the sheet follows the finger: ${mid}`);
+    await at('touchEnd', []);
+    await sleep(450);
+    check(await visible('#placeSheet .modal-in') && !(await evalJs(`document.querySelector('#placeSheet .modal-in').style.transform`)),
+      'a short pull springs back');
+    const tall = await evalJs(`document.querySelector('#placeSheet .modal-in').offsetHeight`);
+    await pull(grip, Math.round(tall * 0.45), { steps: 10, gap: 20 });
+    check(await evalJs(`document.getElementById('placeSheet').hidden`), 'past a third of the way, it closes');
+    await sleep(400);
+    check(!(await visible('#placeSheet .modal-in')), 'and is gone once it has fallen');
+
+    // ── the list over the map is a sheet too ────────────────────────────
+    // Three heights: mostly map, half (where it opens), mostly list. Drag the
+    // heading; let go and it settles on the nearest. The grabber is also a
+    // button that steps between them, for anyone not dragging.
+    await evalJs(`window.__buzz = []; navigator.vibrate = (p) => { window.__buzz.push(p); return true; }`);
+    const topH = () => evalJs(`document.getElementById('placesTop').offsetHeight`);
+    const halfH = await topH();
+    const hd = await evalJs(`(() => { const r = document.querySelector('#itemList .pl-hd b').getBoundingClientRect();
+      return { x: Math.round(r.left + 20), y: Math.round(r.top + r.height / 2) }; })()`);
+    await pull(hd, -320, { steps: 10, gap: 25 });
+    await sleep(500);
+    const listH = await topH();
+    check(listH < 140, `dragged up, the list takes the screen and the map is a strip (${halfH} → ${listH})`);
+    check((await evalJs(`window.__buzz`)).length >= 1, 'and it clicks under the thumb as it settles');
+    check(await evalJs(`document.querySelector('#itemList [data-grab]').getAttribute('aria-label')`) === 'Show more of the map',
+      'the grabber says what a tap on it does');
+    await evalJs(`document.querySelector('#itemList [data-grab]').click()`);
+    await sleep(500);
+    check(Math.abs((await topH()) - halfH) <= 2, `a tap on the grabber steps back to half (${await topH()} vs ${halfH})`);
+    const body = await evalJs(`(() => { const r = document.querySelector('#itemList .group').getBoundingClientRect();
+      return { x: Math.round(r.left + 60), y: Math.round(r.top + 20) }; })()`);
+    await pull(body, 260, { steps: 10, gap: 25 });
+    await sleep(500);
+    const mapH = await topH();
+    check(mapH > halfH + 100, `pulled down from the top of the list, the map takes the screen (${halfH} → ${mapH})`);
+    await evalJs(`document.querySelector('#itemList [data-grab]').click()`);
+    await sleep(500);
+    check(Math.abs((await topH()) - halfH) <= 2, 'and back to half');
     await S('Emulation.setTouchEmulationEnabled', { enabled: false });
     await sleep(100);
-    await evalJs(`document.getElementById('plClose').click()`);
-    await sleep(400);
 
 
 
@@ -1190,6 +1265,8 @@ function connectCdp(wsUrl) {
       return c ? { photo: !!c.querySelector('.rtile img'), text: c.innerText } : null; })()`);
     check(card && card.photo && /30 min · serves 4/.test(card.text) && /Have \d of 4/.test(card.text),
       `the card: its photo, time, servings and what you have — ${JSON.stringify(card)}`);
+    check(await evalJs(`[...document.querySelectorAll('#itemList .rcard img.fade')].every(i => i.classList.contains('in'))`),
+      'its photo has faded in');
 
     await evalJs(`[...document.querySelectorAll('#itemList .rcard')].find(x => /Tuesday chicken/.test(x.innerText)).querySelector('[data-open]').click()`);
     await sleep(700);
@@ -1214,7 +1291,9 @@ function connectCdp(wsUrl) {
 
     // Cook mode: big type, its own ingredients scaled, a timer, no screen-lock claim it cannot keep.
     await evalJs(`Object.defineProperty(navigator, 'wakeLock', { value: undefined, configurable: true })`);
-    await evalJs(`document.getElementById('rpCook').click()`);
+    check(await evalJs(`(() => { document.getElementById('rpCook').click();
+      return !!document.querySelector('#scr-cook.active') && !!document.querySelector('#scr-space.leaving'); })()`),
+      'cook mode is on screen at once, the list fading out under it');
     await sleep(600);
     check(await visible('#scr-cook') && !(await visible('#kindNav')), 'cook mode is the whole screen');
     check(!(await visible('#ckWake')), '"Screen stays on" is not claimed without a wake lock');
@@ -1231,12 +1310,17 @@ function connectCdp(wsUrl) {
     check(await evalJs(`document.querySelectorAll('#ckTray .tray').length`) === 1, "the running timer rides along in the tray");
     check(await evalJs(`document.getElementById('ckNext').classList.contains('finish')`), 'the last step finishes');
     await evalJs(`document.getElementById('ckNext').click()`);
-    await sleep(500);
+    await sleep(650);
     check(await visible('#scr-made'), 'Made it');
+    check(await evalJs(`document.querySelectorAll('#scr-made .md-ok .fx-spark').length`) === 8, 'arriving at Made it is a moment');
     await evalJs(`document.querySelector('#mdAgain [data-v="soon"]').click()`);
     await evalJs(`document.getElementById('mdTweaks').value = 'more lemon'`);
-    await evalJs(`document.getElementById('mdDone').click()`);
-    await sleep(1500);
+    check(await evalJs(`(() => { document.getElementById('mdDone').click();
+      const b = document.getElementById('mdDone'); return b.classList.contains('saved') && /Saved/.test(b.innerText); })()`),
+      'Done answers where you tapped it');
+    await sleep(2000);
+    check(!(await visible('#toast')) || !/Made it/.test(await evalJs(`document.getElementById('toast').innerText`)),
+      'and no toast to explain it afterwards');
     const made = await evalJs(`fetch('/api/space/sp1/items').then(r => r.json()).then(b => b.items.find(i => i.title === 'Tuesday chicken'))`);
     check(made.done && made.cooked.length === 1 && made.cooked[0].again === 'soon' && made.cooked[0].tweaks === 'more lemon',
       `made it is recorded and ticks it off: ${JSON.stringify(made.cooked)}`);
@@ -1288,8 +1372,10 @@ function connectCdp(wsUrl) {
     check(sheet.x >= 44, `with an X a thumb can hit (${sheet.x}px)`);
     check(await evalJs(`[...document.querySelectorAll('.modal button')].filter(b =>
       /^(cancel|close|not now)$/i.test(b.innerText.trim())).length`) === 0, 'and no stacked Cancel / Close / Not now buttons');
-    await evalJs(`document.getElementById('itemSheet').click()`);
-    await sleep(300);
+    check(await evalJs(`(() => { document.getElementById('itemSheet').click();
+      const m = document.getElementById('itemSheet'); return m.hidden && m.classList.contains('leaving'); })()`),
+      'a tap on the scrim closes it at once, and it is drawn a moment longer as it falls away');
+    await sleep(400);
     check(!(await visible('#itemSheet .modal-in')), 'a tap on the scrim closes it');
     // Done together is its icon and its count; the words are for a screen reader.
     const doneChip = await evalJs(`({ label: document.getElementById('tabDone').getAttribute('aria-label'),
@@ -1299,6 +1385,37 @@ function connectCdp(wsUrl) {
     check(/^\d+ to do$/.test(await evalJs(`document.getElementById('spaceCount').innerText`)), 'with how many on the left');
     await evalJs(`fetch('/api/space/sp1/items').then(r => r.json()).then(b => Promise.all(b.items
       .filter(i => /Go for a run/.test(i.title)).map(i => fetch('/api/item/' + i.id, { method: 'DELETE' }))))`);
+
+    // ── coming back to the app ──────────────────────────────────────────
+    // A list left open on the phone used to show nothing new until you left it
+    // and came back: returning repainted only the shelf. Now the open list is
+    // fetched again, and what arrived while you were away glows as it lands.
+    const asLinnea = { cookie: `${AUTH.COOKIE}=${AUTH.sign(L, SECRET)}`, 'content-type': 'application/json' };
+    const picnic = await (await fetch(`${BASE}/api/space/sp1/item`, { method: 'POST', headers: asLinnea,
+      body: JSON.stringify({ title: 'Picnic by the river', visibility: 'shared', kind: 'activity' }) })).json();
+    check(!(await evalJs(`!!${rowOf('/Picnic by the river/')}`)), 'something she adds is not on his open list yet');
+    await evalJs(`document.dispatchEvent(new Event('visibilitychange'))`);
+    await sleep(900);
+    check(await evalJs(`!!${rowOf('/Picnic by the river/')}`), 'coming back to the app brings it in');
+    check(await evalJs(`(${rowOf('/Picnic by the river/')}).classList.contains('arrived')`), 'and it glows as it lands');
+    check(await evalJs(`document.querySelectorAll('#itemList .arrived').length`) === 1, 'it alone');
+    await fetch(`${BASE}/api/item/${picnic.item.id}`, { method: 'DELETE', headers: asLinnea });
+
+    // ── less motion, asked for ──────────────────────────────────────────
+    // The state change and nothing else: a sheet that closes is simply gone,
+    // and a screen that changes simply changes.
+    await S('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    await evalJs(`(${rowOf('/Go record shopping/')}).querySelector('[data-open]').click()`);
+    await sleep(400);
+    check(await evalJs(`(() => { document.getElementById('isCancel').click();
+      return !document.getElementById('itemSheet').classList.contains('leaving'); })()`) && !(await visible('#itemSheet .modal-in')),
+      'with reduced motion a sheet closes with no fall');
+    check(await evalJs(`(() => { document.getElementById('spaceBack').click();
+      return !document.querySelector('.screen.leaving') && !!document.querySelector('#scr-shelf.active'); })()`),
+      'and a screen changes with no fade');
+    await evalJs(`document.querySelector('#shelfList [data-sp]').click()`);
+    await sleep(1000);
+    await S('Emulation.setEmulatedMedia', { features: [] });
 
     // ── [hidden] still means hidden, by LAYOUT ─────────────────────────
     // The map is parked, so its flow cannot be driven from the UI — but the

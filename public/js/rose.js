@@ -19,6 +19,7 @@
 // to `--rose`. `--accent` appears nowhere in the room.
 import { S } from './state.js';
 import { $, esc, toast, openSheet, closeSheet } from './util.js';
+import { haptic } from './motion.js';
 import { get, post } from './api.js';
 
 let data = null;          // last answer from the server
@@ -337,6 +338,7 @@ async function send(body) {
 
 async function answer(btn) {
   const kind = btn.dataset.kind, lv = btn.dataset.level;
+  haptic('tick');
   // On the deck: the card flies off toward its answer, and the next one comes.
   if (kind === 'try' && view === 'try' && $('rsCard')) {
     return fling(lv, WARM[lv] >= 0.5 ? (lv === 'maybe' ? 0 : 1) : -1, lv === 'maybe' ? -1 : 0);
@@ -355,6 +357,7 @@ async function fling(level, dx, dy) {
   const c = $('rsCard');
   if (!c || busy) return;
   const id = c.dataset.id;
+  haptic('tick');
   if (!calm()) {
     c.style.transition = 'transform .24s ease-in, opacity .24s ease-in';
     c.style.transform = `translate(${dx * 420}px, ${dy * 420}px) rotate(${dx * 14}deg)`;
@@ -398,7 +401,10 @@ function bindCard() {
     if (!drag) return;
     dx = e.clientX - x0; dy = Math.min(e.clientY - y0, 0);
     c.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 18}deg)`;
-    c.dataset.lean = dx > 50 ? 'yes' : dx < -50 ? 'no' : dy < -50 ? 'maybe' : '';
+    const lean = dx > 50 ? 'yes' : dx < -50 ? 'no' : dy < -50 ? 'maybe' : '';
+    // A small click under the thumb as the card starts to lean somewhere.
+    if (lean && lean !== c.dataset.lean) haptic('snap');
+    c.dataset.lean = lean;
   });
   const end = () => {
     if (!drag) return;
@@ -419,6 +425,7 @@ function pickOne() {
   if (!ms.length) return;
   const pool = ms.length > 1 ? ms.filter(m => m.id !== picked) : ms;
   picked = pool[Math.floor(Math.random() * pool.length)].id;
+  haptic('tick');
   paint(true);
 }
 
@@ -427,6 +434,7 @@ function pickOne() {
 function bloom(label) {
   const el = document.createElement('div');
   el.className = 'rs-bloom';
+  haptic('success');
   el.innerHTML = `<div>${I.rose(96)}<b>You both want</b><span>${esc(label)}</span></div>`;
   el.addEventListener('click', () => el.remove());
   $('roseSheet').appendChild(el);

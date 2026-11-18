@@ -4,7 +4,8 @@ import { $, showScreen, toast, closeSheet, openSheet, initialOf } from './util.j
 import { loadState, get, subscribePush, unsubscribePush } from './api.js';
 import { initAuth, checkAuth, showAuth, signOut } from './auth.js';
 import { initShelf, renderShelf } from './shelf.js';
-import { initSpace, openSpace } from './space.js';
+import { initSpace, openSpace, refresh } from './space.js';
+import { sheetDrag } from './motion.js';
 import { openCook } from './cook.js';
 import { initShare, incoming, openShare } from './share.js';
 
@@ -112,11 +113,12 @@ async function start() {
   // Every sheet closes on a tap on the scrim, through its own X — so whatever
   // closing that sheet has to do (forget a share, repaint the rose's dot)
   // happens whichever way you leave it.
-  document.querySelectorAll('.modal').forEach((m) => m.addEventListener('click', (e) => {
-    if (e.target !== m) return;
-    const x = m.querySelector('.modal-hd .x, .pl-snip .x, .rp-x');
-    if (x) x.click();
-  }));
+  // Pulling one down by its grabber closes it the same way.
+  document.querySelectorAll('.modal').forEach((m) => {
+    const close = () => { const x = m.querySelector('.modal-hd .x, .pl-snip .x, .rp-x'); if (x) x.click(); };
+    m.addEventListener('click', (e) => { if (e.target === m) close(); });
+    sheetDrag(m, close);
+  });
   // Land in the list, not on the shelf of lists.
   //
   // Almost everybody has one list and will have one list for a long time, so
@@ -146,10 +148,13 @@ async function start() {
   const inc = incoming();
   if (inc) openShare(inc);
 
-  // Somebody else may have added something while you were away.
+  // Somebody else may have added something while you were away — and the list
+  // you are standing in is the one that matters. It used to repaint only the
+  // shelf, so a list left open on the phone showed none of it until you left
+  // and came back. What arrived since you last looked glows as it lands.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
-    loadState().then(() => { if (S.spaceId) return; renderShelf(); }).catch(() => {});
+    loadState().then(() => (S.spaceId ? refresh({ arrived: true }) : renderShelf())).catch(() => {});
   });
 }
 
