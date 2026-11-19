@@ -851,6 +851,9 @@ the mockups stay on that branch and never come into master.
 - **Pairs only, keyed by the pair of people** (`pleasure.pairKey`), and deleted when
   either leaves the pair, in the same line as the rose's answers. Every route is 404 on a
   group list.
+- **The card is on the Activities tab only** (the default kind), at the top above whose
+  idea everything was — not on Films, Shows, Places or Recipes, where it was in the way
+  of the shelf (Andrew's call), and not in Done together.
 - `/api/state` carries `question: { streak, waiting }` per pair space for the shelf — a
   number and a flag. The card loads with the list (`loadQuestion`, beside the items).
 

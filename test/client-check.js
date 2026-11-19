@@ -1669,6 +1669,11 @@ function connectCdp(wsUrl) {
     if (await evalJs(`document.getElementById('tabDone').classList.contains('on')`)) { await evalJs(`document.getElementById('tabDone').click()`); await sleep(400); }
     check(await visible('#dqCard') && await evalJs(`document.getElementById('dqCard').dataset.state`) === 'a'
       && await evalJs(`document.getElementById('itemList').firstElementChild.id`) === 'dqCard', 'today\'s question sits at the top of the pair list');
+    await evalJs(`document.querySelector('#kindNav [data-kind="movie"]').click()`);
+    await sleep(400);
+    check(!(await evalJs(`!!document.getElementById('dqCard')`)), 'on Activities only: not on the shelf of films');
+    await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
+    await sleep(400);
     check(await evalJs(`(() => { const b = document.querySelector('#dqCard .dq-go').getBoundingClientRect();
       const e = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return !!(e && e.closest('.dq-go')); })()`), 'and its Answer button takes the tap');
     const lq = await asApi(L, 'GET', '/api/space/sp1/question');

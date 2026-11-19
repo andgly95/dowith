@@ -362,8 +362,10 @@ export function render() {
     // single heading is still worth having: "all four recipes are Linnea's" is
     // exactly the kind of thing this is for.
     // Today's question sits at the top of a pair list, above whose idea
-    // everything was, on every tab but Places and Done together.
-    list.innerHTML = questionCardHtml() + (cook ? tilesHtml() : '') + (!shown.length ? `<div class="empty">${esc(emptyLine())}</div>`
+    // everything was — on Activities only, where an answer can become a thing
+    // to do. On a shelf of films or a grid of recipes it was in the way.
+    const ask = kindTab === defaultKind() ? questionCardHtml() : '';
+    list.innerHTML = ask + (cook ? tilesHtml() : '') + (!shown.length ? `<div class="empty">${esc(emptyLine())}</div>`
       : together ? byIdea(shown).map(g => whoseHd(g) + rows(g.items)).join('')
         : rows(shown));
     bindQuestionCard(list);
