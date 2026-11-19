@@ -193,7 +193,9 @@ function connectCdp(wsUrl) {
         // tile is the map's designed fallback — pins on a blank ground — not
         // a page error.
         const tile = /tile\.openstreetmap\.org/.test(msg.params.entry.url || '') || /ERR_BLOCKED_BY_CLIENT/.test(t);
-        if (!/service ?worker/i.test(t) && !tile) errors.push(`CONSOLE: ${t}`);
+        // A spent or unknown invite is a 404 by design, and the screen says so.
+        const deadInvite = /\/api\/invite\/[^/]+$/.test(msg.params.entry.url || '') && /404/.test(t);
+        if (!/service ?worker/i.test(t) && !tile && !deadInvite) errors.push(`CONSOLE: ${t}`);
       }
     });
 
@@ -1747,6 +1749,37 @@ function connectCdp(wsUrl) {
     await evalJs(`document.querySelector('#rsBody .dq-send').click()`);
     await sleep(900);
     check((await evalJs(`document.getElementById('rsBody').innerText`)).includes('KIT SAID THIS'), 'and answering it there shows Kit\'s');
+
+    // ── an invite, on a server with no Google and no Access ───────────────
+    // The link is the sign-in: who sent it, a name, one tap, and you are in the
+    // list. This server had shown "Sign-in is not configured" here.
+    const fresh = (await asApi(A, 'POST', '/api/space', { name: '' })).space;
+    const inv = await asApi(A, 'POST', `/api/space/${fresh.id}/invite`, {});
+    await S('Network.clearBrowserCookies');
+    await S('Page.navigate', { url: `${BASE}/?invite=${inv.code}` });
+    await sleep(2200);
+    check(await visible('#joinForm') && await visible('#joinGo'), 'an invite shows a name and a Join button');
+    const authText = await evalJs(`document.getElementById('scr-auth').innerText`);
+    check(/Andrew wants to keep a list/.test(authText) && /What should Andrew call you/.test(authText), 'saying who sent it');
+    check(!/not configured/.test(authText) && !(await visible('#authNote')), 'and no dead end');
+    // Tapping Join with no name asks again and spends nothing.
+    await evalJs(`document.getElementById('joinGo').click()`);
+    await sleep(400);
+    check(await visible('#joinForm'), 'no name, no join');
+    await evalJs(`(() => { const i = document.getElementById('joinName'); i.value = 'Rowan';
+      i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await evalJs(`document.getElementById('joinGo').click()`);
+    await sleep(2200);
+    check(!(await visible('#scr-auth')) && await visible('#scr-space'), 'one tap and he is in the list');
+    check(await evalJs(`document.getElementById('spaceTitle').innerText`) === 'Andrew', 'titled from his side');
+    check(!/invite=/.test(await evalJs('location.search')), 'and the spent code is gone from the address');
+    check((await asApi(A, 'GET', '/api/state')).spaces.some(s => s.id === fresh.id && s.title === 'Rowan'), 'Andrew sees it as his list with Rowan');
+    // A used link says so, and where to go.
+    await S('Network.clearBrowserCookies');
+    await S('Page.navigate', { url: `${BASE}/?invite=${inv.code}` });
+    await sleep(2000);
+    check(!(await visible('#joinForm')) && /already been used\. Ask whoever sent it/.test(await evalJs(`document.getElementById('authNote').innerText`)),
+      'a spent invite says so');
 
     if (errors.length) throw new Error(`page errors:\n${errors.join('\n')}`);
     console.log('client-check: ok — gate, mirroring, share-in, the record, and a private thing staying private');

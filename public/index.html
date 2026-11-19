@@ -39,6 +39,15 @@
       <p class="lede" id="authLede">
         The things you keep meaning to do with the people you keep meaning to do them with.
       </p>
+      <form id="joinForm" class="join" hidden>
+        <label class="fld">
+          <span id="joinAsk">What should we call you?</span>
+          <input id="joinName" type="text" maxlength="40" autocomplete="given-name"
+            autocapitalize="words" enterkeyhint="go" placeholder="Your name" required>
+        </label>
+        <button type="submit" class="primary" id="joinGo">Join</button>
+        <p class="join-small">No password. This link signs you in.</p>
+      </form>
       <div id="gbtn" class="gbtn"></div>
       <p class="note" id="authNote" hidden></p>
     </div>

@@ -963,9 +963,34 @@ async function inviteRules() {
       assert.strictEqual(INVITES.check(st, c).ok, false, String(c));
     }
   });
+
+  await t('a name typed at an invite is made safe to show, and never takes somebody\'s account', () => {
+    assert.strictEqual(INVITES.cleanName('  Rowan \n  K  '), 'Rowan K');
+    assert.strictEqual(INVITES.cleanName('‮evil​'), 'evil', 'no bidi or zero-width tricks');
+    assert.strictEqual(INVITES.cleanName(null), '');
+    const long = '🙂'.repeat(60);
+    assert.strictEqual(Array.from(INVITES.cleanName(long)).length, INVITES.NAME_MAX, 'counted in characters');
+    assert.ok(!/[\ud800-\udbff]$/.test(INVITES.cleanName(long)), 'no emoji cut in half');
+    assert.strictEqual(INVITES.idFor({}, 'Rowan'), 'link:rowan', 'the shape tools/link.js finds by name');
+    assert.strictEqual(INVITES.idFor({}, 'Zoë'), 'link:zoe');
+    assert.strictEqual(INVITES.idFor({}, '🙂'), 'link:friend');
+    let n = 0;
+    const taken = { 'link:andrew': {}, 'link:andrew-000001': {} };
+    assert.strictEqual(INVITES.idFor(taken, 'Andrew', () => String(++n).padStart(6, '0')), 'link:andrew-000002');
+  });
 }
 
 /* ── 5. the Square bridge ────────────────────────────────────────────────── */
+
+// A pass exactly as the Square's lib/app-pass.js mints one.
+function squarePass(over = {}, secret = 'test-square-secret', now = Date.now()) {
+  const iat = Math.floor(now / 1000);
+  const payload = Buffer.from(JSON.stringify({
+    v: 1, aud: 'dowith', iss: 'ava', sub: 'connor', name: 'Connor', owner: false,
+    iat, exp: iat + 300, jti: crypto.randomBytes(16).toString('base64url'), ...over,
+  })).toString('base64url');
+  return `${payload}.${crypto.createHmac('sha256', secret).update(payload).digest('base64url')}`;
+}
 
 async function squareBridge() {
   console.log('\nthe square bridge');
@@ -1002,6 +1027,50 @@ async function squareBridge() {
     assert.strictEqual(SQUARE.status().linkable, false, 'still not linkable');
     cfg.set({ squareStorePath: undefined });
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  await t("a pass from the Square: only the Square's, only for Do With, only once, only for a while", () => {
+    const sec = 'test-square-secret';
+    const v = (tok, o = {}) => SQUARE.verifyPass(tok, { secret: sec, iss: 'ava', ...o });
+    const good = v(squarePass());
+    assert.ok(good.ok, JSON.stringify(good));
+    assert.deepStrictEqual(Object.keys(good.claims).sort(), ['exp', 'iss', 'jti', 'name', 'sub'], 'owner is not carried in');
+    assert.strictEqual(SQUARE.verifyPass(squarePass(), { secret: '', iss: 'ava' }).ok, false, 'no secret, no door');
+    assert.strictEqual(v(squarePass({}, 'somebody-elses-secret')).ok, false, 'signed by something else');
+    assert.strictEqual(v(squarePass({ aud: 'pitchtrace' })).ok, false, "Sing's pass does not open Do With");
+    assert.strictEqual(v(squarePass({ iss: 'franchise-2' })).ok, false, "another building's does not open this one");
+    assert.strictEqual(v(squarePass({ v: 2 })).ok, false);
+    assert.strictEqual(v(squarePass({ sub: '../andrew' })).ok, false, 'an id is a slug');
+    assert.strictEqual(v(squarePass({ jti: 'short' })).ok, false, 'a nonce is a nonce');
+    const old = Date.now() - 10 * 60 * 1000;
+    assert.ok(/expired/.test(v(squarePass({}, sec, old)).why), 'five minutes, then it is spent by time');
+    const t0 = Math.floor(Date.now() / 1000);
+    assert.strictEqual(v(squarePass({ iat: t0, exp: t0 + 86400 })).ok, false, 'a pass that lives a day is not the Square\'s');
+    assert.strictEqual(v(squarePass({ iat: t0 + 3600, exp: t0 + 3700 })).ok, false, 'nor one from the future');
+    const tok = squarePass();
+    const parts = tok.split('.');
+    assert.strictEqual(v(`${parts[0]}x.${parts[1]}`).ok, false, 'an edited payload');
+    for (const junk of [null, '', '.', 'a.b', 'x'.repeat(5000)]) assert.strictEqual(v(junk).ok, false, String(junk).slice(0, 9));
+    // Once.
+    const st = {};
+    const c = v(tok).claims;
+    SQUARE.spendPass(st, c);
+    assert.ok(/already been used/.test(v(tok, { used: SQUARE.spentPasses(st) }).why));
+    // And the list of spent ones forgets what has expired anyway.
+    SQUARE.spendPass(st, { jti: 'b'.repeat(16), exp: t0 + 300 }, Date.now() + 20 * 60 * 1000);
+    assert.deepStrictEqual(st.squarePasses.map(p => p.jti), ['b'.repeat(16)]);
+  });
+
+  await t('who a pass signs in: the linked account, else ask the one signed in here, else someone new', () => {
+    const c = { iss: 'ava', sub: 'andrew' };
+    const mine = { id: 'link:andrew', square: { tenant: 'ava', id: 'andrew' } };
+    const her = { id: 'link:linnea', square: null };
+    const elsewhere = { id: 'x', square: { tenant: 'other', id: 'andrew' } };
+    assert.strictEqual(SQUARE.personFor({ a: mine, b: her }, c, her).user, mine, 'linked wins, whoever is signed in');
+    assert.strictEqual(SQUARE.personFor({ b: her, x: elsewhere }, c, null).how, 'new', 'the same slug in another building is not him');
+    assert.deepStrictEqual(SQUARE.personFor({ b: her }, c, her), { how: 'claim', user: her }, 'signed in and unlinked: asked');
+    assert.strictEqual(SQUARE.personFor({ x: elsewhere }, c, elsewhere).how, 'new', 'never a second link on one account');
+    assert.strictEqual(SQUARE.personFor({ b: her }, c, null).how, 'new', 'nobody signed in: a new account, never a guess by name');
   });
 }
 
@@ -1656,6 +1725,102 @@ async function server() {
     // about what is in the list.
     assert.deepStrictEqual(Object.keys(look.body).sort(), ['from', 'note', 'ok', 'space']);
     assert.strictEqual(JSON.stringify(look.body).includes('record shopping'), false);
+  });
+
+  await t('an invite signs you in by itself: a name and one tap, once', async () => {
+    const made = (await api('POST', '/api/space', { name: '' }, A)).body.space;
+    const { body: inv } = await api('POST', `/api/space/${made.id}/invite`, {}, A);
+    const join = (code, body, cookie) => fetch(`${BASE}/api/invite/${code}/join`, {
+      method: 'POST', headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+      body: JSON.stringify(body),
+    });
+    // Signed in already: refused, and the invite is NOT spent — opening your own
+    // link to check it must not burn it.
+    assert.strictEqual((await join(inv.code, { name: 'Andrew' }, cookieFor(A))).status, 409);
+    assert.strictEqual((await api('GET', `/api/invite/${inv.code}`, null, null)).status, 200, 'still good');
+    // No name, or only invisible characters: asked again, nothing made.
+    assert.strictEqual((await join(inv.code, { name: ' \u202e\u200b ' })).status, 400);
+    assert.strictEqual((await join('not-a-real-code', { name: 'Rowan' })).status, 404);
+
+    const r = await join(inv.code, { name: '  Andrew  ' });
+    assert.strictEqual(r.status, 200);
+    const cookie = (r.headers.get('set-cookie') || '').split(';')[0];
+    assert.ok(cookie.startsWith(`${AUTH.COOKIE}=`), 'signed in by the response');
+    const me = await fetch(`${BASE}/api/state`, { headers: { cookie } }).then(x => x.json());
+    assert.notStrictEqual(me.me.id, A);
+    assert.strictEqual(me.me.id, 'link:andrew', 'the shape tools/link.js finds by name');
+    assert.strictEqual(me.me.name, 'Andrew');
+    // In the list the invite pointed at, and nothing else — titled from his side.
+    assert.deepStrictEqual(me.spaces.map(x => x.id), [made.id]);
+    assert.ok(me.spaces[0].isPair);
+    assert.strictEqual(me.spaces[0].title, 'Andrew');
+    // Once.
+    assert.strictEqual((await join(inv.code, { name: 'Someone else' })).status, 404);
+    assert.strictEqual((await api('GET', `/api/invite/${inv.code}`, null, null)).status, 404);
+    // A second person with the same name is a new account, never the first one.
+    const again = (await api('POST', `/api/space/${made.id}/invite`, {}, A)).body;
+    const r2 = await join(again.code, { name: 'Andrew' });
+    const c2 = (r2.headers.get('set-cookie') || '').split(';')[0];
+    const me2 = await fetch(`${BASE}/api/state`, { headers: { cookie: c2 } }).then(x => x.json());
+    assert.ok(/^link:andrew-[0-9a-f]{6}$/.test(me2.me.id), me2.me.id);
+    assert.strictEqual(me2.spaces[0].members.length, 3, 'all three in the list');
+  });
+
+  await t('the Square tile: a pass signs you in, links once, asks before claiming, and is spent', async () => {
+    const sso = (tok, cookie) => fetch(`${BASE}/sso?t=${encodeURIComponent(tok)}`, { redirect: 'manual', headers: cookie ? { cookie } : {} });
+    const post = (form, cookie) => fetch(`${BASE}/sso`, { method: 'POST', redirect: 'manual',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', ...(cookie ? { cookie } : {}) },
+      body: new URLSearchParams(form).toString() });
+    const session = (r) => (r.headers.get('set-cookie') || '').split(';')[0];
+    const meOf = async (cookie) => (await fetch(`${BASE}/api/state`, { headers: { cookie } }).then(x => x.json()));
+
+    assert.strictEqual((await sso(squarePass())).status, 404, 'no secret: the door does not exist');
+    const c = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+    fs.writeFileSync(cfgFile, JSON.stringify({ ...c, squareSecret: 'test-square-secret' }), { mode: 0o600 });
+
+    // Somebody new from the Square: an account, linked, signed in, no lists.
+    const tok = squarePass({ sub: 'connor', name: 'Connor' });
+    const r = await sso(tok);
+    assert.strictEqual(r.status, 303);
+    assert.strictEqual(r.headers.get('location'), '/', 'the pass leaves the address bar');
+    assert.strictEqual(r.headers.get('referrer-policy'), 'no-referrer');
+    const connor = await meOf(session(r));
+    assert.strictEqual(connor.me.name, 'Connor');
+    assert.deepStrictEqual([connor.me.square.tenant, connor.me.square.id], ['ava', 'connor']);
+    assert.deepStrictEqual(connor.spaces, [], 'and sees nothing — no list is shared with him');
+    assert.strictEqual((await sso(tok)).status, 400, 'once');
+    // The next pass for him is the same account.
+    assert.strictEqual((await meOf(session(await sso(squarePass({ sub: 'connor', name: 'Connor C' }))))).me.id, connor.me.id);
+
+    // Refused outright.
+    assert.strictEqual((await sso(squarePass({ aud: 'sidequest' }))).status, 400);
+    assert.strictEqual((await sso(squarePass({}, 'wrong-secret'))).status, 400);
+
+    // Signed in here and not linked: asked, and nothing is spent by asking.
+    const ask = squarePass({ sub: 'linnea', name: 'Linnea' });
+    const page = await sso(ask, cookieFor(L));
+    assert.strictEqual(page.status, 200);
+    const html = await page.text();
+    assert.ok(/signed in to Do With as\s*<b[^>]*>Linnea<\/b>/.test(html) && /Yes, that's me/.test(html), 'the question');
+    assert.ok(!page.headers.get('set-cookie'), 'asking signs nobody in');
+    const yes = await post({ t: ask }, cookieFor(L));
+    assert.strictEqual(yes.status, 303);
+    assert.strictEqual((await meOf(session(yes))).me.id, L, 'yes: her own account, now linked');
+    // From then on the tile opens her lists from any phone, signed in or not.
+    const later = await meOf(session(await sso(squarePass({ sub: 'linnea' }))));
+    assert.strictEqual(later.me.id, L);
+    assert.ok(later.spaces.some(x => x.id === 'sp1'), 'her lists');
+    assert.strictEqual((await post({ t: ask }, cookieFor(L))).status, 400, 'and the pass is spent');
+
+    // "No, I'm someone else": a new account, and Sam stays unlinked.
+    const no = await post({ t: squarePass({ sub: 'guest', name: 'Guest' }), fresh: '1' }, cookieFor(S));
+    const guest = await meOf(session(no));
+    assert.notStrictEqual(guest.me.id, S);
+    assert.strictEqual(guest.me.name, 'Guest');
+    assert.strictEqual((await meOf(cookieFor(S))).me.square, null);
+
+    fs.writeFileSync(cfgFile, JSON.stringify(c), { mode: 0o600 });
+    assert.strictEqual((await sso(squarePass({ sub: 'linnea' }))).status, 404, 'and the secret gone closes it at once');
   });
 
   await t("today's question: theirs is not sent until you answer, and then neither can change", async () => {

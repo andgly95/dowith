@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 195 tests + a headless-chromium check
+- **Tests:** `npm test` — 200 tests + a headless-chromium check
 
 ## The model
 
@@ -204,18 +204,66 @@ Codes are unguessable (not merely unique), one-shot, and expire in a fortnight.
 has to say who sent it, or a message from your girlfriend looks like phishing. It
 discloses the inviter's name and nothing about what is in the list.
 
-## The Square bridge — plumbing only
+**The invite signs you in by itself.** Those three properties are exactly a sign-in
+link's (`lib/magic.js`), so the screen asks *What should Andrew call you?* and one tap
+on **Join** (`POST /api/invite/:code/join {name}`) makes the account, puts it in the
+list and sets the session. No identity provider is needed: the first invite sent
+(Nov 18) landed on "Sign-in is not configured on this server yet", because there was
+neither Google nor Access, in a restaurant. Google is still offered under the form when
+it is configured.
 
-`lib/square.js`. Nothing is imported and `importable()` refuses on purpose. It
-exists so the shape is decided while the reasons are fresh.
+- **The POST spends it, never the GET**, so a preview crawler cannot burn it; and a
+  caller who is **already signed in is refused (409) without spending it**, so opening
+  your own link to check it is safe.
+- **The id is `link:<name>`**, the shape `tools/link.js` finds by name, so a person who
+  joined this way can be sent a sign-in link for a new phone. **A name already taken
+  gets a random tail** — the id is the account, and a second "Andrew" must never become
+  the first one, or inherit his admin rights. Names are cleaned (`invites.cleanName`):
+  no control, zero-width or bidi characters, 40 characters counted as characters.
+- A full list is refused before anybody is made. A spent link says so and to ask for a
+  new one.
+
+## The Square — a tile in its ⊞ menu (`lib/square.js`)
+
+**Do With is a linked app in the Square**, like Sing and SideQuest: the ⊞ menu there
+has a **Do With** tile (two ticked rows, *to do, together*), and tapping it opens
+Do With signed in as you. The tile is a link carrying a **pass** the Square signs
+(its `lib/app-pass.js`); `GET /sso?t=` here checks it. Built Nov 18 at Andrew's ask,
+"just like the Sing app".
 
 - **The Square has no email on a person** — just a slug (`andrew`), a name, a
-  colour, an avatar. So there is nothing to join on, and anything that tried to
-  match automatically would be guessing whose data it was moving. The link must be
-  an explicit **claim**, and a claim needs proof.
-- Sketch for when it is built: a one-time code shown in the Square to a signed-in
-  person, pasted here, verified back against it. No shared secret, no
-  email-matching, no trusting a typed slug.
+  colour, an avatar. So there is nothing to join on, and anything that matched
+  automatically would be guessing whose lists it was opening. **The pass is the
+  proof that was missing**: `{ v:1, aud:'dowith', iss:<building>, sub:<person id>,
+  name, owner, iat, exp, jti }`, HMAC-SHA256 under a secret shared with Do With ONLY
+  (`squareSecret` here, `dowithSecret` there), five minutes, single-use (`jti` kept
+  in `state.squarePasses` until it would have expired anyway). A Sing pass does not
+  open Do With, nor another building's this one (`squareTenant`, default `ava`).
+- **Who it signs in** (`personFor`, pure): the account already linked to that Square
+  person (`user.square = { tenant, id, at }`); else, if this browser is signed in as
+  somebody not linked, it **asks** — *"This phone is signed in to Do With as Linnea.
+  Is that you, Linnea from the Square?"* — because a shared browser would otherwise
+  hand one person's Square to another's lists; else **a new account**, linked. The
+  Square's members are let in by its owner, the same vouching an invite is, and an
+  account with no lists sees nothing. Asking spends nothing; the POST behind the
+  answer does.
+- **Existing accounts are linked from the shell**: `node tools/square-link.js
+  link:andrew andrew` (server stopped — it checks the port). On Nov 18 the accounts
+  whose people were already in the Square were linked this way. One account per Square
+  person.
+- **The `owner` claim is ignored.** Admin here is `admins` in config and nothing else.
+- **The secret is read live**: set it and the door exists; remove it and `/sso` is a
+  404 at once. No secret, no door — and on the Square's side, no tile.
+- The pass leaves the address bar with a 303 to `/`, under `Referrer-Policy:
+  no-referrer` and `no-store`.
+- The tile points at `https://dowith.guess-ai.app` (`DOWITH_URL` there), the address
+  people already use, so it is the same cookie jar. `dowith.the-square.app` is in the
+  tunnel config but does not resolve.
+
+**Importing people and groups is still plumbing only**, and `importable()` still
+refuses. The pass needs none of it — an id and a name arrive signed and the Square's
+store is never opened for them.
+
 - **Hard constraint:** the Square's store holds `messages`, `dms` and
   `groupMessages` — everybody's private conversations. A bridge reads `people` and
   `customGroups` and NOTHING else, read-only, projected down to id/name/avatar.
@@ -1302,6 +1350,7 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `POST /api/auth/google` | ID token + optional invite → session. **Public.** |
 | `GET /api/auth/me` · `POST /api/auth/signout` | status; sign out |
 | `GET /api/invite/:code` | who invited you — **works signed out** |
+| `POST /api/invite/:code/join {name}` | join by the invite and be signed in by it — signed out only (409 otherwise) |
 | `GET /api/state` | you, your spaces with per-viewer titles and counts (`byKind` too), module manifest |
 | `POST /api/space` · `PATCH /api/space/:id` · `POST /api/space/:id/leave` | lists |
 | `GET /api/space/:id/items` · `POST /api/space/:spaceId/item` | the list itself |
@@ -1311,7 +1360,8 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `POST /api/item/:id/visit` | `{book?, again?, memory?}` — anyone who can see it; `again`/`memory` only once done (409) |
 | `GET /api/item/:id/place` | a place's hours, website, address — live from OSM by its id; 404 if you can't see it |
 | `GET`·`POST /api/space/:id/pleasure` | the rose — pairs only; partner's try answers appear only as matches; `question` is today's Spicy one, answered here with `{ question: {date, text\|pick\|react\|reply} }` |
-| `GET /api/square/status` · `POST /api/square/import` | the bridge (501) |
+| `GET /sso?t=` · `POST /sso` | from the Square's ⊞ tile: a signed pass signs you in (or asks first); 404 without `squareSecret` |
+| `GET /api/square/status` · `POST /api/square/import` | the import bridge (501) |
 | `GET /share` | share target / Shortcut / bookmarklet — serves the shell |
 | `POST /api/space/:id/geocode` | resolve place names you can see, batched — not called by the client since the Map view went |
 | `GET /api/place/suggest?q=&lat=&lon=` | places as you type (Photon, proxied, cached); writes nothing |
@@ -1379,8 +1429,9 @@ Not deployed yet. To bring it up:
 2. Add to `~/.cloudflared/config.yml`: `- hostname: dowith.guess-ai.app` →
    `service: http://localhost:3006`, then `cloudflared tunnel route dns hot-seat
    dowith.guess-ai.app` and restart `cloudflared`
-3. Put **either** `googleClientId` **or** `cfAccessTeam` + `cfAccessAud` in
-   `config.local.json` (gitignored, 0600). With neither, nobody can sign in.
+3. Optionally put `googleClientId` **or** `cfAccessTeam` + `cfAccessAud` in
+   `config.local.json` (gitignored, 0600). With neither, an invite link still signs a
+   new person in (see *Invites*), and `tools/link.js` signs in someone who has one.
 4. The first person still needs an invite, and there is nobody to send one — so
    bootstrap once from the Pi:
    `node -e "const s=require('./store');s.state.invites.push({code:'bootstrap',spaceId:null,createdBy:null,createdAt:Date.now(),expiresAt:Date.now()+9e8,usedBy:null});s.flushSync()"`
