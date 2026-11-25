@@ -591,7 +591,7 @@ function paintPage(it, { fresh = false } = {}) {
 async function loadDetails(it) {
   if (!(it.mod && it.mod.place && it.mod.place.osm)) return;
   let b;
-  try { b = await get(`/api/item/${it.id}/place?at=${localAt()}`); } catch (_) { return; }
+  try { b = await get(`/api/item/${it.id}/place?at=${localAt()}&tz=${encodeURIComponent(myZone())}`); } catch (_) { return; }
   if (page !== it.id || !b || !b.details) return;
   const d = b.details;
   const rows = [];
@@ -639,13 +639,20 @@ const pad2 = (n) => String(n).padStart(2, '0');
 function localAt(d = new Date()) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
-// When it next opens, said the way you would: "5 PM", "tomorrow 8 AM", "Fri 8 AM".
+// The phone's zone, for sunrise and sunset ("sunrise-sunset" parks).
+const myZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (_) { return ''; } };
+// When it next opens, said the way you would: "5 PM", "tomorrow 8 AM",
+// "Fri 8 AM" — or, for a place out of season, the date: "Nov 12".
 function opensWords(o) {
   const today = localAt().slice(0, 10);
   const tomorrow = localAt(new Date(Date.now() + 864e5)).slice(0, 10);
   if (o.date === today) return hm(o.time);
   if (o.date === tomorrow) return `tomorrow ${hm(o.time)}`;
-  return `${new Date(`${o.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' })} ${hm(o.time)}`;
+  const day = new Date(`${o.date}T12:00:00`);
+  if (day - Date.now() > 6 * 864e5) {
+    return day.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(day.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) });
+  }
+  return `${day.toLocaleDateString('en-US', { weekday: 'short' })} ${hm(o.time)}`;
 }
 
 /* ── open or closed, on the Places tab ──────────────────────────────────
@@ -665,7 +672,7 @@ async function loadOpenStates({ force = false } = {}) {
   hoursFor.sig = sig;
   hoursFor.at = Date.now();
   let b;
-  try { b = await get(`/api/space/${sid}/hours?at=${localAt()}`); } catch (_) { hoursFor.at = 0; return; }
+  try { b = await get(`/api/space/${sid}/hours?at=${localAt()}&tz=${encodeURIComponent(myZone())}`); } catch (_) { hoursFor.at = 0; return; }
   if (S.spaceId !== sid || !b) return;
   const before = JSON.stringify([...openStates]);
   openStates.clear();

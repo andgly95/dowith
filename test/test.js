@@ -1560,6 +1560,33 @@ async function weatherRules() {
     assert.strictEqual(H.stateAt(null, null, { date: '2026-11-25', time: '10:00', holidayOf: hol }).known, false, 'no hours, no claim');
   });
 
+  await t('the shapes the live list had: a park open sunrise to sunset, and a holiday market with a season', () => {
+    const H = require('../lib/hours');
+    const D = require('../lib/holidays');
+    const hol = (d) => D.holidayOn(d);
+    const dc = H.sunTimes('2026-11-25', 38.88, -77.0, 'America/New_York');
+    assert.deepStrictEqual([dc.sunrise, dc.sunset], ['07:01', '16:48'], 'Washington, Nov 25 — within a couple of minutes of the almanac');
+    assert.strictEqual(H.sunTimes('2026-12-21', 78.2, 15.6, 'Arctic/Longyearbyen'), null, 'no sunrise in a polar night');
+    const sun = H.sunFor(38.88, -77.0, 'America/New_York');
+    const park = (time) => H.openAt('sunrise-sunset', { date: '2026-11-25', time, holidayOf: hol, sun });
+    assert.deepStrictEqual([park('15:51').open, park('15:51').until], [true, '16:48']);
+    assert.deepStrictEqual([park('18:00').open, park('18:00').opens], [false, { date: '2026-11-26', time: '07:02' }]);
+    assert.strictEqual(H.openAt('sunrise-sunset', { date: '2026-11-25', time: '12:00', holidayOf: hol }).known, false,
+      'with no pin or no zone, the sun is not guessed at');
+    const market = 'Nov 12-Dec 23: Mo-Fr 12:00-20:00; Sa-Su 11:00-20:00';
+    const at = (date, time) => H.openAt(market, { date, time, holidayOf: hol, sun });
+    assert.strictEqual(at('2026-11-25', '15:51').open, true, 'in season, on a weekday');
+    assert.deepStrictEqual([at('2026-11-28', '10:00').open, at('2026-11-28', '10:00').opens], [false, { date: '2026-11-28', time: '11:00' }],
+      'a Saturday in season: the weekend hours');
+    const jan = at('2027-01-09', '12:00');
+    assert.deepStrictEqual([jan.open, jan.closedAllDay, jan.opens], [false, true, { date: '2027-11-12', time: '12:00' }],
+      'a Saturday in January is closed — the season carries to the weekend rule — and it says when it opens again');
+    assert.deepStrictEqual(H.rulesOf('Dec 20-31 10:00-16:00')[0].season, { from: '12-20', to: '12-31' });
+    assert.deepStrictEqual(H.rulesOf('Nov-Feb: Mo-Su 09:00-17:00')[0].season, { from: '11-01', to: '02-31' }, 'a season across the new year');
+    assert.strictEqual(H.openAt('Nov-Feb: Mo-Su 09:00-17:00', { date: '2027-01-15', time: '10:00', holidayOf: hol }).open, true);
+    assert.strictEqual(H.rulesOf('(sunrise+01:00)-sunset'), null, 'an offset from the sun is still beyond it');
+  });
+
   await t("a place's weather profile: only what applies is kept, and nonsense is not", () => {
     const P = require('../lib/placefit');
     const bar = P.cleanFit({ weather_matters: false, setting: 'indoors', ideal_conditions: ['clear'], ideal_min_c: 18, ideal_max_c: 24,

@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 217 tests + a headless-chromium check
+- **Tests:** `npm test` — 218 tests + a headless-chromium check
 
 ## The model
 
@@ -1412,6 +1412,17 @@ Andrew's ask: a place should say when it is closed, by its hours or a holiday.
     (with that day's hours) or *Open for your plan*.
   - On the Places tab, a row says *Closed now*, *Closed today* or *Closes 5 PM* (within
     the hour), in the meta line as words, and a closed place's pin dims.
+- **Seasons and the sun** (`hours.rulesOf`, `rangesOn`, `sunTimes`). Two places on the
+  live list showed their raw hours and no state: a park open `sunrise-sunset`, and a
+  holiday market open `Nov 12-Dec 23: Mo-Fr 12:00-20:00; Sa-Su 11:00-20:00`.
+  - Sunrise, sunset, dawn and dusk are worked out (NOAA, within a couple of minutes) at
+    the place's pin, in the phone's zone (`?tz=`). With no pin or no zone they are not
+    guessed.
+  - A season at the start of the FIRST rule carries to later rules that name none. That
+    is deliberate: the strict reading opens the market every weekend of the year.
+  - A seasonal place looks up to a year ahead for when it opens ("opens Nov 12").
+  - `parse` still gives up on both, because a week cannot say them. `openAt` is what the
+    routes call.
 - **"Now" is the phone's** (`?at=YYYY-MM-DDTHH:MM`, its own clock). The server runs in
   UTC and never decides what time it is: `/api/space/:id/hours` without `at` is a 400.
   The logic lives in one tested place on the server, like `kitchen.match`.
