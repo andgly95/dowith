@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 213 tests + a headless-chromium check
+- **Tests:** `npm test` — 217 tests + a headless-chromium check
 
 ## The model
 
@@ -680,6 +680,48 @@ Island". No confident match means no poster, which the card already draws proper
 - Titles are sent to TMDB, which is a third-party call carrying user content — the same
   trade the app already makes with Nominatim for place names. Worth knowing; private
   items are no exception, because the lookup is about the title, not the audience.
+
+## A show's seasons and episodes (`lib/episodes.js`, `public/js/eps.js`)
+
+Added Nov 25 at Andrew's ask. A show pinned to TMDB has an **Episodes** section in its
+sheet:
+- a **Next up** card: *S2 · E3 · "its name"* with **Watched it**
+- a chip per season, with *3/10*
+- the season as numbered circles to tick
+- *Mark season 2 watched*
+
+The shelf shows how far you are: a hairline along the bottom of the poster, beside the
+tick, and *S2 E3 next* under the title.
+
+- **One record per show, not per person.** You watch it together, so the progress is
+  the list's, like ticking off. Anyone who can see the show may tick an episode (the
+  `complete` right).
+- **Only aired episodes count.** Specials (season 0) are left out. An announced episode
+  is drawn dashed and cannot be ticked. TMDB's `last_episode_to_air` says where airing
+  has got to.
+- **The last episode of a show that has ENDED finishes it.** The server ticks the item
+  off, as whoever ticked that episode, and the usual "finished" nudge goes out. A show
+  still running (`Returning Series`, or a next episode scheduled) is *All caught up*
+  instead, and stays on the shelf, because a new season is what you would keep it there
+  for.
+- **The ordinary tick still finishes a show at any point**, seen it all or not.
+  Un-ticking an episode of a finished show does not un-finish it.
+- **The finale** (`finale()` in space.js). The sheet closes. The poster lifts and glows,
+  a shine runs across it, **SEEN IT ALL** lands like a rubber stamp, and fourteen sparks
+  go out. Then it flies into the Done together toggle, the shelf closes up behind it, and
+  the count springs.
+  - **A fixed copy flies, not the card.** The shelf scrolls in its own box, which clipped
+    the real card at its top edge. Nothing replays on the copy (`.flying`).
+  - Reduced motion gets the state. The browser check catches it mid-flight, and then
+    checks that the poster has gone and the show is done.
+- **Stored** as `item.episodes = { of, seen, show, by, at }`, beside `visit` and set only
+  by `POST /api/item/:id/episodes`, so a PATCH can neither set nor lose it.
+  - `show` is a snapshot of TMDB's seasons, so the shelf can draw progress without
+    asking TMDB per poster. The sheet's `GET /show` refreshes it, cached six hours in
+    memory, with episode names a day.
+  - `of` is the TMDB id. Pin the item to another show and its episodes go.
+  - The wire carries `progress` only, never the whole record.
+- `tmdbEndpoint` in config points TMDB at a stand-in, for the suites.
 
 ## Finishing something
 
@@ -1360,6 +1402,31 @@ Asked at Andrew's ask, Nov 25, as groundwork for suggestions.
   Anthropic**, the same trade as titles to TMDB. The connector passes on its one-line
   `why`.
 
+**Open or closed, and holidays** (`hours.stateAt`, `lib/holidays.js`). Added Nov 25 at
+Andrew's ask: a place should say when it is closed, by its hours or a holiday.
+
+- **Where it shows:**
+  - A place's page says *Open now · until 5 PM*, *Closed now · opens tomorrow 8 AM* or
+    *Closed today · Thanksgiving*, with today's hours under it.
+  - **The day it is planned for** says *Closed on your plan*, *Closed at that time*
+    (with that day's hours) or *Open for your plan*.
+  - On the Places tab, a row says *Closed now*, *Closed today* or *Closes 5 PM* (within
+    the hour), in the meta line as words, and a closed place's pin dims.
+- **"Now" is the phone's** (`?at=YYYY-MM-DDTHH:MM`, its own clock). The server runs in
+  UTC and never decides what time it is: `/api/space/:id/hours` without `at` is a 400.
+  The logic lives in one tested place on the server, like `kitchen.match`.
+- **Holidays are worked out, never fetched.** US for now (`holidayRegion`).
+  - On a `PH` day, a place's own rule (`PH off`, `PH 10:00-14:00`, read by `hours.phOf`)
+    is the truth.
+  - On a **major** holiday with no rule written (Thanksgiving, Christmas, New Year's,
+    the Fourth, Easter), it says *hours may differ* and keeps the usual hours. A
+    confident "closed" there would be a guess that looks like a fact.
+  - Hours that run past midnight count the next morning.
+- **The Places tab asks for every place at once, but only what is cached answers.** The
+  rest go through geo.js's one-a-second queue, and `pending` says to ask again, up to six
+  times. **The rows and pins are updated in place, never redrawn**: redrawing the list as
+  each place's hours arrived swallowed a tap on a row, and the browser check caught it.
+
 **Opening hours** are read by `lib/hours.js` — pure, small, and it gives up rather than
 guess: the common shapes (`Mo-Fr 08:00-17:00; Sa 10:00-14:00`, `24/7`, `off`, `Fr-Mo`
 wrapping, `PH` skipped) become a Monday-first week, a day no rule mentions is closed
@@ -1490,7 +1557,9 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `POST /api/item/:id/when` | put it on a day `{date, time?}` or `{clear:true}` — anyone who can see it |
 | `POST /api/item/:id/visit` | `{book?, again?, memory?}` — anyone who can see it; `again`/`memory` only once done (409) |
 | `GET /api/item/:id/weather` · `GET /api/space/:id/weather` | the weather at a place (now, rain soon, its plan) with how it suits the place's profile; the middle of a list's pins for the Places tab — only what you can see |
-| `GET /api/item/:id/place` | a place's hours, website, address — live from OSM by its id; 404 if you can't see it |
+| `GET /api/item/:id/show` · `GET /api/item/:id/show/season/:n` · `POST /api/item/:id/episodes {s, e?, seen}` | a show's seasons, episode names, and ticking one (or a whole season) — anyone who can see it; the last of an ended show ticks it off |
+| `GET /api/space/:id/hours?at=` | open or closed now for every place on the list, at the phone's time; `pending` says to ask again |
+| `GET /api/item/:id/place?at=` | a place's hours, website, address — live from OSM by its id — and open or closed now and on its plan; 404 if you can't see it |
 | `GET`·`POST /api/space/:id/pleasure` | the rose — pairs only; partner's try answers appear only as matches; `question` is today's Spicy one, answered here with `{ question: {date, text\|pick\|react\|reply} }` |
 | `POST /mcp` | the Claude connector — MCP over Streamable HTTP, bearer token only, read only |
 | `GET /.well-known/oauth-protected-resource[/mcp]` · `/.well-known/oauth-authorization-server` | connector discovery |
@@ -1592,6 +1661,10 @@ Not deployed yet. To bring it up:
 - **Andrew's backlog (Nov 25), roughly in order:**
   - **Suggestions**: what to do today, from the lists, the live weather and each place's
     weather profile. `placefit.judge` plus `weather.summary` are already the two halves.
+    **Films and shows too, "in the same manner"**: a profile made by Opus 5.5 the way
+    places have one, saying what kind of night each suits (mood, how much attention it
+    takes, length, a rainy-night film). For shows, where you are in it (`progress`) is
+    the obvious "keep going with this one".
   - **A location check**: how far apart the two of you are. This is a NEW disclosure,
     which nothing so far has needed: positions are never stored or sent today. It wants
     its own pure rule, opt-in per person, like `kitchen.canUse`.

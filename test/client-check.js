@@ -100,6 +100,16 @@ function connectCdp(wsUrl) {
       return;
     }
     if (req.url.startsWith('/search')) return res.end('[]');   // Nominatim: nowhere by that name
+    // TMDB, for a show's seasons: one that has ended, three episodes and two.
+    if (req.url.startsWith('/tmdb/tv/9001')) {
+      const pth = new URL(req.url, 'http://x').pathname;
+      if (pth.endsWith('/season/1') || pth.endsWith('/season/2')) {
+        return res.end(JSON.stringify({ episodes: [1, 2, 3].map(e => ({ episode_number: e, name: `Chapter ${e}`, air_date: '2019-01-01' })) }));
+      }
+      return res.end(JSON.stringify({ id: 9001, name: 'The Long Goodbye', status: 'Ended',
+        seasons: [{ season_number: 1, episode_count: 3 }, { season_number: 2, episode_count: 2 }],
+        last_episode_to_air: { season_number: 2, episode_number: 2 }, next_episode_to_air: null }));
+    }
     // Open-Meteo: a clear 20° afternoon, so the weather has something to show.
     if (req.url.startsWith('/v1/forecast')) {
       const day = new Date().toISOString().slice(0, 10);
@@ -911,7 +921,8 @@ function connectCdp(wsUrl) {
     check(/Toki Underground/.test(await evalJs(`document.getElementById('plWhere').innerText`)), 'saying which place it is');
     check(/destination=38\.9/.test(await evalJs(`document.getElementById('plDir').getAttribute('href')`)),
       'Directions go to the pin');
-    check(await visible('#plInfo') && /open today · 8 AM–5 PM/i.test(await evalJs(`document.getElementById('plInfo').innerText`)),
+    check(await visible('#plInfo') && /today 8 AM–5 PM/i.test(await evalJs(`document.getElementById('plInfo').innerText`))
+      && /(Open now · until 5 PM|Closed now · opens)/.test(await evalJs(`document.getElementById('plInfo').innerText`)),
       `its hours, read for today: ${await evalJs(`document.getElementById('plInfo').innerText`)}`);
     check(await evalJs(`document.getElementById('plWeb').getAttribute('href')`) === 'https://toki.example', 'and its website');
     const wx = await evalJs(`document.getElementById('plWx').innerText`);
@@ -1773,6 +1784,52 @@ function connectCdp(wsUrl) {
     // ── an invite, on a server with no Google and no Access ───────────────
     // The link is the sign-in: who sent it, a name, one tap, and you are in the
     // list. This server had shown "Sign-in is not configured" here.
+    // ── a show's episodes, and the finale ──────────────────────────────
+    // TMDB for this part only (the config is read live). Ticking the last
+    // episode of a show that has ended finishes it, and the poster flies off
+    // the shelf into Done together. Caught mid-flight, because an assertion
+    // made after it lands would pass just as well with no finale at all.
+    const cfgPath = path.join(dir, 'config.json');
+    const cfg0 = fs.readFileSync(cfgPath, 'utf8');
+    fs.writeFileSync(cfgPath, JSON.stringify({ ...JSON.parse(cfg0), tmdbKey: 'cc', tmdbEndpoint: `${FAKE}/tmdb` }));
+    const showIt = (await asApi(A, 'POST', '/api/space/sp1/item',
+      { title: 'The Long Goodbye', kind: 'show', mod: { watch: { tmdbId: 9001, mediaType: 'tv', title: 'The Long Goodbye' } } })).item;
+    await asUser(A);
+    await S('Page.navigate', { url: `${BASE}/?list=sp1` });
+    await sleep(2200);
+    // The list lands on its first tab once it has loaded; ask until Shows holds.
+    for (let i = 0; i < 6 && !(await evalJs(`!!document.querySelector('#kindNav [data-kind="show"].on')`)); i++) {
+      await evalJs(`(document.querySelector('#kindNav [data-kind="show"]') || { click() {} }).click()`);
+      await sleep(600);
+    }
+    if (await evalJs(`document.getElementById('tabDone').classList.contains('on')`)) { await evalJs(`document.getElementById('tabDone').click()`); await sleep(400); }
+    const showCard = `#itemList .card[data-it="${showIt.id}"]`;
+    await evalJs(`document.querySelector('${showCard} [data-open]').click()`);
+    await sleep(1400);
+    check(await visible('#isEpsFld') && await evalJs(`document.querySelectorAll('#isEps .ep').length`) === 3, "a show's sheet has its episodes, season 1 first");
+    const nextUp = await evalJs(`document.querySelector('#isEps .ep-next').innerText`);
+    check(/S1 · E1/.test(nextUp) && /Chapter 1/.test(nextUp), `and what is next, by name: ${nextUp}`);
+    await evalJs(`document.querySelector('#isEps [data-all]').click()`);
+    await sleep(900);
+    check(await evalJs(`document.getElementById('isEpsCount').innerText`) === '3 of 5', 'a whole season at once');
+    check(await evalJs(`!!document.querySelector('${showCard} .prog')`) && /S2 E1 next/.test(await evalJs(`document.querySelector('${showCard} .cap').innerText`)),
+      'and the poster behind the sheet shows how far, and what is next');
+    await evalJs(`document.querySelector('#isEps [data-next]').click()`);
+    await sleep(900);
+    await evalJs(`document.querySelector('#isEps [data-next]').click()`);   // the last one
+    await sleep(1700);
+    check(!(await visible('#itemSheet .modal-in')), 'the last episode closes the sheet');
+    check(await evalJs(`(() => { const c = document.querySelector('${showCard}.finale'); if (!c) return false;
+      const st = c.querySelector('.fin-stamp'); return !!st && getComputedStyle(c.querySelector('.art')).transform !== 'none'
+        && Number(getComputedStyle(st).opacity) > 0.3; })()`), 'and the finale plays on the poster: it lifts, and SEEN IT ALL lands');
+    await sleep(2600);
+    check(!(await evalJs(`!!document.querySelector('${showCard}')`)) && !(await evalJs(`!!document.querySelector('.card.flying')`)),
+      'then it has flown off the shelf');
+    check((await asApi(A, 'GET', '/api/space/sp1/items')).items.find(x => x.id === showIt.id).done, 'and the show is done together');
+    fs.writeFileSync(cfgPath, cfg0);
+    await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
+    await sleep(400);
+
     // The Claude row: the address to paste into Claude, and a code for a browser
     // that is not signed in here.
     await evalJs(`document.getElementById('btnMe').click()`);

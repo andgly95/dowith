@@ -1448,6 +1448,58 @@ function forecastFixture() {
   };
 }
 
+// Two made-up shows, the way TMDB's /tv/{id} answers: one that has ended
+// (with specials, which do not count), and one still running.
+const SHOW_ENDED = { id: 9001, name: 'Finale Test', status: 'Ended', poster_path: '/ft.jpg', first_air_date: '2019-01-01',
+  seasons: [{ season_number: 0, episode_count: 4, name: 'Specials' }, { season_number: 1, episode_count: 3, air_date: '2019-01-01' },
+    { season_number: 2, episode_count: 2, air_date: '2020-01-01' }],
+  last_episode_to_air: { season_number: 2, episode_number: 2, air_date: '2020-02-01' }, next_episode_to_air: null };
+const SHOW_RUNNING = { id: 9002, name: 'Still Going', status: 'Returning Series', poster_path: '/sg.jpg', first_air_date: '2024-01-01',
+  seasons: [{ season_number: 1, episode_count: 2, air_date: '2024-01-01' }, { season_number: 2, episode_count: 3, air_date: '2026-11-01' }],
+  last_episode_to_air: { season_number: 2, episode_number: 1, air_date: '2026-11-20' },
+  next_episode_to_air: { season_number: 2, episode_number: 2, air_date: '2026-11-27' } };
+function tmdbFixture(pathname) {
+  const m = /^\/tmdb\/tv\/(\d+)(\/season\/(\d+))?(\/watch\/providers)?$/.exec(pathname);
+  if (!m) return null;
+  const show = { 9001: SHOW_ENDED, 9002: SHOW_RUNNING }[m[1]];
+  if (!show) return null;
+  if (m[4]) return { results: {} };
+  if (m[3]) return { episodes: Array.from({ length: 3 }, (_, i) => ({ episode_number: i + 1, name: `Chapter ${i + 1}`, air_date: '2019-01-01', runtime: 50 })) };
+  return show;
+}
+
+async function episodeRules() {
+  console.log('\nshows — seasons and episodes');
+  const E = require('../lib/episodes');
+  await t('a show is counted by what has AIRED, specials left out, and finishing is for a show that has ended', () => {
+    const ended = E.shapeShow(SHOW_ENDED);
+    assert.deepStrictEqual(ended.seasons.map(x => [x.n, x.eps]), [[1, 3], [2, 2]], 'season 0 is specials, not the show');
+    const p0 = E.progress({ seen: {} }, ended);
+    assert.deepStrictEqual([p0.seen, p0.total, p0.next], [0, 5, { s: 1, e: 1 }]);
+    let seen = E.mark({ seen: {} }, ended, { s: 1, seen: true });
+    assert.deepStrictEqual(seen, { 1: [1, 2, 3] }, 'a whole season at once');
+    seen = E.mark({ seen }, ended, { s: 2, e: 1 });
+    assert.deepStrictEqual(E.progress({ seen }, ended).next, { s: 2, e: 2 });
+    seen = E.mark({ seen }, ended, { s: 2, e: 2 });
+    const done = E.progress({ seen }, ended);
+    assert.deepStrictEqual([done.all, done.finished, done.caughtUp, done.next], [true, true, false, null]);
+    assert.strictEqual(E.mark({ seen }, ended, { s: 3, e: 1 }), null, 'no such season');
+    assert.strictEqual(E.mark({ seen }, ended, { s: 1, e: 4 }), null, 'no such episode');
+    assert.deepStrictEqual(E.mark({ seen }, ended, { s: 1, e: 2, seen: false })[1], [1, 3], 'and un-ticking one');
+    assert.deepStrictEqual(E.cleanSeen({ 1: [3, 1, 1, 9, 'x', 2.5], 7: [1] }, ended), { 1: [1, 3] }, 'only real episodes, in order, once');
+
+    const running = E.shapeShow(SHOW_RUNNING);
+    assert.deepStrictEqual([E.airedIn(running, 1), E.airedIn(running, 2)], [2, 1], 'season 2 has aired up to its first episode');
+    assert.strictEqual(E.mark({ seen: {} }, running, { s: 2, e: 2 }), null, 'an episode not out yet cannot be ticked');
+    let r = E.mark({ seen: {} }, running, { s: 1, seen: true });
+    r = E.mark({ seen: r }, running, { s: 2, e: 1 });
+    const caught = E.progress({ seen: r }, running);
+    assert.deepStrictEqual([caught.all, caught.finished, caught.caughtUp, caught.total], [true, false, true, 3],
+      'a show still running is caught up, not finished');
+    assert.deepStrictEqual(caught.coming, { s: 2, e: 2, air: '2026-11-27' });
+  });
+}
+
 async function weatherRules() {
   console.log('\nweather, and what suits a place');
   await t('weather: read from Open-Meteo, rain coming, and the forecast for the planned hour', async () => {
@@ -1477,6 +1529,35 @@ async function weatherRules() {
     const down = async () => { throw new Error('offline'); };
     assert.strictEqual(await W.forecast(10, 10, { fetchImpl: down }), null);
     assert.ok(await W.forecast(10, 10, { fetchImpl: fake }), 'a failure is not remembered');
+  });
+
+  await t('open or closed: the hours, the holidays, and a place’s own holiday rule', () => {
+    const H = require('../lib/hours');
+    const D = require('../lib/holidays');
+    assert.deepStrictEqual(['2026-11-26', '2026-04-05', '2026-01-19', '2026-05-25', '2026-09-07', '2026-12-25'].map(d => (D.holidayOn(d) || {}).name),
+      ['Thanksgiving', 'Easter', 'Martin Luther King Jr. Day', 'Memorial Day', 'Labor Day', 'Christmas Day'], 'worked out, not fetched');
+    assert.strictEqual(D.holidayOn('2026-11-25'), null);
+    assert.strictEqual(D.holidayOn('2026-11-26', 'XX'), null, 'a region it has no table for has no holidays');
+    assert.deepStrictEqual([H.phOf('Mo-Fr 08:00-17:00; PH off'), H.phOf('PH 10:00-14:00'), H.phOf('Mo-Fr 08:00-17:00'), H.phOf('PH sunrise-sunset')],
+      [[], [['10:00', '14:00']], null, null]);
+    const hol = (d) => D.holidayOn(d);
+    const raw = 'Mo-Fr 08:00-17:00; Sa 10:00-14:00; PH off';
+    const at = (date, time) => H.stateAt(H.parse(raw), H.phOf(raw), { date, time, holidayOf: hol });
+    assert.deepStrictEqual([at('2026-11-25', '10:00').open, at('2026-11-25', '10:00').until], [true, '17:00']);
+    const evening = at('2026-11-25', '18:00');
+    assert.deepStrictEqual([evening.open, evening.closedAllDay, evening.opens], [false, false, { date: '2026-11-27', time: '08:00' }],
+      'closed now, and the next opening skips Thanksgiving, because its hours say PH off');
+    const tg = at('2026-11-26', '10:00');
+    assert.deepStrictEqual([tg.open, tg.closedAllDay, tg.holiday, tg.holidayRule], [false, true, 'Thanksgiving', true]);
+    const sat = at('2026-11-28', '09:00');
+    assert.deepStrictEqual([sat.open, sat.opens], [false, { date: '2026-11-28', time: '10:00' }], 'not yet: opens later today');
+    const sun = at('2026-11-29', null);
+    assert.deepStrictEqual([sun.closedAllDay, sun.open, sun.opens], [true, null, { date: '2026-11-30', time: '08:00' }], 'a whole day, asked about');
+    const noRule = H.stateAt(H.parse('Mo-Su 09:00-21:00'), null, { date: '2026-11-26', time: '10:00', holidayOf: hol });
+    assert.deepStrictEqual([noRule.open, noRule.mayDiffer], [true, true], 'no rule written: the usual hours, and "may differ" — never a guessed "closed"');
+    const late = H.stateAt(H.parse('Mo-Su 18:00-02:00'), null, { date: '2026-11-25', time: '01:00', holidayOf: hol });
+    assert.deepStrictEqual([late.open, late.until], [true, '02:00'], 'last night’s hours run past midnight');
+    assert.strictEqual(H.stateAt(null, null, { date: '2026-11-25', time: '10:00', holidayOf: hol }).known, false, 'no hours, no claim');
   });
 
   await t("a place's weather profile: only what applies is kept, and nonsense is not", () => {
@@ -1704,6 +1785,12 @@ async function server() {
     if (req.url.startsWith('/r/')) return recipeFixture(req, res);
     // And Open-Meteo, for the weather on a place.
     if (req.url.startsWith('/v1/forecast')) return res.end(JSON.stringify(forecastFixture()));
+    // And TMDB, for a show's seasons.
+    if (req.url.startsWith('/tmdb/')) {
+      const tv = tmdbFixture(new URL(req.url, 'http://x').pathname);
+      if (!tv) { res.statusCode = 404; return res.end('{}'); }
+      return res.end(JSON.stringify(tv));
+    }
     // And for Nominatim's lookup, which the place page asks for hours.
     if (req.url.startsWith('/lookup')) {
       return res.end(JSON.stringify([{
@@ -2853,6 +2940,70 @@ async function server() {
     assert.strictEqual(last.body.why, 'slow-down', 'thirty an hour');
   });
 
+  await t('a show’s episodes: anyone who can see it ticks them, the last one of a show that has ended finishes it', async () => {
+    // TMDB, for this test only: the config is read live.
+    const setTmdb = (on) => {
+      const c = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+      if (on) Object.assign(c, { tmdbKey: 'test-tmdb', tmdbEndpoint: `http://127.0.0.1:${photon.address().port}/tmdb` });
+      else { delete c.tmdbKey; delete c.tmdbEndpoint; }
+      fs.writeFileSync(cfgFile, JSON.stringify(c), { mode: 0o600 });
+    };
+    setTmdb(true);
+    try {
+      const mk = async (title, tmdbId) => (await api('POST', '/api/space/sp1/item',
+        { title, kind: 'show', mod: { watch: { tmdbId, mediaType: 'tv', title } } }, A)).body.item;
+      const show = await mk('EP finale test', 9001);
+      const ep = (body, as) => api('POST', `/api/item/${show.id}/episodes`, body, as);
+      const first = (await api('GET', `/api/item/${show.id}/show`, null, A)).body;
+      assert.deepStrictEqual([first.ok, first.progress.total, first.progress.next], [true, 5, { s: 1, e: 1 }]);
+      assert.strictEqual((await api('GET', `/api/item/${show.id}/show/season/1`, null, L)).body.episodes[0].name, 'Chapter 1');
+      assert.strictEqual((await ep({ s: 1, e: 1 }, S)).status, 404, 'not his list, not his show');
+      assert.strictEqual((await ep({ s: 1, e: 9 }, L)).status, 400);
+      const one = (await ep({ s: 1, e: 1 }, L)).body;
+      assert.deepStrictEqual([one.progress.seen, one.finished], [1, false], 'she may tick it: watching it is doing it');
+      await ep({ s: 1, seen: true }, A);
+      const shelf = (await api('GET', '/api/space/sp1/items', null, A)).body.items.find(x => x.id === show.id);
+      assert.deepStrictEqual([shelf.progress.seen, shelf.progress.total, shelf.progress.next], [3, 5, { s: 2, e: 1 }], 'the shelf knows how far');
+      assert.strictEqual(shelf.episodes, undefined, 'and only that');
+      await api('PATCH', `/api/item/${show.id}`, { title: 'EP finale test', kind: 'show', episodes: { of: 9001, seen: { 2: [1, 2] } } }, A);
+      assert.strictEqual((await api('GET', `/api/item/${show.id}/show`, null, A)).body.progress.seen, 3, 'a PATCH cannot tick episodes');
+      await ep({ s: 2, e: 1 }, L);
+      const last = (await ep({ s: 2, e: 2 }, L)).body;
+      assert.deepStrictEqual([last.finished, last.item.done, last.item.doneBy], [true, true, L], 'the last episode ticks the show off, as hers');
+      const again = (await ep({ s: 2, e: 2, seen: false }, L)).body;
+      assert.deepStrictEqual([again.finished, again.item.done], [false, true], 'un-ticking an episode does not un-finish the show');
+
+      const running = await mk('EP still going', 9002);
+      const r1 = (await api('POST', `/api/item/${running.id}/episodes`, { s: 1, seen: true }, A)).body;
+      assert.strictEqual(r1.finished, false);
+      assert.strictEqual((await api('POST', `/api/item/${running.id}/episodes`, { s: 2, e: 2 }, A)).status, 400, 'not out yet');
+      const r2 = (await api('POST', `/api/item/${running.id}/episodes`, { s: 2, e: 1 }, A)).body;
+      assert.deepStrictEqual([r2.caughtUp, r2.finished, r2.item.done], [true, false, false], 'caught up, and still on the shelf');
+
+      // Pinned to a different show, the episodes go with the old one.
+      const moved = (await api('POST', `/api/item/${running.id}/watch`, { tmdbId: 9001 }, A)).body.item;
+      assert.strictEqual(moved.progress, null);
+    } finally { setTmdb(false); }
+  });
+
+  await t('open or closed at a place: at the phone’s time, with its plan, and for the whole Places tab', async () => {
+    const mk = async (body, as) => (await api('POST', '/api/space/sp1/item', body, as)).body.item;
+    const shop = await mk({ title: 'HR shop', kind: 'place', mod: { place: { name: 'HR shop', lat: 38.9, lon: -77.0, osm: 'N777' } } }, A);
+    await api('POST', `/api/item/${shop.id}/when`, { date: '2026-11-29', time: '12:00' }, A);   // a Sunday
+    const at = (when) => api('GET', `/api/item/${shop.id}/place?at=${when}`, null, A);
+    const wed = (await at('2026-11-25T10:00')).body;
+    assert.deepStrictEqual([wed.now.open, wed.now.until], [true, '17:00'], 'the stand-in: Mo-Fr 08:00-17:00; Sa 10:00-14:00');
+    assert.deepStrictEqual([wed.plan.closedAllDay, wed.plan.opens], [true, { date: '2026-11-30', time: '08:00' }], 'and closed on its planned Sunday');
+    const tg = (await at('2026-11-26T10:00')).body.now;
+    assert.deepStrictEqual([tg.open, tg.holiday, tg.mayDiffer], [true, 'Thanksgiving', true], 'no PH rule: usual hours, "may differ"');
+    assert.strictEqual((await api('GET', `/api/item/${shop.id}/place`, null, A)).body.now, null, 'no time from the phone, no "now"');
+    const tab = await api('GET', '/api/space/sp1/hours?at=2026-11-28T16:00', null, A);
+    assert.deepStrictEqual([tab.body.states[shop.id].open, tab.body.states[shop.id].opens], [false, { date: '2026-11-30', time: '08:00' }],
+      'Saturday after two: closed, opens Monday');
+    assert.strictEqual((await api('GET', '/api/space/sp1/hours', null, A)).status, 400, 'the server never decides what time it is');
+    assert.strictEqual((await api('GET', '/api/space/sp1/hours?at=2026-11-28T16:00', null, S)).status, 404);
+  });
+
   await t('weather at a place: through its pin, only for those who can see it, with its plan', async () => {
     const mk = async (body, as) => (await api('POST', '/api/space/sp1/item', body, as)).body.item;
     const bar = await mk({ title: 'WX bar', kind: 'place', mod: { place: { name: 'WX bar', lat: 38.90012, lon: -76.98765 } } }, A);
@@ -3712,6 +3863,7 @@ async function placeSuggestions() {
   await geocoding();
   await placeSuggestions();
   await recipes();
+  await episodeRules();
   await weatherRules();
   await connectorRules();
   await server();

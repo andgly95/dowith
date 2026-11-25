@@ -112,6 +112,7 @@ function sortPlaces(list, been) {
 }
 
 export function renderPlaces(list, { open, done, been }) {
+  lastPlaces = [list, { open, done, been }];
   shown = { open, done, been };
   askHere();
   $('plGo').setAttribute('aria-pressed', String(!been));
@@ -150,6 +151,8 @@ export function renderPlaces(list, { open, done, been }) {
       + (items.length ? `<div class="group">${items.map((it) => {
         const bits = placeLine(it).filter(Boolean).map(t => `<span>${esc(t)}</span>`);
         if (it.visibility === 'private') bits.unshift('<span class="chip private">Just you</span>');
+        const oc = been ? '' : openChip(openStates.get(it.id));
+        if (oc) bits.unshift(oc.replace('<span ', '<span data-oc '));
         return rowHtml(it, bits, {
           by: together ? initialOf(it.ideaByName || it.author.name) : null,
           sel: it.id === sel,
@@ -170,6 +173,7 @@ export function renderPlaces(list, { open, done, been }) {
   if (undo) undo.addEventListener('click', undoPin);
   drawBig();
   paintTabWeather();
+  loadOpenStates();
 }
 
 /* ── the list is a sheet you can pull ─────────────────────────────────────
@@ -281,7 +285,7 @@ function bigPoints() {
     const p = pinOf(it);
     if (!p) continue;
     pts.push({ id: it.id, lat: p.lat, lon: p.lon, label: it.title, fit: !choosing,
-      cls: `epin ${been ? 'been' : 'go'}${it.id === sel ? ' sel' : ''}`, inner: bubble(it, { selected: it.id === sel }) });
+      cls: `epin ${been ? 'been' : 'go'}${it.id === sel ? ' sel' : ''}${!been && shutNow(it.id) ? ' shut' : ''}`, inner: bubble(it, { selected: it.id === sel }) });
   }
   // The other set stays as dots, so switching never empties the map.
   for (const it of been ? open : done) {
@@ -587,18 +591,35 @@ function paintPage(it, { fresh = false } = {}) {
 async function loadDetails(it) {
   if (!(it.mod && it.mod.place && it.mod.place.osm)) return;
   let b;
-  try { b = await get(`/api/item/${it.id}/place`); } catch (_) { return; }
+  try { b = await get(`/api/item/${it.id}/place?at=${localAt()}`); } catch (_) { return; }
   if (page !== it.id || !b || !b.details) return;
   const d = b.details;
   const rows = [];
-  const todayIx = (new Date().getDay() + 6) % 7;
-  if (d.week) {
-    const today = d.week[todayIx] || [];
-    const all = today.length === 1 && today[0][0] === '00:00' && today[0][1] === '24:00';
-    rows.push(['clock', today.length
-      ? `<span class="open">Open today</span> · ${all ? 'all day' : today.map(r => `${hm(r[0])}–${hm(r[1])}`).join(', ')}`
-      : '<span class="shut">Closed today</span>']);
+  const st = b.now;
+  if (st && st.known) {
+    // Now, and today's hours under it — the holiday's, when it has a rule.
+    const lead = st.open ? `<span class="open">Open now</span> · until ${hm(st.until)}`
+      : st.closedAllDay ? `<span class="shut">Closed today</span>${st.holiday ? ` · ${esc(st.holiday)}` : ''}${st.opens ? ` · opens ${esc(opensWords(st.opens))}` : ''}`
+      : `<span class="shut">Closed now</span>${st.opens ? ` · opens ${esc(opensWords(st.opens))}` : ''}`;
+    const all = st.ranges.length === 1 && st.ranges[0][0] === '00:00' && st.ranges[0][1] === '24:00';
+    const todays = st.ranges.length ? `Today ${all ? 'all day' : st.ranges.map(r => `${hm(r[0])}–${hm(r[1])}`).join(', ')}` : '';
+    rows.push(['clock', `${lead}${todays && !st.closedAllDay ? `<small>${esc(todays)}${st.holidayRule ? ` · ${esc(st.holiday)} hours` : ''}</small>` : ''}`]);
   } else if (d.hours) rows.push(['clock', esc(d.hours)]);
+  // A big holiday with no rule written down: said, never guessed at.
+  if (st && st.mayDiffer) rows.push(['cal', `<span class="hol">${esc(st.holiday)}</span> · hours may differ`]);
+  // The day it is planned for: closed then is worth saying before you go.
+  const pl = b.plan;
+  if (pl && pl.known && it.when) {
+    const when = `${dayLabel(it.when.date)}${it.when.time ? ` · ${timeLabel(it.when.time)}` : ''}`;
+    const hrs = pl.ranges.length ? pl.ranges.map(r => `${hm(r[0])}–${hm(r[1])}`).join(', ') : '';
+    rows.push(['cal', pl.closedAllDay
+      ? `<span class="shut">Closed on your plan</span> · ${esc(when)}${pl.holiday ? ` · ${esc(pl.holiday)}` : ''}`
+      : it.when.time && pl.open === false
+        ? `<span class="shut">Closed at that time</span> · ${esc(when)}<small>Open ${esc(hrs)} that day</small>`
+        : pl.mayDiffer
+          ? `<span class="hol">${esc(pl.holiday)}</span> on your plan · hours may differ`
+          : `<span class="open">Open for your plan</span> · ${esc(when)}${hrs ? `<small>${esc(hrs)}</small>` : ''}`]);
+  }
   if (d.address) rows.push(['pin', esc(d.address)]);
   if (d.website) rows.push(['globe', `<a href="${esc(d.website)}" target="_blank" rel="noopener noreferrer">${esc(d.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</a>`]);
   if (d.phone) rows.push(['phone', `<a href="tel:${esc(d.phone.replace(/[^\d+]/g, ''))}">${esc(d.phone)}</a>`]);
@@ -611,6 +632,84 @@ async function loadDetails(it) {
   $('plInfo').classList.add('rows');
   $('plInfo').hidden = false;
   $('plSrc').hidden = false;
+}
+
+// The phone's own date and clock — what "now" means for open or closed.
+const pad2 = (n) => String(n).padStart(2, '0');
+function localAt(d = new Date()) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+// When it next opens, said the way you would: "5 PM", "tomorrow 8 AM", "Fri 8 AM".
+function opensWords(o) {
+  const today = localAt().slice(0, 10);
+  const tomorrow = localAt(new Date(Date.now() + 864e5)).slice(0, 10);
+  if (o.date === today) return hm(o.time);
+  if (o.date === tomorrow) return `tomorrow ${hm(o.time)}`;
+  return `${new Date(`${o.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' })} ${hm(o.time)}`;
+}
+
+/* ── open or closed, on the Places tab ──────────────────────────────────
+   For every place on the list, from the server (which reads the hours and the
+   holidays in one tested place) at the phone's own time. Only what is known is
+   answered at first; `pending` places are asked for again shortly. A row says
+   so when a place is closed, or closing within the hour, or it is a holiday
+   that may change its hours; its pin dims while it is shut. */
+const openStates = new Map();
+const hoursFor = { sig: null, at: 0, tries: 0 };
+let lastPlaces = null;   // what renderPlaces last drew, so the hours know which tab is up
+async function loadOpenStates({ force = false } = {}) {
+  const sid = S.spaceId;
+  const sig = `${sid}:${(S.items || []).length}`;
+  if (!force && hoursFor.sig === sig && Date.now() - hoursFor.at < 5 * 60e3) return;
+  if (hoursFor.sig !== sig) { openStates.clear(); hoursFor.tries = 0; }
+  hoursFor.sig = sig;
+  hoursFor.at = Date.now();
+  let b;
+  try { b = await get(`/api/space/${sid}/hours?at=${localAt()}`); } catch (_) { hoursFor.at = 0; return; }
+  if (S.spaceId !== sid || !b) return;
+  const before = JSON.stringify([...openStates]);
+  openStates.clear();
+  for (const [id, st] of Object.entries(b.states || {})) openStates.set(id, st);
+  if (JSON.stringify([...openStates]) !== before && !$('placesTop').hidden) paintOpenStates();
+  if (b.pending && hoursFor.tries < 6) {
+    hoursFor.tries++;
+    setTimeout(() => { if (S.spaceId === sid) loadOpenStates({ force: true }); }, Math.min(8000, 1200 * b.pending));
+  }
+}
+// Into the rows and pins already on screen — never a redraw of the list, which
+// would swallow a tap that landed while the hours were still arriving.
+function paintOpenStates() {
+  if (!lastPlaces || lastPlaces[1].been) return;
+  for (const row of $('itemList').querySelectorAll('.it[data-it]')) {
+    const old = row.querySelector('[data-oc]');
+    if (old) old.remove();
+    const chip = openChip(openStates.get(row.dataset.it));
+    if (!chip) continue;
+    let meta = row.querySelector('.it-meta');
+    if (!meta) {
+      meta = document.createElement('div');
+      meta.className = 'it-meta';
+      row.querySelector('.it-bd').appendChild(meta);
+    }
+    meta.insertAdjacentHTML('afterbegin', chip.replace('<span ', '<span data-oc '));
+  }
+  drawBig();
+}
+const shutNow = (id) => { const st = openStates.get(id); return !!(st && st.known && st.open === false); };
+function openChip(st) {
+  if (!st) return '';
+  if (st.known && st.open === false) {
+    return `<span class="chip shut">${st.closedAllDay ? `Closed today${st.holiday ? ` · ${esc(st.holiday)}` : ''}`
+      : `Closed now${st.opens && st.opens.date === localAt().slice(0, 10) ? ` · opens ${esc(hm(st.opens.time))}` : ''}`}</span>`;
+  }
+  if (st.mayDiffer) return `<span class="chip hol">${esc(st.holiday)} · hours may differ</span>`;
+  if (st.known && st.open && st.until && st.until !== '24:00') {
+    const [h, m] = st.until.split(':').map(Number);
+    const now = new Date();
+    const left = (h * 60 + m) - (now.getHours() * 60 + now.getMinutes());
+    if (left > 0 && left <= 60) return `<span class="chip soon">Closes ${esc(hm(st.until))}</span>`;
+  }
+  return '';
 }
 
 // "08:00" → "8 AM", "17:30" → "5:30 PM".

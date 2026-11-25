@@ -17,7 +17,8 @@ import { initSwap } from './swap.js';
 import { loadQuestion, questionCardHtml, bindQuestionCard, initQuestion, openQuestionSettings } from './question.js';
 import { initKitchen } from './kitchen.js';
 import { initCook } from './cook.js';
-import { haptic, fadeIn, skeleton } from './motion.js';
+import { haptic, fadeIn, skeleton, burst } from './motion.js';
+import { paintEpisodes } from './eps.js';
 
 let onChange = () => {};
 let onBack = () => {};
@@ -488,19 +489,23 @@ function cardHtml(it) {
   const src = posterSrc(w);
   const year = w && w.year ? String(w.year) : '';
   const prov = (w && w.providers) || [];
+  // A show you are partway through: how far, and what is next (lib/episodes.js).
+  const pr = !it.done && it.progress && it.progress.total && it.progress.seen ? it.progress : null;
+  const where = pr ? (pr.caughtUp ? 'caught up' : pr.next ? `S${pr.next.s} E${pr.next.e} next` : '') : '';
   return `<div class="card ${it.done ? 'done' : ''}" data-it="${esc(it.id)}">
     <div class="art" data-open>
       ${src
     ? `<img class="fade" src="${esc(src)}" alt="" loading="lazy" decoding="async">`
     : `<div class="noart"><span>${esc(it.title)}</span></div>`}
       ${it.done ? '<div class="seen">Seen</div>' : ''}
+      ${pr ? `<span class="prog" aria-hidden="true"><i style="width:${Math.round((pr.seen / pr.total) * 100)}%"></i></span>` : ''}
       <button class="tick" data-tick aria-label="${it.done ? 'Not done after all' : 'Done'}">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"/></svg>
       </button>
     </div>
     <div class="cap" data-open>
       <b>${esc(it.title)}</b>
-      ${year ? `<small>${esc(year)}</small>` : ''}
+      ${year || where ? `<small>${esc([year, where].filter(Boolean).join(' · '))}</small>` : ''}
     </div>
     ${prov.length ? `<div class="prov">${prov.map(p => (logoSrc(p)
     ? `<img src="${esc(logoSrc(p))}" alt="${esc(p.name)}" title="${esc(p.name)}" loading="lazy">`
@@ -919,6 +924,54 @@ function closeUp(was) {
   });
 }
 
+/* ── the finale ────────────────────────────────────────────────────────────
+   The last episode of a show, ticked in its sheet. Bigger than an ordinary
+   tick, because it is: the poster lifts, a shine runs across it, SEEN IT ALL
+   lands on it like a stamp, a ring of sparks goes out — and then it flies off
+   the shelf into Done together, the shelf closes up behind it, and the count
+   springs. The server has already ticked it off (lib/episodes.js); this is the
+   moment, over a screen that is already right. Reduced motion gets the state. */
+const pause = (ms) => new Promise(r => setTimeout(r, ms));
+export async function finale(id, b) {
+  const land = async (was) => {
+    applyWire(b.state);
+    await refresh();
+    onChange();
+    if (was) closeUp(was);
+    doneLanded();
+  };
+  const card = $('itemList').querySelector(`.card[data-it="${CSS.escape(id)}"]`);
+  if (calm() || !card || !card.animate) return land(null);
+  await pause(260);   // the sheet falls away first
+  card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  const art = card.querySelector('.art');
+  card.classList.add('finale');
+  art.insertAdjacentHTML('beforeend', '<i class="fin-shine" aria-hidden="true"></i><span class="fin-stamp" aria-hidden="true">Seen it all</span>');
+  setTimeout(() => burst(art, { r: 64, n: 14, size: 6, ring: 1.5 }), 380);
+  await pause(1400);
+  const was = new Map([...$('itemList').querySelectorAll('[data-it]')].map(el => [el.dataset.it, el.getBoundingClientRect()]));
+  // Off the shelf, toward where it is going. A copy flies, fixed over the
+  // whole screen: the shelf scrolls inside its own box, which would clip the
+  // real card at its top edge, well short of the Done together toggle.
+  const a = card.getBoundingClientRect();
+  const to = ($('tabDone') || card).getBoundingClientRect();
+  const dx = (to.left + to.width / 2) - (a.left + a.width / 2);
+  const dy = (to.top + to.height / 2) - (a.top + a.height / 2);
+  const fly = card.cloneNode(true);
+  fly.classList.add('flying');
+  fly.querySelectorAll('.fx').forEach(x => x.remove());
+  Object.assign(fly.style, { left: `${a.left}px`, top: `${a.top}px`, width: `${a.width}px` });
+  document.body.appendChild(fly);
+  card.style.visibility = 'hidden';
+  await fly.animate([
+    { transform: 'none', opacity: 1 },
+    { transform: `translate(${dx * 0.3}px, ${dy * 0.3 - 40}px) scale(.8) rotate(-6deg)`, opacity: 1, offset: 0.35 },
+    { transform: `translate(${dx}px, ${dy}px) scale(.1) rotate(-14deg)`, opacity: 0.1 },
+  ], { duration: 640, easing: 'cubic-bezier(.45,0,.7,.5)', fill: 'forwards' }).finished.catch(() => {});
+  fly.remove();
+  await land(was);
+}
+
 export async function toggle(id) {
   const it = S.items.find(x => x.id === id);
   if (!it) return;
@@ -986,6 +1039,17 @@ export function openItem(id, { generic = false } = {}) {
   kindPicker($('isKind'), () => editingKind, (k) => { editingKind = k; kindFields(); });
   kindFields();
   paintWatchRow(it);
+  // A show's seasons and episodes, to tick as you watch (eps.js).
+  paintEpisodes(it, {
+    toast,
+    changed: (b) => {
+      const i = S.items.findIndex(x => x.id === b.item.id);
+      if (i >= 0) S.items[i] = { ...S.items[i], ...b.item };
+      applyWire(b.state);
+      render();
+    },
+    finished: (fid, b) => { closeSheet('itemSheet'); finale(fid, b); },
+  });
   paintWhen(it);
   // Somebody else's wording is theirs. You can see it and tick it off; you cannot
   // rewrite it — unless the server says you can (an admin, correcting things).
