@@ -675,6 +675,18 @@ button.crow:active{background:var(--card2)}
 
 /* The theme picker: each card IS the theme (data-theme on it), so the tiny list
    it draws is painted from the palette it would switch to. */
+/* The Claude sheet (connect.js). */
+.cl-note{color:var(--ink2);font-size:14.5px;line-height:1.55;margin:0 2px 14px}
+.cl-steps{margin:0 0 10px;padding-left:22px;color:var(--ink2);font-size:14.5px;line-height:1.55}
+.cl-steps li{margin-bottom:4px}
+.cl-steps b{color:var(--ink);font-weight:600}
+.cl-url{display:flex;align-items:center;gap:8px;background:var(--card);border-radius:var(--r-field);padding:6px 6px 6px 12px;margin:0 0 14px}
+.cl-url code{flex:1;min-width:0;font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent);word-break:break-all}
+.cl-url button{flex:none;min-height:var(--tap);padding:0 14px;border-radius:12px;background:var(--accent-tint);color:var(--accent);font:600 14px/1 var(--sans)}
+.cl-code{text-align:center;background:var(--card);border-radius:var(--r-card);padding:14px;margin:6px 0 4px}
+.cl-code b{display:block;font:600 28px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:3px;color:var(--ink)}
+.cl-code small{display:block;color:var(--dim);font-size:13px;margin-top:4px}
+.cl-conn .val button{color:var(--warn);font:600 14px/1 var(--sans);min-height:var(--tap);padding:0 2px}
 .theme-box{margin-bottom:14px}
 .theme-box .sec{margin-top:6px}
 .theme-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
@@ -921,6 +933,27 @@ button.crow:active{background:var(--card2)}
 .glass-btn.rose-btn{color:var(--dim)}
 .glass-btn.rose-btn svg{stroke-width:1.6}
 .pl-seg{display:flex;gap:2px;padding:4px;border-radius:24px;background:var(--glass)}
+/* The weather over the Places map (pl.js, lib/weather.js): under the floating row, left. */
+.pl-wx{position:absolute;left:8px;top:calc(var(--safe-t) + 8px + var(--tap) + 8px);z-index:6;
+  display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:18px;background:var(--glass);
+  color:var(--ink);font:500 14px/1.2 var(--sans);max-width:calc(100% - 16px);pointer-events:none}
+.pl-wx b{font-weight:600}
+.pl-wx small{color:var(--ink2);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* …and on a place's page. */
+.box.wx{padding:14px 16px 10px}
+.wx-now{display:flex;align-items:center;gap:12px}
+.wx-i{font-size:30px;line-height:1}
+.wx-t{flex:1;min-width:0}
+.wx-t b{display:block;font:600 22px/1.1 var(--sans)}
+.wx-t small{display:block;color:var(--dim);font-size:13.5px;margin-top:2px}
+.wx-hl{flex:none;color:var(--ink2);font-size:14px}
+.wx-line{color:var(--ink2);font-size:14px;line-height:1.45;margin-top:8px}
+.wx-line b{color:var(--ink);font-weight:600}
+.wx-ok{color:var(--accent2);font-weight:600}
+.wx-meh{color:var(--ink);font-weight:600}
+.wx-no{color:var(--warn);font-weight:600}
+.wx-fit{color:var(--dim);font-size:13.5px}
+.wx-src{color:var(--dim);font-size:12px;margin:8px 0 0}
 .pl-seg button{min-height:38px;border-radius:19px;padding:0 14px;color:var(--ink2);
   display:flex;align-items:center;gap:6px;font:600 14px/1 var(--sans)}
 .pl-seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}

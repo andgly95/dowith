@@ -22,6 +22,7 @@ import { get, post, patch, del, applyWire } from './api.js';
 import { createMap } from './map.js';
 import { icon, iconFor } from './icons.js';
 import { dayLabel, timeLabel } from './calendar.js';
+import { wxOf, deg, hourWords } from './wx.js';
 import {
   render, refresh, changed, rowHtml, visRow, kindList, kindOf, kindOrDefault,
   kindPicker, ideaControl, whenHint, setTab,
@@ -168,6 +169,7 @@ export function renderPlaces(list, { open, done, been }) {
   const undo = list.querySelector('[data-undo]');
   if (undo) undo.addEventListener('click', undoPin);
   drawBig();
+  paintTabWeather();
 }
 
 /* ── the list is a sheet you can pull ─────────────────────────────────────
@@ -413,6 +415,99 @@ export function openPlace(id) {
   requestAnimationFrame(() => { if (snip) snip.refit(); });
   if (big && pinOf(it)) big.focus(id);
   loadDetails(it);
+  loadWeather(it);
+}
+
+/* ── weather ──────────────────────────────────────────────────────────────
+   At the place, now; rain coming in the next few hours; and the day it is
+   planned for, at its hour when it has one. From lib/weather.js, through the
+   server, by the place's pin — fetched fresh each time the page opens, and the
+   Places tab's pill whenever it is drawn and ten minutes old. */
+async function loadWeather(it) {
+  const box = $('plWx');
+  box.hidden = true;
+  if (!pinOf(it)) return;
+  let b;
+  try { b = await get(`/api/item/${it.id}/weather`); } catch (_) { return; }
+  if (page !== it.id || !b || !b.weather) return;
+  const w = b.weather;
+  const now = wxOf(w.now.code, w.now.day);
+  const lines = [];
+  const fit = b.fit;
+  const verdict = (j, when) => (!j ? ''
+    : j.verdict === 'good' ? `<span class="wx-ok">Good weather for it ${when}</span>`
+    : j.verdict === 'poor' ? `<span class="wx-no">Not ideal ${when} · ${esc(j.why.map(words).join(', '))}</span>`
+    : `<span class="wx-meh">Not quite ideal ${when} · ${esc(j.why.map(words).join(', '))}</span>`);
+  if (b.judge && b.judge.now) lines.push(verdict(b.judge.now, 'right now'));
+  if (w.rainSoon) lines.push(`${wxOf(61).icon} Rain likely around ${esc(hourWords(w.rainSoon.time))} · ${w.rainSoon.rain}%`);
+  else if (w.today && w.today.rain >= 30) lines.push(`${w.today.rain}% chance of rain today`);
+  const pl = w.plan;
+  if (pl && !(pl.date === (w.today && w.today.date) && !pl.hour)) {
+    const at = pl.hour
+      ? `${wxOf(pl.hour.code).icon} ${deg(pl.hour.t)} · ${esc(wxOf(pl.hour.code).label.toLowerCase())}${pl.hour.rain >= 20 ? ` · ${pl.hour.rain}% rain` : ''}`
+      : `${wxOf(pl.code).icon} ${deg(pl.hi)} / ${deg(pl.lo)}${pl.rain >= 20 ? ` · ${pl.rain}% rain` : ''}`;
+    lines.push(`<b>Your plan</b>, ${esc(dayLabel(pl.date))}${pl.time ? ` · ${esc(timeLabel(pl.time))}` : ''}: ${at}`
+      + (b.judge && b.judge.plan ? `<br>${verdict(b.judge.plan, 'then')}` : ''));
+  }
+  // What Claude said suits this place (lib/placefit.js) — only what applies.
+  if (fit) lines.push(`<span class="wx-fit">${esc(fitWords(fit))}</span>`);
+  box.innerHTML = `<div class="wx-now"><span class="wx-i" aria-hidden="true">${now.icon}</span>
+      <span class="wx-t"><b>${deg(w.now.t)}</b><small>${esc(now.label)}${Number.isFinite(w.now.feels) && Math.abs(w.now.feels - w.now.t) >= 2 ? ` · feels ${deg(w.now.feels)}` : ''}</small></span>
+      ${w.today ? `<span class="wx-hl">H ${deg(w.today.hi)} · L ${deg(w.today.lo)}</span>` : ''}</div>
+    ${lines.map(l => `<div class="wx-line">${l}</div>`).join('')}
+    <p class="wx-src">Weather there now · Open-Meteo</p>`;
+  box.hidden = false;
+}
+
+// A profile's words for a condition, and the profile as one line.
+const COND = { clear: 'clear skies', partly_cloudy: 'some cloud', overcast: 'cloud', fog: 'fog', drizzle: 'drizzle', rain: 'rain',
+  snow: 'snow', thunderstorm: 'storms', windy: 'wind' };
+const words = (x) => COND[x] || x;
+const andList = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} or ${xs[xs.length - 1]}`);
+function fitWords(f) {
+  if (!f.matters) return f.setting === 'indoors' ? 'Indoors — the weather won’t matter.' : 'The weather won’t matter much here.';
+  const best = [];
+  if (f.ideal && f.ideal.conditions) best.push(andList(f.ideal.conditions.map(words)));
+  if (f.ideal && (f.ideal.minC !== null || f.ideal.maxC !== null)) {
+    best.push(f.ideal.minC !== null && f.ideal.maxC !== null ? `${deg(f.ideal.minC)}–${deg(f.ideal.maxC)}`
+      : f.ideal.minC !== null ? `above ${deg(f.ideal.minC)}` : `below ${deg(f.ideal.maxC)}`);
+  }
+  if (f.bestTime && f.bestTime !== 'any') best.push(`in the ${f.bestTime}`);
+  if (f.seasons) best.push(`in ${andList(f.seasons)}`);
+  const worst = [];
+  if (f.avoid && f.avoid.conditions && f.avoid.conditions.length) worst.push(andList(f.avoid.conditions.map(words)));
+  if (f.avoid && f.avoid.belowC !== null) worst.push(`below ${deg(f.avoid.belowC)}`);
+  if (f.avoid && f.avoid.aboveC !== null) worst.push(`above ${deg(f.avoid.aboveC)}`);
+  const out = [best.length ? `Best with ${best.join(', ')}` : null, worst.length ? `spoiled by ${worst.join(', ')}` : null].filter(Boolean);
+  return out.length ? `${out.join(' · ')}.` : (f.why || '');
+}
+
+// The pill over the Places map: the weather in the middle of this list's pins.
+// Kept ten minutes per list and set of pins — a list that had none a moment
+// ago and has one now is asked again.
+const tabWx = { sig: null, at: 0, w: null };
+async function paintTabWeather() {
+  const pill = $('plWxPill');
+  const sid = S.spaceId;
+  const sig = `${sid}:${(S.items || []).filter(pinOf).length}`;
+  const fresh = tabWx.sig === sig && Date.now() - tabWx.at < 10 * 60e3;
+  const draw = (w) => {
+    if (!w) { pill.hidden = true; return; }
+    const now = wxOf(w.now.code, w.now.day);
+    const extra = w.rainSoon ? `rain around ${hourWords(w.rainSoon.time)}` : now.label.toLowerCase();
+    pill.innerHTML = `<span aria-hidden="true">${now.icon}</span> <b>${deg(w.now.t)}</b> <small>${esc(extra)}</small>`;
+    pill.setAttribute('aria-label', `Weather: ${deg(w.now.t)}, ${extra}`);
+    pill.hidden = false;
+  };
+  if (fresh) return draw(tabWx.w);
+  if (!tabWx.sig || !tabWx.sig.startsWith(`${sid}:`)) pill.hidden = true;
+  tabWx.sig = sig;
+  tabWx.at = Date.now();
+  let b;
+  try { b = await get(`/api/space/${sid}/weather`); } catch (_) { tabWx.at = 0; return; }
+  if (S.spaceId !== sid) return;
+  tabWx.w = b && b.weather;
+  draw(tabWx.w);
 }
 
 function paintPage(it, { fresh = false } = {}) {

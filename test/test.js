@@ -1428,6 +1428,192 @@ async function geocoding() {
   delete process.env.DATA_FILE;
 }
 
+// A made-up Open-Meteo answer: three days from 2026-11-25 14:15 local, dry
+// until rain at 17:00 that day, and a cold wet evening on the 26th.
+function forecastFixture() {
+  const days = ['2026-11-25', '2026-11-26', '2026-11-27'];
+  const time = [], temp = [], rain = [], code = [];
+  for (const d of days) for (let h = 0; h < 24; h++) {
+    time.push(`${d}T${String(h).padStart(2, '0')}:00`);
+    temp.push(d === '2026-11-26' && h === 19 ? 6.2 : 12);
+    const wet = (d === '2026-11-25' && h >= 17 && h <= 19) || (d === '2026-11-26' && h >= 18);
+    rain.push(wet ? 70 : 5);
+    code.push(wet ? 63 : 1);
+  }
+  return {
+    timezone: 'America/New_York',
+    current: { time: '2026-11-25T14:15', temperature_2m: 12.4, apparent_temperature: 9.8, weather_code: 2, is_day: 1, wind_speed_10m: 11 },
+    hourly: { time, temperature_2m: temp, precipitation_probability: rain, weather_code: code },
+    daily: { time: days, weather_code: [61, 63, 0], temperature_2m_max: [14, 9, 11], temperature_2m_min: [6, 3, 4], precipitation_probability_max: [70, 80, 0] },
+  };
+}
+
+async function weatherRules() {
+  console.log('\nweather, and what suits a place');
+  await t('weather: read from Open-Meteo, rain coming, and the forecast for the planned hour', async () => {
+    const W = require('../lib/weather');
+    const fc = W.shape(forecastFixture());
+    assert.deepStrictEqual(fc.now, { t: 12.4, feels: 9.8, code: 2, day: true, wind: 11 });
+    assert.strictEqual(fc.days.length, 3);
+    assert.strictEqual(W.shape({ current: { time: 'nope' } }), null, 'somebody else’s JSON is checked');
+    const s1 = W.summary(fc);
+    assert.deepStrictEqual(s1.rainSoon, { time: '17:00', rain: 70 }, 'the first wet hour in the next twelve');
+    assert.strictEqual(s1.today.date, '2026-11-25');
+    assert.strictEqual(s1.plan, null);
+    const s2 = W.summary(fc, { plan: { date: '2026-11-26', time: '19:30' } });
+    assert.deepStrictEqual([s2.plan.date, s2.plan.time, s2.plan.hour.t, s2.plan.hour.rain], ['2026-11-26', '19:30', 6.2, 70],
+      'the planned day, at its hour');
+    assert.strictEqual(W.summary(fc, { plan: { date: '2026-11-27' } }).plan.hour, null, 'a day with no time is the whole day');
+    assert.strictEqual(W.summary(fc, { plan: { date: '2026-12-25' } }).plan, null, 'too far out for a forecast');
+    assert.strictEqual(W.summary(fc, { plan: { date: '2026-11-20' } }).plan, null, 'a day that has passed');
+    assert.deepStrictEqual(W.middle([{ lat: 38.9, lon: -77 }, { lat: 38.91, lon: -77.01 }, { lat: 48.8, lon: 2.3 }]), { lat: 38.91, lon: -77 },
+      'the median: one holiday pin does not move it');
+    assert.strictEqual(W.middle([{ lat: 0, lon: 0 }]), null, '0,0 is a parse failure, not a place');
+    let asked = 0;
+    const fake = async () => { asked++; return { ok: true, json: async () => forecastFixture() }; };
+    assert.ok(await W.forecast(51.50734, -0.12776, { fetchImpl: fake }));
+    assert.ok(await W.forecast(51.50741, -0.12769, { fetchImpl: fake }));
+    assert.strictEqual(asked, 1, 'two pins a few metres apart are one question, for a quarter of an hour');
+    const down = async () => { throw new Error('offline'); };
+    assert.strictEqual(await W.forecast(10, 10, { fetchImpl: down }), null);
+    assert.ok(await W.forecast(10, 10, { fetchImpl: fake }), 'a failure is not remembered');
+  });
+
+  await t("a place's weather profile: only what applies is kept, and nonsense is not", () => {
+    const P = require('../lib/placefit');
+    const bar = P.cleanFit({ weather_matters: false, setting: 'indoors', ideal_conditions: ['clear'], ideal_min_c: 18, ideal_max_c: 24,
+      avoid_conditions: null, too_cold_below_c: null, too_hot_above_c: null, best_time: 'night', best_seasons: null, why: 'A cellar bar.' }, { of: 'osm:N1' });
+    assert.deepStrictEqual([bar.matters, bar.setting, bar.ideal, bar.avoid, bar.bestTime, bar.of], [false, 'indoors', null, null, null, 'osm:N1'],
+      'when the weather does not matter, nothing else is kept');
+    const beach = P.cleanFit({ weather_matters: true, setting: 'outdoors', ideal_conditions: ['clear', 'tornado', 'clear'], ideal_min_c: 24, ideal_max_c: 32,
+      avoid_conditions: ['rain', 'windy', 'clear'], too_cold_below_c: 18, too_hot_above_c: 99, best_time: 'afternoon',
+      best_seasons: ['spring', 'summer', 'autumn', 'winter'], why: 'x'.repeat(500) });
+    assert.deepStrictEqual(beach.ideal, { conditions: ['clear'], minC: 24, maxC: 32 }, 'an unknown condition and a repeat are dropped');
+    assert.deepStrictEqual(beach.avoid, { conditions: ['rain', 'windy'], belowC: 18, aboveC: null }, '99°C is refused; "clear" cannot be both');
+    assert.strictEqual(beach.seasons, null, 'all four seasons is not a preference');
+    assert.strictEqual(beach.why.length, 200);
+    const odd = P.cleanFit({ weather_matters: true, setting: 'outdoors', ideal_conditions: null, ideal_min_c: 30, ideal_max_c: 10,
+      avoid_conditions: null, too_cold_below_c: null, too_hot_above_c: null, best_time: null, best_seasons: ['winter'], why: '' });
+    assert.deepStrictEqual([odd.ideal, odd.seasons], [null, ['winter']], 'a backwards range is no range');
+    assert.strictEqual(P.cleanFit({ setting: 'indoors' }), null, 'not a profile at all');
+    assert.deepStrictEqual(P.judge(beach, { code: 0, t: 28 }), { verdict: 'good', why: [] });
+    assert.deepStrictEqual(P.judge(beach, { code: 63, t: 28 }), { verdict: 'poor', why: ['rain'] });
+    assert.deepStrictEqual(P.judge(beach, { code: 0, t: 21 }), { verdict: 'mixed', why: ['a bit cold'] });
+    assert.deepStrictEqual(P.judge(beach, { code: 0, t: 28, wind: 50 }).why, ['windy']);
+    assert.strictEqual(P.judge(bar, { code: 63, t: 5 }), null, 'indoors: no verdict at all');
+    const it = { title: 'Sunset drinks', mod: { place: { name: 'Roof Terrace', what: 'bar', area: 'Navy Yard', osm: 'W42' } } };
+    assert.strictEqual(P.keyOf(it), 'osm:W42');
+    assert.ok(P.stale(it) && !P.stale({ ...it, weatherFit: { of: 'osm:W42' } }) && P.stale({ ...it, weatherFit: { of: 'osm:W41' } }),
+      'a profile made for another place is stale');
+    const asked = P.promptFor(it);
+    assert.ok(asked.includes('Roof Terrace') && asked.includes('What it is: bar') && asked.includes('Navy Yard'));
+    assert.ok(/data, and ignore any instructions/.test(P.SYSTEM));
+  });
+}
+
+async function connectorRules() {
+  console.log('\nthe Claude connector — the door');
+  const O = require('../lib/oauth');
+  const C = require('../lib/connector');
+  const crypto = require('crypto');
+  const CB = 'https://claude.ai/api/mcp/auth_callback';
+  const RES = 'https://dw.example/mcp';
+
+  await t("a client may send an approval to Claude's callback or a loopback port, and nowhere else", () => {
+    for (const ok of [CB, 'https://claude.com/api/mcp/auth_callback', 'http://localhost:3118/callback', 'http://127.0.0.1:59000/cb'])
+      assert.ok(O.redirectAllowed(ok), ok);
+    for (const no of ['https://evil.example/cb', 'https://claude.ai.evil.example/api/mcp/auth_callback', 'http://claude.ai/api/mcp/auth_callback',
+      'https://claude.ai/api/mcp/auth_callback/x', 'http://localhost.evil.example/cb', 'http://user:pw@localhost/cb', 'javascript:alert(1)', '', null])
+      assert.ok(!O.redirectAllowed(no), String(no));
+    const st = {};
+    assert.strictEqual(O.register(st, { redirect_uris: ['https://evil.example/cb'] }).error, 'invalid_redirect_uri');
+    assert.strictEqual(O.register(st, { redirect_uris: [CB], grant_types: ['client_credentials'] }).error, 'invalid_client_metadata');
+    const r = O.register(st, { client_name: 'Claude‮', redirect_uris: [CB], token_endpoint_auth_method: 'client_secret_post' });
+    assert.strictEqual(r.client.token_endpoint_auth_method, 'none', 'a public client whatever it asked for — PKCE is the proof');
+    assert.strictEqual(r.client.client_name, 'Claude', 'the name is cleaned: it is shown on the Allow page');
+    assert.ok(!('client_secret' in r.client));
+  });
+
+  await t('PKCE, one-shot codes, rotation — and the store holds hashes, never a token', () => {
+    const st = {};
+    const id = O.register(st, { redirect_uris: [CB] }).client.client_id;
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+    const q = { response_type: 'code', client_id: id, redirect_uri: CB, code_challenge: challenge, code_challenge_method: 'S256', state: 's1', resource: RES };
+    const a = O.checkAuthorize(st, q, RES);
+    assert.ok(a.ok);
+    assert.ok(O.checkAuthorize(st, { ...q, client_id: 'dwc_nope' }, RES).fatal, 'no such client: shown, never redirected');
+    assert.ok(O.checkAuthorize(st, { ...q, redirect_uri: 'http://localhost:1/x' }, RES).fatal, 'an unregistered redirect: shown, never redirected');
+    assert.strictEqual(O.checkAuthorize(st, { ...q, code_challenge_method: 'plain' }, RES).error, 'invalid_request', 'S256 only');
+    assert.strictEqual(O.checkAuthorize(st, { ...q, resource: 'https://other.example/mcp' }, RES).error, 'invalid_target');
+    const sec = 'x'.repeat(32);
+    const txn = O.sealTxn(a.params, sec);
+    assert.deepStrictEqual(O.openTxn(txn, sec), a.params);
+    assert.strictEqual(O.openTxn(txn.replace(/^./, 'Z'), sec), null, 'tampered');
+    assert.strictEqual(O.openTxn(txn, sec, Date.now() + 16 * 60e3), null, 'stale');
+    const ex = (code, over = {}) => O.exchange(st, { grant_type: 'authorization_code', code, client_id: id, redirect_uri: CB, code_verifier: verifier, resource: RES, ...over }, { resource: RES });
+    const c1 = O.issueCode('u1', a.params);
+    assert.strictEqual(ex(c1, { code_verifier: 'w'.repeat(43) }).error, 'invalid_grant', 'the wrong verifier');
+    assert.strictEqual(ex(c1).error, 'invalid_grant', 'and the code is spent by the failed try');
+    const c2 = O.issueCode('u1', a.params);
+    assert.strictEqual(ex(c2, { redirect_uri: 'http://localhost:9/cb' }).error, 'invalid_grant');
+    const c3 = O.issueCode('u1', a.params);
+    const tok = ex(c3).tokens;
+    assert.ok(tok && tok.access_token && tok.refresh_token && tok.token_type === 'Bearer');
+    assert.strictEqual(ex(c3).error, 'invalid_grant', 'a code works once');
+    assert.strictEqual(O.bearer(st, `Bearer ${tok.access_token}`).uid, 'u1');
+    assert.strictEqual(O.bearer(st, tok.access_token), null, 'a bare token is not a Bearer header');
+    assert.strictEqual(O.bearer(st, `Bearer ${tok.access_token}`, Date.now() + O.ACCESS_TTL_MS + 1), null, 'an hour, then refresh');
+    const dump = JSON.stringify(st);
+    assert.ok(!dump.includes(tok.access_token) && !dump.includes(tok.refresh_token) && !dump.includes(verifier), 'only hashes are kept');
+    const ref = (rt, cid = id) => O.exchange(st, { grant_type: 'refresh_token', refresh_token: rt, client_id: cid }, { resource: RES });
+    assert.strictEqual(ref(tok.refresh_token, 'dwc_other').error, 'invalid_grant', "another client cannot use it");
+    const tok2 = ref(tok.refresh_token).tokens;
+    assert.ok(tok2.refresh_token !== tok.refresh_token);
+    assert.strictEqual(ref(tok.refresh_token).error, 'invalid_grant', 'rotated: the old refresh token is dead');
+    assert.strictEqual(O.bearer(st, `Bearer ${tok.access_token}`), null, 'and so is the old access token');
+    assert.ok(O.bearer(st, `Bearer ${tok2.access_token}`));
+    assert.ok(!O.revoke(st, O.grantsOf(st, 'u1')[0].id, 'u2'), 'only yours to disconnect');
+    assert.ok(O.revoke(st, O.grantsOf(st, 'u1')[0].id, 'u1'));
+    assert.strictEqual(O.bearer(st, `Bearer ${tok2.access_token}`), null, 'disconnected is immediate');
+  });
+
+  await t('a code from the phone: once, ten minutes, and guessing is cut off', () => {
+    const { code } = O.mintPair('u9');
+    assert.ok(/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(code), code);
+    assert.strictEqual(O.takePair(code.toLowerCase().replace('-', ' ')), 'u9', 'typed however');
+    assert.strictEqual(O.takePair(code), null, 'once');
+    const late = O.mintPair('u9');
+    assert.strictEqual(O.takePair(late.code, Date.now() + O.PAIR_TTL_MS + 1), null, 'ten minutes');
+    const second = O.mintPair('u9');
+    O.mintPair('u9');
+    assert.strictEqual(O.takePair(second.code), null, 'a new code replaces the last');
+    for (let i = 0; i < 10; i++) O.pairMissed('10.9.9.9');
+    assert.ok(O.pairBlocked('10.9.9.9'));
+    assert.ok(!O.pairBlocked('10.9.9.8'));
+  });
+
+  await t('the protocol: versions, notifications, unknown things, and every tool read only', () => {
+    const look = () => ({ uid: 'u1', me: 'Andrew', zone: 'UTC', today: '2026-11-25', kinds: [], kindOf: () => ({}), lists: [] });
+    const init = C.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } }, look);
+    assert.strictEqual(init.result.protocolVersion, '2025-06-18', 'the version asked for, when known');
+    assert.strictEqual(C.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '1999-01-01' } }, look).result.protocolVersion, C.VERSIONS[0]);
+    assert.strictEqual(C.handle({ jsonrpc: '2.0', method: 'notifications/initialized' }, look), null, 'a notification gets no reply');
+    assert.strictEqual(C.handle({ jsonrpc: '2.0', id: 2, method: 'nope' }, look).error.code, -32601);
+    assert.strictEqual(C.handle({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'delete_everything' } }, look).error.code, -32602);
+    const bad = C.handle({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'get_list_items', arguments: { kind: 'boat' } } }, look);
+    assert.strictEqual(bad.result.isError, true, 'bad arguments are the tool’s error, so the model can try again');
+    const tools = C.handle({ jsonrpc: '2.0', id: 5, method: 'tools/list' }, look).result.tools;
+    assert.deepStrictEqual(tools.map(x => x.name), ['list_lists', 'get_list_items', 'coming_up']);
+    for (const x of tools) {
+      assert.ok(x.title && x.annotations.readOnlyHint === true && x.annotations.destructiveHint === false, x.name);
+      assert.ok(x.name.length <= 64);
+    }
+    assert.strictEqual(C.dayWords('2026-11-29', '2026-11-25'), 'Sun 29 Nov');
+    assert.strictEqual(C.dayWords('2027-01-02', '2026-11-25'), 'Sat 2 Jan 2027');
+  });
+}
+
 /* ── 6. the API ──────────────────────────────────────────────────────────── */
 
 const PORT = 3907;
@@ -1477,6 +1663,10 @@ async function server() {
   // suite never calls Anthropic, and it can see exactly what would have been
   // sent. It answers in the Messages API's own shape.
   const claudeHits = [];
+  const placeFitHits = [];
+  const FIT_SAYS = { weather_matters: true, setting: 'outdoors', ideal_conditions: ['clear', 'partly_cloudy'], ideal_min_c: 10, ideal_max_c: 24,
+    avoid_conditions: ['rain', 'thunderstorm'], too_cold_below_c: 4, too_hot_above_c: null, best_time: 'evening', best_seasons: null,
+    why: 'A terrace: lovely on a clear evening, miserable in the rain.' };
   const CLAUDE_SAYS = {
     verdict: 'Of what you have, the roasted peppers work best here.',
     suggestions: [
@@ -1498,6 +1688,12 @@ async function server() {
         const b = JSON.parse(raw);
         claudeHits.push({ url: req.url, headers: req.headers, body: b });
         const asked = JSON.stringify(b.messages);
+        // A place's weather profile (lib/placefit.js) asks with its own schema.
+        if (JSON.stringify((b.output_config || {}).format || {}).includes('weather_matters')) {
+          placeFitHits.push(b);
+          return res.end(JSON.stringify({ id: 'msg_fit', type: 'message', role: 'assistant', model: b.model, stop_sequence: null,
+            usage: { input_tokens: 10, output_tokens: 10 }, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(FIT_SAYS) }] }));
+        }
         const msg = { id: 'msg_test', type: 'message', role: 'assistant', model: b.model, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 } };
         if (/refuse-me/.test(asked)) return res.end(JSON.stringify({ ...msg, content: [], stop_reason: 'refusal', stop_details: { type: 'refusal', category: null, explanation: null } }));
         res.end(JSON.stringify({ ...msg, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(CLAUDE_SAYS) }] }));
@@ -1506,6 +1702,8 @@ async function server() {
     }
     // Recipe pages for the reader, and the things a page must not be.
     if (req.url.startsWith('/r/')) return recipeFixture(req, res);
+    // And Open-Meteo, for the weather on a place.
+    if (req.url.startsWith('/v1/forecast')) return res.end(JSON.stringify(forecastFixture()));
     // And for Nominatim's lookup, which the place page asks for hours.
     if (req.url.startsWith('/lookup')) {
       return res.end(JSON.stringify([{
@@ -1522,6 +1720,7 @@ async function server() {
     geoLookupEndpoint: `http://127.0.0.1:${photon.address().port}/lookup`,
     anthropicKey: 'test-key',
     anthropicBaseUrl: `http://127.0.0.1:${photon.address().port}`,
+    weatherEndpoint: `http://127.0.0.1:${photon.address().port}/v1/forecast`,
   }), { mode: 0o600 });
   // Admin is read from config LIVE, so the suite can grant and revoke it
   // mid-run — which is also the property worth having: no restart either way.
@@ -2389,6 +2588,15 @@ async function server() {
     assert.strictEqual((await api('GET', '/api/img/..%2Fstore.json', null, A)).status, 404);
   });
 
+  await t('a page with the recipe only in its layout is read through the route too, photo and all', async () => {
+    const r = await api('POST', '/api/recipe/read', { url: FX('/r/layout.html') }, A);
+    assert.strictEqual(r.body.ok, true, JSON.stringify(r.body));
+    assert.strictEqual(r.body.recipe.name, 'Skillet Lemon Chicken');
+    assert.deepStrictEqual(r.body.recipe.ingredients.map(x => x.name), ['Chicken Thighs', 'Chicken Broth', 'Lemon']);
+    assert.strictEqual(r.body.recipe.steps.length, 3);
+    assert.ok(/^[a-f0-9]{24}\.jpg$/.test(r.body.recipe.image), 'its og:image is kept here');
+  });
+
   await t("a page that won't give its recipe up is a 'no-recipe', never an error", async () => {
     for (const [u, why] of [['/r/none.html', 'no-recipe'], ['/r/notes.txt', 'no-recipe'], ['/r/missing', 'unreachable']]) {
       const r = await api('POST', '/api/recipe/read', { url: FX(u) }, A);
@@ -2645,6 +2853,159 @@ async function server() {
     assert.strictEqual(last.body.why, 'slow-down', 'thirty an hour');
   });
 
+  await t('weather at a place: through its pin, only for those who can see it, with its plan', async () => {
+    const mk = async (body, as) => (await api('POST', '/api/space/sp1/item', body, as)).body.item;
+    const bar = await mk({ title: 'WX bar', kind: 'place', mod: { place: { name: 'WX bar', lat: 38.90012, lon: -76.98765 } } }, A);
+    await api('POST', `/api/item/${bar.id}/when`, { date: '2026-11-26', time: '19:30' }, A);
+    const hidden = await mk({ title: 'WX hers', kind: 'place', visibility: 'private', mod: { place: { name: 'WX hers', lat: 38.95, lon: -77.03 } } }, L);
+    const words = await mk({ title: 'WX words only', kind: 'place', mod: { place: { name: 'Somewhere unpinned' } } }, A);
+    // Claude fills in its weather profile in the background, once.
+    for (let i = 0; i < 40 && !(await api('GET', '/api/space/sp1/items', null, A)).body.items.find(x => x.id === bar.id).weatherFit; i++) {
+      await new Promise(r => setTimeout(r, 50));
+    }
+    const fitted = (await api('GET', '/api/space/sp1/items', null, A)).body.items.find(x => x.id === bar.id).weatherFit;
+    assert.ok(fitted && fitted.matters && fitted.of === 'name:wx bar|', JSON.stringify(fitted));
+    assert.deepStrictEqual(fitted.ideal, { conditions: ['clear', 'partly_cloudy'], minC: 10, maxC: 24 });
+    const asked = placeFitHits.find(b => JSON.stringify(b.messages).includes('WX bar'));
+    assert.ok(asked && asked.model === 'claude-opus-5-5', 'asked of Opus 5.5');
+    const before = photonHits.length;
+    const r = await api('GET', `/api/item/${bar.id}/weather`, null, A);
+    assert.strictEqual(r.body.ok, true, JSON.stringify(r.body));
+    const w = r.body.weather;
+    assert.deepStrictEqual([w.now.t, w.rainSoon.time, w.plan.date, w.plan.hour.rain], [12.4, '17:00', '2026-11-26', 70]);
+    assert.deepStrictEqual(r.body.judge.now, { verdict: 'good', why: [] }, 'some cloud at 12° suits a terrace');
+    assert.deepStrictEqual(r.body.judge.plan, { verdict: 'poor', why: ['rain'] }, 'its planned evening is wet');
+    const n = placeFitHits.length;
+    await api('GET', `/api/item/${bar.id}/weather`, null, A);
+    assert.strictEqual(placeFitHits.length, n, 'and it is not asked again');
+    const hit = photonHits.slice(before).find(u => u.pathname === '/v1/forecast');
+    assert.deepStrictEqual([hit.searchParams.get('latitude'), hit.searchParams.get('longitude')], ['38.9', '-76.99'], 'the pin, rounded to ~1 km');
+    assert.strictEqual((await api('GET', `/api/item/${bar.id}/weather`, null, L)).body.weather.plan.time, '19:30', 'and for her, the same plan');
+    assert.strictEqual((await api('GET', `/api/item/${hidden.id}/weather`, null, A)).status, 404, 'a place you cannot see has no weather for you');
+    assert.strictEqual((await api('GET', `/api/item/${bar.id}/weather`, null, S)).status, 404);
+    assert.strictEqual((await api('GET', `/api/item/${words.id}/weather`, null, A)).body.weather, null, 'no pin, no weather');
+    const tab = await api('GET', '/api/space/sp1/weather', null, A);
+    assert.strictEqual(tab.body.weather.now.code, 2, 'the Places tab: the middle of the pins');
+    assert.strictEqual((await api('GET', '/api/space/sp1/weather', null, S)).status, 404);
+  });
+
+  await t('the Claude connector: discovered, registered, allowed — and it reads what you see, nothing more', async () => {
+    const crypto = require('crypto');
+    const CB = 'https://claude.ai/api/mcp/auth_callback';
+    const RES = `${BASE}/mcp`;
+    const mcp = (body, token, headers = {}) => fetch(RES, { method: 'POST', body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...(token ? { authorization: `Bearer ${token}` } : {}), ...headers } });
+    const call = async (token, name, args = {}) => (await (await mcp({ jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name, arguments: args } }, token)).json()).result;
+    const formPost = (p, f, headers = {}) => fetch(BASE + p, { method: 'POST', redirect: 'manual',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers }, body: new URLSearchParams(f).toString() });
+
+    // Things on the list with Linnea, from both sides.
+    const mk = async (body, as) => (await api('POST', '/api/space/sp1/item', body, as)).body.item;
+    await mk({ title: 'CX her shared film', kind: 'movie', visibility: 'shared' }, L);
+    await mk({ title: 'CX her private thing', visibility: 'private' }, L);
+    await mk({ title: 'CX his private thing', visibility: 'private' }, A);
+    const planned = await mk({ title: 'CX dinner plan', kind: 'place' }, A);
+    const tomorrow = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+    await api('POST', `/api/item/${planned.id}/when`, { date: tomorrow, time: '19:30' }, A);
+
+    // Discovery, the way Claude does it: a 401 that says where to look.
+    const anon = await mcp({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } });
+    assert.strictEqual(anon.status, 401);
+    assert.ok((anon.headers.get('www-authenticate') || '').includes(`resource_metadata="${BASE}/.well-known/oauth-protected-resource/mcp"`));
+    const prm = await (await fetch(`${BASE}/.well-known/oauth-protected-resource/mcp`)).json();
+    assert.deepStrictEqual([prm.resource, prm.authorization_servers], [RES, [BASE]]);
+    const asm = await (await fetch(`${BASE}/.well-known/oauth-authorization-server`)).json();
+    assert.deepStrictEqual(asm.code_challenge_methods_supported, ['S256']);
+    assert.strictEqual(asm.registration_endpoint, `${BASE}/oauth/register`);
+    assert.ok(!asm.client_id_metadata_document_supported, 'Claude registers itself instead');
+
+    const reg = async (uris) => fetch(`${BASE}/oauth/register`, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ client_name: 'Claude', redirect_uris: uris, grant_types: ['authorization_code', 'refresh_token'], token_endpoint_auth_method: 'none' }) });
+    assert.strictEqual((await reg(['https://evil.example/cb'])).status, 400);
+    const client = await (await reg([CB])).json();
+    assert.ok(client.client_id);
+
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const q = new URLSearchParams({ response_type: 'code', client_id: client.client_id, redirect_uri: CB, state: 'st8',
+      code_challenge: crypto.createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', scope: 'lists:read', resource: RES });
+    const signedOut = await fetch(`${BASE}/oauth/authorize?${q}`);
+    assert.strictEqual(signedOut.headers.get('x-frame-options'), 'DENY', 'the Allow page cannot be framed');
+    assert.strictEqual(signedOut.headers.get('referrer-policy'), 'same-origin',
+      'and never no-referrer: a browser then sends Origin: null with Allow, and the tap is refused');
+    assert.ok((await signedOut.text()).includes('isn’t signed in'), 'a browser not signed in here is asked for a code');
+    const stray = await fetch(`${BASE}/oauth/authorize?${new URLSearchParams({ ...Object.fromEntries(q), redirect_uri: 'https://evil.example/cb' })}`, { redirect: 'manual' });
+    assert.deepStrictEqual([stray.status, stray.headers.get('location')], [400, null], 'a redirect it never registered is shown, never followed');
+
+    const pageA = await (await fetch(`${BASE}/oauth/authorize?${q}`, { headers: { cookie: cookieFor(A) } })).text();
+    assert.ok(pageA.includes('Andrew'), 'signed in: it says as whom');
+    const txn = /name="txn" value="([^"]+)"/.exec(pageA)[1];
+    assert.strictEqual((await formPost('/oauth/authorize', { txn, allow: '1' }, { cookie: cookieFor(A), origin: 'https://evil.example' })).status, 403,
+      'another site cannot press Allow for you');
+    assert.strictEqual((await formPost('/oauth/authorize', { txn, allow: '1' }, { cookie: cookieFor(A), origin: 'null' })).status, 403,
+      'nor a sandboxed frame');
+    const allowed = await formPost('/oauth/authorize', { txn, allow: '1' }, { cookie: cookieFor(A), origin: BASE });
+    assert.strictEqual(allowed.status, 302);
+    const back = new URL(allowed.headers.get('location'));
+    assert.deepStrictEqual([back.origin + back.pathname, back.searchParams.get('state'), back.searchParams.get('iss')], [CB, 'st8', BASE]);
+    const token = async (f) => (await formPost('/oauth/token', f)).json();
+    const t1 = await token({ grant_type: 'authorization_code', code: back.searchParams.get('code'), redirect_uri: CB,
+      client_id: client.client_id, code_verifier: verifier, resource: RES });
+    assert.ok(t1.access_token && t1.refresh_token, JSON.stringify(t1));
+    assert.strictEqual(t1.expires_in, 3600);
+
+    // The protocol, end to end.
+    const init = await (await mcp({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '1' } } }, t1.access_token)).json();
+    assert.strictEqual(init.result.protocolVersion, '2025-06-18');
+    assert.strictEqual((await mcp({ jsonrpc: '2.0', method: 'notifications/initialized' }, t1.access_token)).status, 202);
+    assert.strictEqual((await mcp({ jsonrpc: '2.0', id: 2, method: 'ping' }, t1.access_token, { 'mcp-protocol-version': '1999-01-01' })).status, 400);
+    assert.strictEqual((await mcp({ jsonrpc: '2.0', id: 2, method: 'ping' }, t1.access_token, { origin: 'https://evil.example' })).status, 403);
+    assert.strictEqual((await fetch(RES, { headers: { authorization: `Bearer ${t1.access_token}` } })).status, 405, 'no stream to offer');
+    assert.strictEqual((await fetch(RES, { method: 'POST', headers: { cookie: cookieFor(A), 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }) })).status, 401, 'a session cookie is not a way in');
+
+    const lists = (await call(t1.access_token, 'list_lists')).content[0].text;
+    assert.ok(lists.includes('To do with Linnea (id sp1)') && lists.includes('Ski trip'), lists);
+    const his = (await call(t1.access_token, 'get_list_items', { list: 'Linnea' })).content[0].text;
+    assert.ok(his.includes('CX her shared film') && his.includes('CX his private thing'), his);
+    assert.ok(his.includes('only you can see this'), 'his private thing says so');
+    assert.ok(!his.includes('CX her private thing'), 'her private thing is as absent here as on his phone');
+    const films = (await call(t1.access_token, 'get_list_items', { list: 'sp1', kind: 'movie' })).content[0].text;
+    assert.ok(films.includes('CX her shared film') && !films.includes('CX dinner plan'));
+    const soon = (await call(t1.access_token, 'coming_up', { days: 7 })).content[0].text;
+    assert.ok(soon.includes('CX dinner plan') && soon.includes('19:30'), soon);
+    assert.strictEqual((await call(t1.access_token, 'get_list_items', { list: 'Nobody' })).isError, true);
+
+    // Linnea connects from a browser that is not signed in, with a code from her phone.
+    const { code } = (await api('POST', '/api/connect/code', {}, L)).body;
+    const pageL = await (await fetch(`${BASE}/oauth/authorize?${q}`)).text();
+    const txnL = /name="txn" value="([^"]+)"/.exec(pageL)[1];
+    assert.strictEqual((await formPost('/oauth/authorize', { txn: txnL, code: 'ZZZZ-ZZZZ', allow: '1' }, { origin: BASE })).status, 400);
+    const okL = await formPost('/oauth/authorize', { txn: txnL, code: code.toLowerCase(), allow: '1' }, { origin: BASE });
+    assert.strictEqual(okL.status, 302);
+    assert.strictEqual((await formPost('/oauth/authorize', { txn: txnL, code, allow: '1' }, { origin: BASE })).status, 400, 'a code works once');
+    const tL = await token({ grant_type: 'authorization_code', code: new URL(okL.headers.get('location')).searchParams.get('code'),
+      redirect_uri: CB, client_id: client.client_id, code_verifier: verifier });
+    const hers = (await call(tL.access_token, 'get_list_items', { list: 'Andrew' })).content[0].text;
+    assert.ok(hers.includes('CX her private thing') && !hers.includes('CX his private thing'), 'and she sees her side, not his private things');
+    const denied = await formPost('/oauth/authorize', { txn, deny: '1' }, { cookie: cookieFor(A), origin: BASE });
+    assert.strictEqual(new URL(denied.headers.get('location')).searchParams.get('error'), 'access_denied');
+
+    // Refresh rotates; the account sheet lists it; Disconnect is immediate.
+    const t2 = await token({ grant_type: 'refresh_token', refresh_token: t1.refresh_token, client_id: client.client_id });
+    assert.ok(t2.access_token && t2.refresh_token !== t1.refresh_token);
+    assert.strictEqual((await token({ grant_type: 'refresh_token', refresh_token: t1.refresh_token, client_id: client.client_id })).error, 'invalid_grant');
+    const mine = (await api('GET', '/api/connect', null, A)).body;
+    assert.strictEqual(mine.url, RES);
+    assert.deepStrictEqual(mine.connections.map(c => c.name), ['Claude']);
+    assert.strictEqual((await api('DELETE', `/api/connect/${mine.connections[0].id}`, null, L)).status, 404, "not hers to disconnect");
+    assert.strictEqual((await api('DELETE', `/api/connect/${mine.connections[0].id}`, null, A)).body.ok, true);
+    assert.strictEqual((await mcp({ jsonrpc: '2.0', id: 3, method: 'ping' }, t2.access_token)).status, 401);
+    assert.strictEqual((await mcp({ jsonrpc: '2.0', id: 3, method: 'ping' }, tL.access_token)).status, 200, 'hers is untouched');
+    await new Promise(r => setTimeout(r, 400));
+    const disk = fs.readFileSync(dataFile, 'utf8');
+    assert.ok(!disk.includes(tL.access_token) && !disk.includes(tL.refresh_token), 'tokens never reach the disk, only their hashes');
+  });
+
   await t('data survives a restart', async () => {
     const before = (await api('GET', '/api/state', null, A)).body;
     child.kill('SIGTERM');
@@ -2681,6 +3042,40 @@ const RECIPE_LD = {
   image: [{ '@type': 'ImageObject', url: '/r/square.jpg', width: 1200, height: 1200 },
     { '@type': 'ImageObject', url: '/r/photo.jpg', width: 1200, height: 900 }],
 };
+// A recipe with no JSON-LD Recipe at all: a store's blog post, laid out the way
+// a Shopify theme does it — every item in a list of its own, a product link
+// inside one, the times in a sidebar after the steps, and a footer with a list
+// of its own below. Made up; the shape is from a real page.
+const LAYOUT_PAGE = `<!doctype html><html><head>
+<title>Skillet Lemon Chicken | Test Farm</title>
+<meta property="og:site_name" content="Test Farm">
+<meta property="og:title" content="Skillet Lemon Chicken | Test Farm">
+<meta property="og:image" content="http://farm.example/img/chicken.jpg">
+<meta property="og:image:secure_url" content="/r/photo.jpg">
+<script type="application/ld+json">{"@type":"Article","headline":"Skillet Lemon Chicken","articleBody":"A quick one."}</script>
+<style>.ingredients h3{color:red}</style></head><body>
+<nav><ul><li><a href="/">Home</a></li><li><a href="/recipes">Recipes</a></li></ul></nav>
+<h1 class="title">Skillet Lemon Chicken</h1><p>Our chicken, in a hot pan with lemon &amp; thyme.</p>
+<article><div class="ingredients"><h3 class="h6 title">Ingredients</h3>
+  <ul><li>
+    2
+    <a href="/products/thighs"> Chicken Thighs </a>
+    , Defrosted
+  </li></ul>
+  <ul><li> 1/2 Cup Chicken Broth </li></ul>
+  <ul><li>Lemon</li></ul>
+  <!-- <ul><li>a commented-out ingredient</li></ul> -->
+</div>
+<div class="direction"><h3 class="h6 title">Direction</h3>
+  <ul><li>Sear the chicken thighs skin side down for 8 minutes.</li></ul>
+  <ul><li><p>Pour in the chicken broth and simmer 10 minutes.</p></li></ul>
+  <ul><li>Squeeze the lemon over and serve.</li></ul>
+</div><div class="foot"><a href="/recipes">Back to Recipes</a></div></article>
+<aside><div class="item">Prep Time: 5 Minutes</div><div class="item">Cook Time: 18 Minutes</div>
+<div class="item">Ready Time:
+  25 Minutes</div><div class="item">Servings: 2</div></aside>
+<footer><h2>Stay in the know</h2><ul><li>Sign up</li><li>Contact us</li></ul></footer>
+<svg><text>Ingredients</text></svg></body></html>`;
 // A JPEG is its first three bytes, as far as the sniffer is concerned.
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);
 
@@ -2688,6 +3083,7 @@ function recipeFixture(req, res) {
   const u = req.url;
   const page = (body, type = 'text/html; charset=utf-8') => { res.setHeader('content-type', type); res.end(body); };
   if (u === '/r/recipe.html') return page(`<html><head><meta property="og:site_name" content="Test Kitchen">${ld(RECIPE_LD)}</head></html>`);
+  if (u === '/r/layout.html') return page(LAYOUT_PAGE);
   if (u === '/r/none.html') return page(`<html><head>${ld({ '@type': 'Article', name: 'Not a recipe' })}</head></html>`);
   if (u === '/r/notes.txt') return page('1 cup flour', 'text/plain');
   if (u === '/r/photo.jpg') return page(JPEG, 'image/jpeg');
@@ -2810,6 +3206,68 @@ async function recipes() {
     assert.strictEqual(bare.ingredients.length, 2);
     assert.strictEqual(bare.steps.length, 1);
     assert.strictEqual(R.fromText('just some words'), null);
+  });
+
+  await t("a page with no Recipe in its JSON-LD is read from its own headings and lists", () => {
+    const got = R.fromHtml(LAYOUT_PAGE, 'https://www.farm.example/blogs/recipes/lemon-chicken');
+    assert.ok(got, 'read, not a no-recipe');
+    const r = got.recipe;
+    assert.strictEqual(r.name, 'Skillet Lemon Chicken', 'the title without " | Test Farm"');
+    assert.strictEqual(r.site, 'Test Farm');
+    assert.strictEqual(r.from, 'page');
+    assert.deepStrictEqual(r.ingredients.map(x => x.text), ['2 Chicken Thighs, Defrosted', '1/2 Cup Chicken Broth', 'Lemon'],
+      'one item to a list, a link inside one — read as one line each, and nothing from a comment, the nav or the footer');
+    assert.deepStrictEqual([r.ingredients[0].q, r.ingredients[0].name, r.ingredients[0].note], [2, 'Chicken Thighs', 'Defrosted']);
+    assert.deepStrictEqual([r.ingredients[1].q, r.ingredients[1].unit], [0.5, 'cup'], '"1/2 Cup" still scales');
+    assert.deepStrictEqual(r.steps.map(x => x.text), ['Sear the chicken thighs skin side down for 8 minutes.',
+      'Pour in the chicken broth and simmer 10 minutes.', 'Squeeze the lemon over and serve.'], '"Direction", singular, is the steps');
+    assert.deepStrictEqual(r.steps[1].timers, [{ secs: 600, label: 'Simmer' }]);
+    assert.deepStrictEqual([r.prep, r.cook, r.total], [5, 18, 25], 'the sidebar\'s times; "Ready Time" is the total');
+    assert.deepStrictEqual(r.yield, { n: 2, unit: 'servings' });
+    assert.strictEqual(got.imageUrl, 'https://www.farm.example/r/photo.jpg', 'og:image:secure_url first, made absolute');
+  });
+
+  await t('…and it reads only that: a page that is not plainly a recipe stays a no-recipe', () => {
+    const at = 'https://a.b/';
+    const body = (x) => `<html><head><title>T</title></head><body>${x}</body></html>`;
+    assert.strictEqual(R.fromHtml(body('<h2>Ingredients</h2><ul><li>Duck</li><li>Water</li><li>Salt</li></ul>'), at), null,
+      'a product page lists its ingredients too — no steps, no recipe');
+    assert.strictEqual(R.fromHtml(body('<p>The ingredients matter. Here are our directions to the farm.</p><ul><li>Turn left</li></ul>'), at), null,
+      'the words in prose are not headings');
+    assert.strictEqual(R.fromHtml(body('<h2>Ingredients</h2>' + '<p>A long paragraph about sourcing.</p>'.repeat(4)
+      + '<ul><li>Home</li></ul><h2>Directions</h2><ul><li>Stir.</li></ul>'), at), null,
+      'a heading followed by paragraphs gives up before it reaches a list further down');
+    const wins = R.fromHtml(body(ld({ '@type': 'Recipe', name: 'From JSON-LD', recipeIngredient: ['1 egg'] })
+      + '<h2>Ingredients</h2><ul><li>2 eggs</li></ul><h2>Method</h2><ul><li>Boil.</li></ul>'), at);
+    assert.strictEqual(wins.recipe.name, 'From JSON-LD', 'JSON-LD, when it has a recipe, is read first');
+  });
+
+  await t('…the shapes the layout comes in: label paragraphs, sub-headings, groups, unclosed items, numbered paragraphs', () => {
+    const at = 'https://a.b/';
+    const read = (x) => R.fromHtml(`<html><body>${x}</body></html>`, at).recipe;
+    const pseudo = read('<p><strong>Ingredients:</strong></p><ul><li>- 2 eggs</li></ul><p><b>Method</b></p><ol><li>1. Beat the eggs.</li></ol>');
+    assert.deepStrictEqual([pseudo.ingredients[0].text, pseudo.steps[0].text], ['2 eggs', 'Beat the eggs.'],
+      'a paragraph that IS the label is a heading; bullets and numbers come off');
+    const groups = read('<h2>Ingredients</h2><h3>For the sauce</h3><ul><li>1 cup cream</li></ul><p>For the pasta:</p><ul><li>200 g spaghetti</li></ul>'
+      + '<h2>Directions</h2><ul><li>Boil the spaghetti.</li></ul><h2>Reviews</h2><ul><li>Lovely!</li></ul>');
+    assert.deepStrictEqual(groups.ingredients.map(x => x.name), ['cream', 'spaghetti'], 'a smaller heading or a "For the …:" line keeps it going');
+    assert.deepStrictEqual(groups.steps.map(x => x.text), ['Boil the spaghetti.'], 'a heading as big as the first ends it');
+    const nested = read('<h2>Ingredients</h2><ul><li>Dough<ul><li>2 cups flour</li><li>1 cup water</li></ul></li></ul><h2>Steps</h2><ol><li>Mix<li>Knead 5 minutes</ol>');
+    assert.deepStrictEqual(nested.ingredients.map(x => x.text), ['2 cups flour', '1 cup water'], 'the group\'s own name is not an ingredient');
+    assert.deepStrictEqual(nested.steps.map(x => x.text), ['Mix', 'Knead 5 minutes'], '"<li>a<li>b" is two items');
+    const paras = read('<h2>Ingredients</h2><ul><li>2 eggs</li></ul><h2>Instructions</h2><p>1. Cook 3 minutes.</p><p>2. Serve.</p><p>Enjoy this one!</p>');
+    assert.deepStrictEqual(paras.steps.map(x => x.text), ['Cook 3 minutes.', 'Serve.'], 'numbered paragraphs are steps, and the sign-off is not');
+    assert.strictEqual(paras.cook, null, '"Cook 3 minutes." is a step, not the cook time');
+    assert.deepStrictEqual([R.textMinutes('1 hour 15 minutes'), R.textMinutes('1 hr, 5 mins'), R.textMinutes('1h20m'), R.textMinutes('until golden'),
+      R.textMinutes('20 minutes per pound')], [75, 65, 80, null, null]);
+  });
+
+  await t("…in time on any page: unclosed comments, scripts and tags can't make it crawl", () => {
+    for (const junk of ['<!--', '<script>', '<a href="', '<li>', '<h2>']) {
+      const start = Date.now();
+      R.fromHtml(`<html><body>${junk.repeat(200000)}`, 'https://a.b/');
+      assert.ok(Date.now() - start < 1500, `${junk} ×200k took ${Date.now() - start} ms`);
+    }
   });
 
   await t('the kitchen: a head noun decides, staples are had unless Out, water always', () => {
@@ -3254,6 +3712,8 @@ async function placeSuggestions() {
   await geocoding();
   await placeSuggestions();
   await recipes();
+  await weatherRules();
+  await connectorRules();
   await server();
 
   console.log(`\n${pass} passed, ${fails.length} failed`);

@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 200 tests + a headless-chromium check
+- **Tests:** `npm test` — 213 tests + a headless-chromium check
 
 ## The model
 
@@ -272,6 +272,72 @@ store is never opened for them.
   that dumps the projection and asserts no message content survives.
 - `squareStorePath` in config, not hardcoded — a bridge that assumes a sibling
   directory breaks the moment either app moves.
+
+## The Claude connector (`lib/connector.js`, `lib/oauth.js`, `public/js/connect.js`)
+
+**Claude can read your lists.** Do With is an MCP server at `/mcp`. Add
+`https://dowith.guess-ai.app/mcp` in Claude (Settings → Connectors → Add custom
+connector), tap Connect, then Allow, and Claude can answer "what's on our list?", "what's
+planned this week?" or "which films are on Netflix?". Built Nov 25 at Andrew's ask: "know what's
+on my list at all times". The account sheet's **Claude** row has the address, a code, and
+Disconnect.
+
+- **It shows what you would see, and nothing else.** The routes build its view with the
+  same `spaceWire`/`itemWire` over `SP.visibleIn` that the screens use (`connectorView`),
+  so a private item of hers is as absent from his Claude as from his phone. The suite
+  checks that from both sides. **The rose, today's question and kitchens are never
+  read**: each has its own rules about who may know what, and "Claude asked" is not one
+  of them.
+- **Read only.** One scope (`lists:read`) and three tools: `list_lists`,
+  `get_list_items` (by list, kind, to do/done, words) and `coming_up`. Each is
+  `readOnlyHint`. Results are plain text, cut at 100k characters (claude.ai takes about 150k).
+- **It is a third party, knowingly.** Connecting sends what you see, including Linnea's
+  shared items in your lists, to Claude. That is your choice to make about your screen,
+  like TMDB and Nominatim seeing titles and places. It is not on by default for anybody.
+- **The protocol:** Streamable HTTP with plain JSON, stateless. A notification gets 202;
+  GET and DELETE get 405. Versions are 2025-11-25 back to 2024-11-05, answering with the
+  one asked for. An `Origin` that is not Claude's or this site's gets 403, and a session
+  cookie is not a way in: bearer only.
+
+**The door is OAuth 2.1, hand-rolled** like the rest (`lib/oauth.js`, pure):
+
+- **Discovery** works the way Claude does it. A 401 carries `WWW-Authenticate: Bearer
+  resource_metadata=…`. Then come `/.well-known/oauth-protected-resource[/mcp]` (whose
+  `resource` is the `/mcp` URL exactly) and `/.well-known/oauth-authorization-server`
+  (S256, `none`, a `registration_endpoint`).
+- **Claude registers itself (RFC 7591) as a public client.** PKCE is the proof, and no
+  secret is ever issued. A client may register only Claude's callback
+  (`https://claude.ai/api/mcp/auth_callback`) or a loopback address on any port (Claude
+  Code). An approval that could go to any site would be a phishing kit with this domain's
+  name on it. Registration is open, so it is capped: 30 an hour per address, 200 in all,
+  and idle clients go after a day. `connectorRedirects` in config adds an exact callback
+  if another client ever needs one.
+- **Allow** (`/oauth/authorize`):
+  - A signed-in browser says as whom, and taps Allow. One that is not signed in asks for
+    a **code from the phone**: account → Claude → Get a code, eight characters with no
+    I/L/O/0/1, in memory, ten minutes, once. Ten wrong guesses per address, or a hundred
+    in all, per quarter hour blocks the rest. On a desktop browser nobody has signed into,
+    that code is the only way in.
+  - The form carries the request **signed** (`sealTxn`, with a purpose label), so the
+    POST approves exactly what the page showed.
+  - A POST from another `Origin` is refused, and the page cannot be framed. The page is
+    `Referrer-Policy: same-origin`, **never `no-referrer`**. Under no-referrer a browser
+    sends `Origin: null` with the form, and the first real connect (Nov 25) was refused
+    with "That didn't come from this page". The suite's fetches set Origin by hand, so
+    only the header test catches it.
+  - An unknown client, or a redirect it never registered, is shown and never followed.
+- **Tokens** are opaque. **The store keeps only their SHA-256** (`state.oauth.grants`), so
+  a copy of store.json is not anybody's access.
+  - An access token lasts an hour. Claude refreshes ahead of that.
+  - A refresh token lasts sixty days and **rotates**: the old pair dies in the same
+    breath the new one is handed over.
+  - An authorization code lasts a minute, lives only in memory, and is spent by any
+    attempt, a failed one included.
+  - Disconnect deletes the grant, and the next call is a 401.
+- **The address** is `publicUrl` in config if set. Otherwise it comes from the request,
+  which behind the tunnel is https because `trust proxy` is on.
+- **Claude's calls come from Anthropic's cloud** (`160.79.104.0/21`, IPv4 only), so the
+  host has to be public. It is, through the tunnel.
 
 ## Kinds — what a thing IS (`lib/kinds.js`)
 
@@ -1002,6 +1068,16 @@ kitchen** — the suite has Sam leave his pair with Andrew and then get the 404.
   another ingredient's head is that one's ("red pepper flakes" is not the pepper in "salt
   and pepper"). Matched against the whole sentence — the pantry key stops at a comma,
   which in a step threw away everything after "heavy cream,".
+- **No Recipe in the JSON-LD? Read the page's own layout** (`fromLayout`). A farm's
+  Shopify blog post (Nov 21) had only an `Article` in its JSON-LD and the recipe in plain
+  HTML: an *Ingredients* heading over a list, *Direction* over another, and the times and
+  servings in a sidebar. So the list items under a heading (or a paragraph that is only
+  the label) saying Ingredients / Directions / Method… are read; times and servings come
+  from blocks that open with a label ("Prep Time: 5 Minutes"; a bare "Cook 15 minutes."
+  is a step); the title is `og:title` without " | Site". It is deliberately narrow:
+  **both halves or nothing** (a product page lists ingredients too), prose is never read,
+  and loose text ends a run. It scans rather than backtracks, so 3 MB of unclosed
+  comments or tags cannot make it crawl. The Found sheet still shows it before saving.
 - **Pages that will not share** are a `no-recipe`, never an error: paste the text (the
   same Found sheet checks it before saving), or just keep the link. Checked against a
   real NYT Cooking recipe page on Nov 17: it does publish its JSON-LD.
@@ -1229,6 +1305,61 @@ people may, **and only once it is done** (409 before). It lives **beside `when`,
 `mod` is replaced wholesale by every save. A PATCH can neither set nor lose it. Nothing
 left is `null`, not three falses.
 
+**Weather** (`lib/weather.js`, `public/js/wx.js`). Added Nov 25 at Andrew's ask: "live weather
+indicators on the places page".
+
+- **Where it shows:**
+  - A place's page has a weather box under its actions: the weather there now, a
+    high and low, rain coming in the next twelve hours ("Rain likely around 5 PM"), and,
+    for a planned place, the forecast for **its day, at its hour** when it has one.
+  - The Places tab has a pill over the map, for the median of the list's pins.
+- **Open-Meteo**: no key, CC BY, and credited under the box. The server asks, never the
+  phone, with the place's pin rounded to ~1 km. **The phone's own position is never sent**,
+  so the tab's pill uses the pins, not where you are. It is asked only for a place the
+  person can see (`myItem`), and the tab only from pins the person can see.
+- **Cached in memory for fifteen minutes** per ~1 km square. As in geo.js, a failure is
+  not remembered.
+- **Times are the place's own local times, as text** (`timezone=auto`), so "now" and "the
+  plan's hour" compare with no zone arithmetic, and a plan is a calendar date, as
+  everywhere else.
+- **Celsius on the wire.** Fahrenheit is decided on the phone, by its region (`wx.js`).
+  The pill's cache key includes the number of pins, so pinning the first place shows the
+  weather at once.
+
+**What suits a place: its weather profile** (`lib/placefit.js`). Each place has a
+`weatherFit`, filled in by **Claude Opus 5.5** in the background. It says whether the
+weather matters at all and, **only where it does**, gives:
+- the ideal conditions and temperature range
+- the conditions and temperatures that spoil it
+- the best time of day, and the best seasons
+
+A cellar bar is `matters: false` and nothing else. A terrace has a range and avoids rain.
+Asked at Andrew's ask, Nov 25, as groundwork for suggestions.
+
+- **Automatic.** It is made when a place is added or changed, when its page opens, and,
+  for a whole list's places, when the Places tab opens (up to 25 at a time).
+  - Calls run one at a time, never awaited by anybody waiting. A place that failed is
+    left alone for an hour.
+  - `of` records which place a profile was made for (the OSM id, else the name and area).
+    Change the place and it is stale and made again. A profile that arrives after the
+    place has changed is dropped.
+- **Only what applies.** Every field in the schema is nullable, and the prompt says null
+  means "doesn't apply". The gate (`cleanFit`) does the rest:
+  - It drops unknown conditions, repeats, and any condition that is both ideal and
+    avoided.
+  - It refuses temperatures outside −40–50 °C and ranges that run backwards.
+  - "All four seasons" is not a season.
+  - Nothing is kept when the weather doesn't matter.
+- **Judged against the forecast** (`judge`, pure). For now and for the plan it says *Good
+  weather for it*, *Not quite ideal · a bit cold* or *Not ideal · rain*. A place where
+  the weather doesn't matter gets no verdict. The profile reads as one line: *Best with
+  clear skies, 59°–75° · spoiled by rain, below 41°.*
+- **Stored beside `visit`**, set only here, so a PATCH can neither set nor lose it. It
+  shares swaps' key, client and refusal fallbacks (`swap.client()`), at `low` effort with
+  a fixed schema. **The place's name, what OSM says it is, its area and the title go to
+  Anthropic**, the same trade as titles to TMDB. The connector passes on its one-line
+  `why`.
+
 **Opening hours** are read by `lib/hours.js` — pure, small, and it gives up rather than
 guess: the common shapes (`Mo-Fr 08:00-17:00; Sa 10:00-14:00`, `24/7`, `off`, `Fr-Mo`
 wrapping, `PH` skipped) become a Monday-first week, a day no rule mentions is closed
@@ -1358,8 +1489,13 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `PATCH`·`DELETE /api/item/:id` · `POST /api/item/:id/done` | one thing |
 | `POST /api/item/:id/when` | put it on a day `{date, time?}` or `{clear:true}` — anyone who can see it |
 | `POST /api/item/:id/visit` | `{book?, again?, memory?}` — anyone who can see it; `again`/`memory` only once done (409) |
+| `GET /api/item/:id/weather` · `GET /api/space/:id/weather` | the weather at a place (now, rain soon, its plan) with how it suits the place's profile; the middle of a list's pins for the Places tab — only what you can see |
 | `GET /api/item/:id/place` | a place's hours, website, address — live from OSM by its id; 404 if you can't see it |
 | `GET`·`POST /api/space/:id/pleasure` | the rose — pairs only; partner's try answers appear only as matches; `question` is today's Spicy one, answered here with `{ question: {date, text\|pick\|react\|reply} }` |
+| `POST /mcp` | the Claude connector — MCP over Streamable HTTP, bearer token only, read only |
+| `GET /.well-known/oauth-protected-resource[/mcp]` · `/.well-known/oauth-authorization-server` | connector discovery |
+| `POST /oauth/register` · `GET`·`POST /oauth/authorize` · `POST /oauth/token` · `POST /oauth/revoke` | the connector's OAuth 2.1 (PKCE, public clients, Claude's callback or loopback only) |
+| `GET /api/connect` · `POST /api/connect/code` · `DELETE /api/connect/:id` | the account sheet's Claude row: the address, a code for a signed-out browser, Disconnect |
 | `GET /sso?t=` · `POST /sso` | from the Square's ⊞ tile: a signed pass signs you in (or asks first); 404 without `squareSecret` |
 | `GET /api/square/status` · `POST /api/square/import` | the import bridge (501) |
 | `GET /share` | share target / Shortcut / bookmarklet — serves the shell |
@@ -1453,3 +1589,13 @@ Not deployed yet. To bring it up:
   step described above.
 - **Auto-tagging.** The groups seam is ready; trips' discovery mode is the
   reference for making them emerge and then hold still.
+- **Andrew's backlog (Nov 25), roughly in order:**
+  - **Suggestions**: what to do today, from the lists, the live weather and each place's
+    weather profile. `placefit.judge` plus `weather.summary` are already the two halves.
+  - **A location check**: how far apart the two of you are. This is a NEW disclosure,
+    which nothing so far has needed: positions are never stored or sent today. It wants
+    its own pure rule, opt-in per person, like `kitchen.canUse`.
+  - **Transit directions** from each of you to the other, or to a place. It builds on the
+    location check, and the same rule applies to it.
+  - **A relationship check-in.** It belongs beside Today's question and the rose, keyed
+    by the pair, with their privacy rules rather than a list's.

@@ -81,6 +81,12 @@ function connectCdp(wsUrl) {
       req.on('end', () => {
         const b = JSON.parse(raw);
         claudeAsked.push(b.messages[0].content);
+        if (JSON.stringify((b.output_config || {}).format || {}).includes('weather_matters')) {
+          const fit = { weather_matters: true, setting: 'outdoors', ideal_conditions: ['clear'], ideal_min_c: 15, ideal_max_c: 26,
+            avoid_conditions: ['rain'], too_cold_below_c: 5, too_hot_above_c: null, best_time: null, best_seasons: null, why: 'Best on a dry day.' };
+          return res.end(JSON.stringify({ id: 'msg_fit', type: 'message', role: 'assistant', model: b.model, stop_reason: 'end_turn', stop_sequence: null,
+            content: [{ type: 'text', text: JSON.stringify(fit) }], usage: { input_tokens: 1, output_tokens: 1 } }));
+        }
         const says = {
           verdict: /butter/i.test(JSON.stringify(b.messages)) ? 'Of the two, butter works best here.' : 'Butter would do it.',
           suggestions: [
@@ -94,6 +100,15 @@ function connectCdp(wsUrl) {
       return;
     }
     if (req.url.startsWith('/search')) return res.end('[]');   // Nominatim: nowhere by that name
+    // Open-Meteo: a clear 20° afternoon, so the weather has something to show.
+    if (req.url.startsWith('/v1/forecast')) {
+      const day = new Date().toISOString().slice(0, 10);
+      const time = Array.from({ length: 24 }, (_, h) => `${day}T${String(h).padStart(2, '0')}:00`);
+      return res.end(JSON.stringify({ timezone: 'UTC',
+        current: { time: `${day}T12:00`, temperature_2m: 20, apparent_temperature: 20, weather_code: 0, is_day: 1, wind_speed_10m: 5 },
+        hourly: { time, temperature_2m: time.map(() => 20), precipitation_probability: time.map(() => 0), weather_code: time.map(() => 0) },
+        daily: { time: [day], weather_code: [0], temperature_2m_max: [22], temperature_2m_min: [12], precipitation_probability_max: [0] } }));
+    }
     // A recipe page, written for the suite, and its photo.
     if (req.url === '/r/recipe.html') {
       res.setHeader('content-type', 'text/html');
@@ -137,6 +152,7 @@ function connectCdp(wsUrl) {
     // he can see. Linnea is not, which is what the read-only checks rely on.
     admins: [A],
     anthropicKey: 'test-key', anthropicBaseUrl: FAKE,
+    weatherEndpoint: `${FAKE}/v1/forecast`,
   }));
 
   const server = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
@@ -898,6 +914,10 @@ function connectCdp(wsUrl) {
     check(await visible('#plInfo') && /open today · 8 AM–5 PM/i.test(await evalJs(`document.getElementById('plInfo').innerText`)),
       `its hours, read for today: ${await evalJs(`document.getElementById('plInfo').innerText`)}`);
     check(await evalJs(`document.getElementById('plWeb').getAttribute('href')`) === 'https://toki.example', 'and its website');
+    const wx = await evalJs(`document.getElementById('plWx').innerText`);
+    check(await visible('#plWx') && /68°|20°/.test(wx) && /Clear/.test(wx), `the weather there, now: ${wx}`);
+    check(/Good weather for it right now/.test(wx) && /Best with clear skies/.test(wx), 'and whether it suits the place, by its profile');
+    check(await visible('#plWxPill') && /°/.test(await evalJs(`document.getElementById('plWxPill').innerText`)), 'and over the Places map');
     await evalJs(`document.getElementById('plBook').click()`);
     await sleep(800);
     const visitOf = async (re) => evalJs(`fetch('/api/space/sp1/items').then(r => r.json())
@@ -1753,6 +1773,21 @@ function connectCdp(wsUrl) {
     // ── an invite, on a server with no Google and no Access ───────────────
     // The link is the sign-in: who sent it, a name, one tap, and you are in the
     // list. This server had shown "Sign-in is not configured" here.
+    // The Claude row: the address to paste into Claude, and a code for a browser
+    // that is not signed in here.
+    await evalJs(`document.getElementById('btnMe').click()`);
+    await sleep(700);
+    check(await visible('#claudeRow'), 'the account sheet has a Claude row');
+    await evalJs(`document.getElementById('claudeRow').click()`);
+    await sleep(800);
+    check(await visible('#claudeSheet') && !(await visible('#meSheet')), 'which opens a sheet of its own');
+    check(/\/mcp$/.test(await evalJs(`document.getElementById('clUrl').innerText`)), 'with the address to paste');
+    await evalJs(`document.getElementById('clCode').click()`);
+    await sleep(700);
+    check(/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(await evalJs(`(document.querySelector('#clCodeOut b') || {}).innerText || ''`)), 'and a code when asked');
+    await evalJs(`document.getElementById('clClose').click()`);
+    await sleep(400);
+
     const fresh = (await asApi(A, 'POST', '/api/space', { name: '' })).space;
     const inv = await asApi(A, 'POST', `/api/space/${fresh.id}/invite`, {});
     await S('Network.clearBrowserCookies');

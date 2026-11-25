@@ -8,6 +8,7 @@ import { initSpace, openSpace, refresh } from './space.js';
 import { sheetDrag } from './motion.js';
 import { openCook } from './cook.js';
 import { initShare, incoming, openShare } from './share.js';
+import { initClaude, paintClaudeRow } from './connect.js';
 
 function toShelf() {
   S.spaceId = null;
@@ -79,6 +80,7 @@ async function openAccount() {
       : sq.linkable ? 'connected'
       : `${sq.people} people found · linking not built yet`;
   } catch (_) { $('squareState').textContent = 'unavailable'; }
+  paintClaudeRow();
   paintNudge();
   paintThemes();
   openSheet('meSheet');
@@ -108,6 +110,7 @@ async function start() {
     paintNudge();
   });
   $('meSignOut').addEventListener('click', signOut);
+  initClaude();
   $('meCancel').addEventListener('click', () => closeSheet('meSheet'));
   $('meSheet').addEventListener('click', (e) => { if (e.target === $('meSheet')) closeSheet('meSheet'); });
   // Every sheet closes on a tap on the scrim, through its own X — so whatever

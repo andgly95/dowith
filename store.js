@@ -32,6 +32,9 @@ function defaultState() {
     kitchens: {},
     // Cooking timers registered so a locked phone still gets told; ≤6 a person.
     timers: [],
+    // The Claude connector's OAuth: registered clients, and grants holding only
+    // HASHES of their tokens — see lib/oauth.js.
+    oauth: { clients: {}, grants: {} },
     seq: 1,
   };
 }

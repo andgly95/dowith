@@ -108,6 +108,7 @@
         </div>
         <button class="glass-btn rose-btn" id="plRose" aria-label="Just us"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 5.2c0 3.3 2.2 5.8 5 5.8s5-2.5 5-5.8c-1.4.9-2.7.9-3.6 0-.6-.6-1-1.5-1.4-2.7-.4 1.2-.8 2.1-1.4 2.7-.9.9-2.2.9-3.6 0z"/><path d="M9.8 6.9c.6.8 1.4 1.2 2.2 1.2s1.6-.4 2.2-1.2"/><path d="M12 11v10"/><path d="M12 16.2c-1.9-.2-3.5-1.3-4.1-3.2 2 0 3.5 1 4.1 3.2z"/><path d="M12 18.6c1.9-.2 3.5-1.3 4.1-3.2-2 0-3.5 1-4.1 3.2z"/></svg></button>
       </div>
+      <div class="pl-wx glass" id="plWxPill" role="status" hidden></div>
     </div>
     <div class="scroll" id="spaceScroll">
       <div id="itemList" class="items"></div>
@@ -265,6 +266,7 @@
       <a class="act" id="plWeb" target="_blank" rel="noopener noreferrer"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.6 3.6 5.5 3.6 8.6s-1.2 6-3.6 8.6c-2.4-2.6-3.6-5.5-3.6-8.6s1.2-6 3.6-8.6z"/></svg></i>Website</a>
       <button type="button" class="act" id="plShare"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 14.6V3.8M8.2 7.4L12 3.8l3.8 3.6"/><path d="M7 10.6H5.8v9h12.4v-9H17"/></svg></i>Share</button>
     </div>
+    <div class="box wx" id="plWx" hidden></div>
     <div class="box info" id="plInfo" hidden></div>
     <p class="pl-src" id="plSrc" hidden>Hours and address come from OpenStreetMap, fresh each time you open this.</p>
 
@@ -424,6 +426,7 @@
     </div>
     <div class="box rows">
       <div class="crow"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.8" r="3.2"/><path d="M3.4 19.2c.6-3 2.9-4.7 5.6-4.7s5 1.7 5.6 4.7"/><circle cx="16.6" cy="9.4" r="2.6"/><path d="M15.6 14.4c2.5 0 4.4 1.4 5 4"/></svg></i><span class="cb"><b>People you can share with</b></span><span class="val" id="meCircle">0</span></div>
+      <button type="button" class="crow" id="claudeRow"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8v16.4M4.9 7.9l14.2 8.2M4.9 16.1l14.2-8.2"/></svg></i><span class="cb"><b>Claude</b><small>ask it what’s on your lists</small></span><span class="val" id="claudeState">—</span></button>
       <div class="crow" id="squareRow"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.6" y="4.6" width="14.8" height="14.8" rx="3.4"/><path d="M9 12h6"/></svg></i><span class="cb"><b>The Square</b></span><span class="val" id="squareState">—</span></div>
     </div>
     <div class="box rows">
@@ -438,6 +441,26 @@
     <div class="box rows">
       <button type="button" class="crow warn" id="meSignOut"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.8 4.6H6.2v14.8h7.6"/><path d="M10.8 12h9.4M17 8.6l3.4 3.4-3.4 3.4"/></svg></i><span class="cb"><b>Sign out</b></span></button>
     </div>
+  </div>
+</div>
+
+<!-- the Claude connector: read only (lib/connector.js, lib/oauth.js) -->
+<div id="claudeSheet" class="modal" hidden>
+  <div class="modal-in">
+    <div class="modal-hd"><div class="hd-t"><b>Claude</b><span>read only</span></div><button type="button" class="x" id="clClose" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
+    <p class="cl-note">Ask Claude what’s on your lists, what’s planned, or what to watch tonight. It reads what you see here and changes nothing. It never sees the rose, today’s question or a kitchen.</p>
+    <ol class="cl-steps">
+      <li>In Claude, open <b>Settings → Connectors</b> and choose <b>Add custom connector</b>.</li>
+      <li>Call it Do With, and paste this address:</li>
+    </ol>
+    <div class="cl-url"><code id="clUrl"></code><button type="button" id="clCopy">Copy</button></div>
+    <ol class="cl-steps" start="3">
+      <li>Tap <b>Connect</b>, then <b>Allow</b>. If that browser isn’t signed in to Do With, it asks for a code.</li>
+    </ol>
+    <button type="button" class="ghost" id="clCode">Get a code</button>
+    <div class="cl-code" id="clCodeOut" hidden></div>
+    <h3 class="sec" id="clConnHd" hidden>Connected</h3>
+    <div class="box rows" id="clConns" hidden></div>
   </div>
 </div>
 
