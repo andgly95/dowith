@@ -32,6 +32,11 @@ function defaultState() {
     kitchens: {},
     // Cooking timers registered so a locked phone still gets told; ≤6 a person.
     timers: [],
+    // Where people set out from — a station each chose (lib/stations.js) — and
+    // what their thumbs have taught each list's suggestions (lib/suggest.js),
+    // per list, per person.
+    stations: {},
+    taste: {},
     // The Claude connector's OAuth: registered clients, and grants holding only
     // HASHES of their tokens — see lib/oauth.js.
     oauth: { clients: {}, grants: {} },

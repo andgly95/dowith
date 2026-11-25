@@ -81,7 +81,21 @@ function connectCdp(wsUrl) {
       req.on('end', () => {
         const b = JSON.parse(raw);
         claudeAsked.push(b.messages[0].content);
-        if (JSON.stringify((b.output_config || {}).format || {}).includes('weather_matters')) {
+        const fmt = JSON.stringify((b.output_config || {}).format || {});
+        const reply = (says) => res.end(JSON.stringify({ id: 'msg_s', type: 'message', role: 'assistant', model: b.model, stop_reason: 'end_turn', stop_sequence: null,
+          content: [{ type: 'text', text: JSON.stringify(says) }], usage: { input_tokens: 1, output_tokens: 1 } }));
+        // What each thing asks of you, answered by number; and new ideas.
+        if (fmt.includes('better_when_bad')) {
+          return reply({ items: [...b.messages[0].content.matchAll(/^(\d+)\. \[([a-z]+)\]/gm)].map(([, n, kind]) => ({ n: Number(n),
+            role: kind === 'film' || kind === 'show' ? 'watch' : kind === 'recipe' ? 'eat' : 'do', energy: kind === 'film' || kind === 'show' ? 1 : 3,
+            minutes: 90, where: kind === 'place' ? 'out' : 'home', times: null, weather: 'any' })) });
+        }
+        if (fmt.includes('"ideas"')) {
+          return reply({ ideas: [{ title: '🎬 The Apartment', kind: 'movie', role: 'watch', energy: 1, why: 'A warm one for a night in.' },
+            { title: '🍲 A big pot of chili', kind: 'recipe', role: 'eat', energy: 2, why: 'Easy, and it feeds tomorrow too.' },
+            { title: '🧩 A jigsaw and a record', kind: 'activity', role: 'do', energy: 1, why: 'Nothing to get up for.' }] });
+        }
+        if (fmt.includes('weather_matters')) {
           const fit = { weather_matters: true, setting: 'outdoors', ideal_conditions: ['clear'], ideal_min_c: 15, ideal_max_c: 26,
             avoid_conditions: ['rain'], too_cold_below_c: 5, too_hot_above_c: null, best_time: null, best_seasons: null, why: 'Best on a dry day.' };
           return res.end(JSON.stringify({ id: 'msg_fit', type: 'message', role: 'assistant', model: b.model, stop_reason: 'end_turn', stop_sequence: null,
@@ -100,6 +114,13 @@ function connectCdp(wsUrl) {
       return;
     }
     if (req.url.startsWith('/search')) return res.end('[]');   // Nominatim: nowhere by that name
+    // Transitous, for suggestions: a station search and an 18-minute ride.
+    if (req.url.startsWith('/transit/api/v1/geocode')) {
+      return res.end(JSON.stringify([{ type: 'STOP', name: 'Union Station', id: 'u', lat: 38.8977, lon: -77.0064, modes: ['SUBWAY'], areas: [{ name: 'DC', default: true }] }]));
+    }
+    if (req.url.startsWith('/transit/api/v5/plan')) {
+      return res.end(JSON.stringify({ itineraries: [{ duration: 1080, legs: [{ mode: 'SUBWAY', routeShortName: 'R', routeColor: 'c80f2d' }] }] }));
+    }
     // TMDB, for a show's seasons: one that has ended, three episodes and two.
     if (req.url.startsWith('/tmdb/tv/9001')) {
       const pth = new URL(req.url, 'http://x').pathname;
@@ -163,6 +184,7 @@ function connectCdp(wsUrl) {
     admins: [A],
     anthropicKey: 'test-key', anthropicBaseUrl: FAKE,
     weatherEndpoint: `${FAKE}/v1/forecast`,
+    transitEndpoint: `${FAKE}/transit`,
   }));
 
   const server = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
@@ -325,13 +347,13 @@ function connectCdp(wsUrl) {
     // ONE CONTROL, not three. "To do" was a tab for the state you were already
     // in, and the map is parked until it has something worth showing — its
     // renderer is untouched, only the way in is gone.
-    // Two since the calendar: views you switch INTO, never "To do" (the state
-    // you are already in) and never the map.
-    // The map is the third, and only once something here has a place — nothing
-    // does yet, so it must not be on screen. Asked by LAYOUT, like everything.
+    // Three since suggestions: views you switch INTO, never "To do" (the state
+    // you are already in) and never the map. Asked by LAYOUT, like everything.
     check(await evalJs(`[...document.querySelectorAll('#spaceTabs button')]
       .filter(b => b.offsetWidth).map(b => b.dataset.tab).join()`)
-      === 'cal,done', 'the toggles are Calendar and Done together, and nothing else');
+      === 'sug,cal,done', 'the toggles are Suggestions, Calendar and Done together, and nothing else');
+    check(await evalJs(`(() => { const c = document.querySelector('.ctl'); return c.scrollWidth <= c.clientWidth + 1; })()`),
+      'and the three fit on the row');
     check(await visible('#tabDone'), 'and it is the record');
     // Small, and over on the right. It inherited the size and weight of the
     // three-up row it is no longer part of, which put a bold card-backed button
@@ -1807,6 +1829,8 @@ function connectCdp(wsUrl) {
     await evalJs(`document.querySelector('${showCard} [data-open]').click()`);
     await sleep(1400);
     check(await visible('#isEpsFld') && await evalJs(`document.querySelectorAll('#isEps .ep').length`) === 3, "a show's sheet has its episodes, season 1 first");
+    check(await evalJs(`[...document.querySelectorAll('#isEps .ep .ep-t b')].map(b => b.innerText).join('|')`) === 'Chapter 1|Chapter 2|Chapter 3',
+      'each episode by its title');
     const nextUp = await evalJs(`document.querySelector('#isEps .ep-next').innerText`);
     check(/S1 · E1/.test(nextUp) && /Chapter 1/.test(nextUp), `and what is next, by name: ${nextUp}`);
     await evalJs(`document.querySelector('#isEps [data-all]').click()`);
@@ -1829,6 +1853,53 @@ function connectCdp(wsUrl) {
     fs.writeFileSync(cfgPath, cfg0);
     await evalJs(`document.querySelector('#kindNav [data-kind="activity"]').click()`);
     await sleep(400);
+
+    // ── suggestions ─────────────────────────────────────────────────────
+    // The button beside Calendar opens a view of its own: how much energy, for
+    // when, and then a plan — each piece swappable — and the list in order.
+    await evalJs(`document.getElementById('tabSug').click()`);
+    await sleep(1600);
+    check(await visible('.sg') && await visible('#sgEnergy'), 'Suggestions opens its own view, with an energy slider');
+    check(!(await visible('#kindNav')) && !(await visible('#newItem')), 'and the kind bar and the composer step aside');
+    await evalJs(`(() => { const r = document.getElementById('sgEnergy'); r.value = '1';
+      r.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await sleep(1800);
+    check(await evalJs(`document.getElementById('sgWord').innerText`) === 'Wiped out', 'the slider says what it means');
+    check(await evalJs(`document.querySelectorAll('#sgBody .sg-slot').length`) >= 1 && await evalJs(`document.querySelectorAll('#sgBody .sg-it[data-sit]').length`) >= 2,
+      'and there is a plan, and the list in order');
+    check(/Low effort|No going anywhere/.test(await evalJs(`document.getElementById('sgBody').innerText`)), 'each thing says why');
+    await evalJs(`document.querySelector('#sgBody [data-vote][data-v="1"]').click()`);
+    await sleep(1500);
+    check(await evalJs(`!!document.querySelector('#sgBody [data-vote][data-v="1"][aria-pressed="true"]')`), 'a thumb is kept');
+    await evalJs(`document.querySelector('#sgBody [data-swap]').click()`);
+    await sleep(700);
+    check(await visible('#sgSwapSheet .modal-in') && /From your list/.test(await evalJs(`document.getElementById('sgSwapBody').innerText`)), 'Swap offers other things for that piece');
+    await evalJs(`document.getElementById('sgSwapIdeas').click()`);
+    await sleep(1500);
+    // Whichever part of the day the first slot is, only an idea of that kind comes back.
+    check(/The Apartment|pot of chili|jigsaw/.test(await evalJs(`document.getElementById('sgSwapBody').innerText`))
+      && await evalJs(`document.querySelectorAll('#sgSwapBody [data-useidea]').length`) === 1, 'and something new of the same sort, when asked');
+    await evalJs(`document.getElementById('sgSwapClose').click()`);
+    await sleep(400);
+    // Where you start from: a station you choose.
+    await evalJs(`document.getElementById('sgFrom').click()`);
+    await sleep(700);
+    check(await visible('#sgStationSheet .modal-in'), 'Starting from opens the stations');
+    await evalJs(`(() => { const i = document.querySelector('#sgStationBody [data-q]'); i.value = 'union';
+      i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await sleep(1300);
+    await evalJs(`document.querySelector('#sgStationBody [data-pick]').click()`);
+    await sleep(1200);
+    check(/Union Station/.test(await evalJs(`document.querySelector('#sgStationBody .crow').innerText`)), 'search, tap, and it is yours');
+    await evalJs(`document.getElementById('sgStationClose').click()`);
+    await sleep(2600);
+    check(/Union Station/.test(await evalJs(`document.getElementById('sgFrom').innerText`)), 'and the screen says where you start from');
+    await evalJs(`document.getElementById('sgThrough').click()`);
+    await sleep(2000);
+    check(/Tomorrow/.test(await evalJs(`[...document.querySelectorAll('#sgBody .sg-day')].map(x => x.innerText).join('|')`)), 'a plan can carry on into tomorrow');
+    await evalJs(`document.getElementById('tabSug').click()`);
+    await sleep(600);
+    check(await visible('#kindNav') && !(await evalJs(`!!document.querySelector('.sg')`)), 'and the button puts the list back');
 
     // The Claude row: the address to paste into Claude, and a code for a browser
     // that is not signed in here.

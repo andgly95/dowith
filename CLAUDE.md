@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 218 tests + a headless-chromium check
+- **Tests:** `npm test` — 227 tests + a headless-chromium check
 
 ## The model
 
@@ -40,6 +40,10 @@ state.kitchens[uid] = { pantry: { [key]: { name, state, aisle, by, at } }, buy: 
 state.questions[pairKey] = { zone, decks: {[uid]: kinds}, remind: {[uid]: 'HH:MM'}, paused, pauses, startedOn,
                              days: { 'YYYY-MM-DD': { qid, kind, answers: {[uid]: {text|pick, at}}, reacts, replies } } } // see Today's question
 state.timers = [{ id, uid, itemId, step, label, endsAt }]
+fit        = { role, energy, minutes, where, times, weather, of, by, model, at }   // see Suggestions
+episodes   = { of, seen: { [season]: [ep…] }, season, show, by, at }               // see A show's seasons
+state.stations[uid] = { list: [{ id, name, lat, lon, modes, area }], by, at }       // a station each person chose
+state.taste[spaceId][uid] = { votes: { [itemId]: { v, at } }, ideas: [...], w: { [feature]: -1..1 } }
 ```
 
 - **A space holds people.** Two, usually. A pair needs no name — from your side it
@@ -272,6 +276,135 @@ store is never opened for them.
   that dumps the projection and asserts no message content survives.
 - `squareStorePath` in config, not hardcoded — a bridge that assumes a sibling
   directory breaks the moment either app moves.
+
+## Suggestions (`lib/suggest.js`, `itemfit.js`, `stations.js`, `transit.js`, `ideas.js`, `public/js/suggest.js`)
+
+A sparkle button beside Calendar opens a view of its own (Andrew's ask, Nov 25–26). You
+say **how much energy you have** on a slider and **when it is for** (Now, Tonight,
+Tomorrow, or a day and time). It answers with:
+
+- **A plan**: one thing after another (dinner, then something to watch), each piece
+  with a **Swap**. *Carry on into the next day* adds a morning, an afternoon and a
+  dinner, for the evening that turns into a sleepover.
+- **Also good then**: the rest of the list, in order, each saying why.
+- **Not then**: what is ruled out (closed at that hour, rained off), with the reason.
+  Nothing is hidden silently.
+- **New ideas**, on request: things not on the list yet.
+
+Every row has a thumb up and a thumb down. **Put it on the calendar** gives each piece
+of the plan its day and hour (`/when`).
+
+### The scorer is pure, and every weight says why
+
+`suggest.score(item, ctx)` weighs one thing for one moment. The routes gather the facts
+and the client draws what it is sent, the `kitchen.match` rule again. The weights are one
+table (`W`), and each one that moves a thing has words the screen shows:
+
+- **Energy.** An exact match is best. Each level a thing asks beyond what you have costs
+  a lot (*Takes more than you've got*); each level to spare costs a little.
+- **The part of the day** (*More of a morning or afternoon thing*), and a long thing
+  late at night.
+- **The weather at that hour.** A place with a weather profile is judged by it
+  (`placefit.judge`). Everything else goes by its `weather` field: *Nice out for it*,
+  *Wet then*, *Good for a wet one*.
+- **Open or closed then** (`hours.openAt`): *Closed then · opens 9 PM* rules it out.
+- **The journey**, for whoever has furthest to come: *Close by*, *A trek · 70 min for
+  Linnea*. When you are tired, a long trip costs more.
+- **Already planned for then**, a show you are **in the middle of** (*Keep going · S2
+  E3*), a recipe you **have everything for**.
+- **Thumbs**, below.
+
+`rank` then spreads the top of the list across kinds, so it is not eight films in a row.
+
+### A plan is slots, each weighed for its own hour
+
+`slotsFor(start, { through })` gives the parts of the day still ahead, each with a role:
+*Dinner@19:00, Evening@21:00*, and with `through` *Morning@11:00, Afternoon@14:30,
+Dinner@18:30* the next day. They are a template, not a schedule, so the screen says
+"around 7 PM". `plan()` fills each slot with the best thing of that role **for that
+slot's hour** (its weather, its opening hours, its journey), never the same thing twice,
+and keeps up to six runners-up for Swap.
+
+- **A piece you chose stays put** (`keep=s1:<id>`), and the rest is fitted round it.
+- **Over two days, one dinner out and one cooked** (`W.otherDinner`).
+- **The next day assumes you are rested**: its energy is at least "okay".
+- A thumb down on a piece makes room for the next one.
+- Swap offers the runners-up **From your list** and **Something new**: ideas of that
+  role only, added to the list and used in one tap.
+
+### What a thing asks of you (`item.fit`, by Opus 5.5)
+
+Every item gets a profile: its **role** (eat, drink, watch, do), **energy** 1–5,
+minutes, home or out, the parts of the day it suits, and what weather does to it
+(`needs_good`, `better_when_bad`, `any`). This is the "same manner" Andrew asked for,
+for films and shows as well as places.
+
+- **Batched, twenty a call**, in the background, when Suggestions opens. Only what the
+  person asking can see is sent: a private film of hers waits for a request of her own.
+  **Title, kind and public facts go** (a film's year, what OSM calls a place, a recipe's
+  time). **Notes never do.**
+- **Until it arrives, `fitOf` answers from the kind** (`rough`): a film is low energy,
+  at home, in the evening. So it works on day one, with no key at all.
+- `of` is the kind and title it was made for. Reword it and it is made again. A PATCH can
+  neither set nor lose it. A gate (`cleanFit`, `cleanBatch`) stands between Claude and the
+  store.
+
+### Stations — a new audience, so one narrow rule (`lib/stations.js`)
+
+**Each person's location is a station they choose, never where the phone is.** That was
+Andrew's answer to the location check in the backlog: "Let me set each person's location
+as like a nearest subway station(s)". Up to three each.
+
+- **Who may see or set one is the kitchen's rule**, for the kitchen's reason, because it
+  says something about where you live: **yourself and anyone you share a PAIR list
+  with**. A group co-member gets 404, a stranger gets 404, and the suite has the truth
+  table. A partner may set yours (`by` records whose hand).
+- In a group list, somebody whose station you may not see is `null`: not "none set",
+  which would itself be saying something.
+- The picker searches Transitous (`/api/transit/stops`), rail before bus stops.
+
+### Journeys (`lib/transit.js`)
+
+**Transitous** (transitous.org): a free, keyless, community-run planner over public
+timetables. Checked on Nov 25: it knows the Metro's lines and colours.
+
+- **What is sent:** a station's coordinates, a place's coordinates and a time.
+- **One journey per person, per pinned place, per day of the plan**, cached six hours by
+  the half hour it leaves in, four at a time. A failure is not remembered.
+- **Under about 900 m is a walk** and is not asked about ("about 6 min walk").
+- No zone from the phone means no instant, so no journeys.
+- `transitEndpoint` in config points it at a stand-in for the suites.
+
+### Nothing waits for other people's servers
+
+Weather, opening hours and journeys are all somebody else's. `GET /suggest` uses what is
+cached, starts the rest, and says `pending`. The client asks again (up to seven times)
+and the answer sharpens in place. `profiling` says Claude is still describing the list.
+
+### Thumbs (`state.taste[spaceId][uid]`)
+
+- **A thumb on a thing fades** (half-life three weeks): "not tonight" is not "never".
+- **It teaches leanings** (`featuresOf`): toward a kind, toward staying in, toward low
+  effort, toward films in the evening. One thumb moves each by a step, bounded at ±1.
+  Changing your mind moves them by the difference, and taking it back leaves nothing.
+- **Yours alone on the wire.** The response carries your own thumb and nobody else's.
+  It still counts toward what the list suggests for everyone on it, because the
+  question is "what should we do". Leaving a list takes your thumbs with you.
+
+### New ideas (`lib/ideas.js`)
+
+Asked of Opus 5.5 only when somebody taps, 12 an hour per person. **It is told more than
+a swap is**, so it is said plainly: when it is for, the energy, the weather then, the
+**names** of the stations people start from (never coordinates), the titles on the list,
+and what was thumbed up or down. Never anybody's name, notes, or a private thing the
+asker cannot see.
+
+- The gate drops an idea already on the list (emoji-insensitive), one passed on, a
+  repeat, a kind that is not one, and anything that is not the role asked for.
+- The prompt says to name a real place only when confident, and otherwise to describe
+  the kind of place. A place idea is added as words, and gets a pin when a person picks
+  it on the map.
+- Not labelled as AI: the section is *New ideas*.
 
 ## The Claude connector (`lib/connector.js`, `lib/oauth.js`, `public/js/connect.js`)
 
@@ -687,7 +820,8 @@ Added Nov 25 at Andrew's ask. A show pinned to TMDB has an **Episodes** section 
 sheet:
 - a **Next up** card: *S2 · E3 · "its name"* with **Watched it**
 - a chip per season, with *3/10*
-- the season as numbered circles to tick
+- the season as a row per episode: its number in a ring to tick, and **its title**
+  (Andrew asked for the titles: a title is how anybody remembers where they got to)
 - *Mark season 2 watched*
 
 The shelf shows how far you are: a hairline along the bottom of the poster, beside the
@@ -704,6 +838,15 @@ tick, and *S2 E3 next* under the title.
   still running (`Returning Series`, or a next episode scheduled) is *All caught up*
   instead, and stays on the shelf, because a new season is what you would keep it there
   for.
+- **The season you chose is where you are** (`rec.season`, Andrew's ask: "in case you
+  wanna skip whole seasons"). Tapping a season chip keeps that choice on the server, for
+  both of you, and ticks nothing. *Next up* is the first unwatched episode from that
+  season ON, so starting at season 3 says *S3 E1*, and the shelf's *next* agrees. The
+  selection stays put after you watch an episode. It only moves when *Watched it* was
+  an episode of the following season.
+  - **Skipped seasons, then the last episode:** not every episode is seen, so the show
+    does not finish itself. The card says *You've reached the end* with **Finish the
+    show**, which ticks it off and plays the same finale.
 - **The ordinary tick still finishes a show at any point**, seen it all or not.
   Un-ticking an episode of a finished show does not un-finish it.
 - **The finale** (`finale()` in space.js). The sheet closes. The poster lifts and glows,
@@ -1568,6 +1711,9 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `POST /api/item/:id/when` | put it on a day `{date, time?}` or `{clear:true}` — anyone who can see it |
 | `POST /api/item/:id/visit` | `{book?, again?, memory?}` — anyone who can see it; `again`/`memory` only once done (409) |
 | `GET /api/item/:id/weather` · `GET /api/space/:id/weather` | the weather at a place (now, rain soon, its plan) with how it suits the place's profile; the middle of a list's pins for the Places tab — only what you can see |
+| `GET /api/space/:id/suggest?energy=&at=&tz=&through=&keep=` | what would be good for then: a plan of slots (pick and runners-up), the list in order, what is ruled out, `pending` |
+| `POST /api/space/:id/suggest/vote {item\|idea, v, at}` · `POST /api/space/:id/suggest/ideas {energy, at, tz, role?}` | a thumb (yours alone on the wire); new ideas from Claude, gated, 12 an hour |
+| `GET`·`POST /api/people/:uid/stations` · `GET /api/transit/stops?q=&space=` | where somebody starts from — yourself or a pair partner, else 404; the station search |
 | `GET /api/item/:id/show` · `GET /api/item/:id/show/season/:n` · `POST /api/item/:id/episodes {s, e?, seen}` | a show's seasons, episode names, and ticking one (or a whole season) — anyone who can see it; the last of an ended show ticks it off |
 | `GET /api/space/:id/hours?at=` | open or closed now for every place on the list, at the phone's time; `pending` says to ask again |
 | `GET /api/item/:id/place?at=` | a place's hours, website, address — live from OSM by its id — and open or closed now and on its plan; 404 if you can't see it |
@@ -1669,17 +1815,9 @@ Not deployed yet. To bring it up:
   step described above.
 - **Auto-tagging.** The groups seam is ready; trips' discovery mode is the
   reference for making them emerge and then hold still.
-- **Andrew's backlog (Nov 25), roughly in order:**
-  - **Suggestions**: what to do today, from the lists, the live weather and each place's
-    weather profile. `placefit.judge` plus `weather.summary` are already the two halves.
-    **Films and shows too, "in the same manner"**: a profile made by Opus 5.5 the way
-    places have one, saying what kind of night each suits (mood, how much attention it
-    takes, length, a rainy-night film). For shows, where you are in it (`progress`) is
-    the obvious "keep going with this one".
-  - **A location check**: how far apart the two of you are. This is a NEW disclosure,
-    which nothing so far has needed: positions are never stored or sent today. It wants
-    its own pure rule, opt-in per person, like `kitchen.canUse`.
-  - **Transit directions** from each of you to the other, or to a place. It builds on the
-    location check, and the same rule applies to it.
+- **Andrew's backlog:**
+  - Suggestions, stations and journeys are built (see *Suggestions*). Still open there:
+    turn-by-turn directions, a separate energy for the next day, and learning from what
+    actually got done after it was suggested.
   - **A relationship check-in.** It belongs beside Today's question and the rose, keyed
     by the pair, with their privacy rules rather than a list's.

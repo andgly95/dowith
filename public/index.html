@@ -91,6 +91,7 @@
     <div class="ctl">
       <span class="ctl-n" id="spaceCount"></span>
       <div class="seg" id="spaceTabs">
+        <button id="tabSug" data-tab="sug" aria-pressed="false" aria-label="Suggestions"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 4.2l1.7 4.6 4.6 1.7-4.6 1.7-1.7 4.6-1.7-4.6-4.6-1.7 4.6-1.7z"/><path d="M18 14.6l.8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8z"/></svg></button>
         <button id="tabCal" data-tab="cal" aria-pressed="false"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg><span>Calendar</span></button>
         <button id="tabDone" data-tab="done" aria-pressed="false" aria-label="Done together"><svg class="ok" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M8.2 12.3l2.6 2.6 5-5.2"/></svg></button>
       </div>
@@ -444,6 +445,23 @@
     <div class="box rows">
       <button type="button" class="crow warn" id="meSignOut"><i><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.8 4.6H6.2v14.8h7.6"/><path d="M10.8 12h9.4M17 8.6l3.4 3.4-3.4 3.4"/></svg></i><span class="cb"><b>Sign out</b></span></button>
     </div>
+  </div>
+</div>
+
+<!-- suggestions: swap one piece of a plan (suggest.js) -->
+<div id="sgSwapSheet" class="modal" hidden>
+  <div class="modal-in">
+    <div class="modal-hd"><div class="hd-t"><b id="sgSwapTitle">Swap</b><span id="sgSwapSub"></span></div><button type="button" class="x" id="sgSwapClose" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
+    <div id="sgSwapBody"></div>
+  </div>
+</div>
+
+<!-- suggestions: where each of you starts from — a station, chosen (lib/stations.js) -->
+<div id="sgStationSheet" class="modal" hidden>
+  <div class="modal-in">
+    <div class="modal-hd"><div class="hd-t"><b>Starting from</b><span>your nearest station</span></div><button type="button" class="x" id="sgStationClose" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
+    <p class="cl-note">Suggestions use this to say how long it takes each of you to get somewhere. It is a station you choose, never where your phone is, and only the two of you see it.</p>
+    <div id="sgStationBody"></div>
   </div>
 </div>
 

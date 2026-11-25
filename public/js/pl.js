@@ -129,6 +129,7 @@ export function renderPlaces(list, { open, done, been }) {
         : `${n} ${n === 1 ? 'place' : 'places'} to go`}</b>
       <small>with ${esc(sp.title || 'this list')} · ${been ? 'most recent first' : here ? 'closest first' : 'newest first'}</small>
     </div>
+    <button type="button" class="round" data-plsug aria-label="Suggestions"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 4.2l1.7 4.6 4.6 1.7-4.6 1.7-1.7 4.6-1.7-4.6-4.6-1.7 4.6-1.7z"/><path d="M18 14.6l.8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8z"/></svg></button>
     <button type="button" class="round" data-plcal aria-label="Calendar">${icon('cal', 19)}</button></div>`;
 
   let body;
@@ -165,6 +166,7 @@ export function renderPlaces(list, { open, done, been }) {
   list.innerHTML = head + body;
 
   list.querySelector('[data-plcal]').addEventListener('click', () => $('tabCal').click());
+  list.querySelector('[data-plsug]').addEventListener('click', () => $('tabSug').click());
   // The grabber is a button too, for anyone not dragging: it steps between the
   // list and the map rather than leaving a gesture as the only way.
   list.querySelector('[data-grab]').addEventListener('click', () => snapTo(detent === 'half' ? 'list' : 'half'));

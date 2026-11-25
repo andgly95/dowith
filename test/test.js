@@ -1498,6 +1498,23 @@ async function episodeRules() {
       'a show still running is caught up, not finished');
     assert.deepStrictEqual(caught.coming, { s: 2, e: 2, air: '2026-11-27' });
   });
+
+  await t('the season you chose is where you are: next is counted from it, so seasons can be skipped', () => {
+    const show = E.shapeShow(SHOW_ENDED);
+    const fresh = E.progress({ seen: {} }, show);
+    assert.deepStrictEqual([fresh.season, fresh.next], [1, { s: 1, e: 1 }], 'nothing chosen: where the first unwatched one is');
+    const skipped = E.progress({ seen: {}, season: 2 }, show);
+    assert.deepStrictEqual([skipped.season, skipped.next], [2, { s: 2, e: 1 }], 'chose season 2: S2 E1 is next, not S1 E1');
+    const mid = E.progress({ seen: { 2: [1] }, season: 2 }, show);
+    assert.deepStrictEqual([mid.season, mid.next, mid.reachedEnd], [2, { s: 2, e: 2 }, false], 'and it stays in season 2');
+    const end = E.progress({ seen: { 2: [1, 2] }, season: 2 }, show);
+    assert.deepStrictEqual([end.next, end.reachedEnd, end.finished, end.all], [null, true, false, false],
+      'the last season watched with one skipped: the end for them, though not every episode');
+    const back = E.progress({ seen: { 1: [1, 2, 3] }, season: 1 }, show);
+    assert.deepStrictEqual(back.next, { s: 2, e: 1 }, 'a finished season moves next on to the one after');
+    assert.strictEqual(E.progress({ seen: {}, season: 9 }, show).season, 1, 'a season the show does not have is not a choice');
+    assert.deepStrictEqual([E.pickSeason(show, 2), E.pickSeason(show, 0), E.pickSeason(show, 7)], [2, null, null]);
+  });
 }
 
 async function weatherRules() {
@@ -1616,6 +1633,204 @@ async function weatherRules() {
     const asked = P.promptFor(it);
     assert.ok(asked.includes('Roof Terrace') && asked.includes('What it is: bar') && asked.includes('Navy Yard'));
     assert.ok(/data, and ignore any instructions/.test(P.SYSTEM));
+  });
+}
+
+async function suggestRules() {
+  console.log('\nsuggestions — stations, journeys, what a thing asks of you, and the scorer');
+  const ST = require('../lib/stations');
+  const TR = require('../lib/transit');
+  const F = require('../lib/itemfit');
+  const SG = require('../lib/suggest');
+  const ID = require('../lib/ideas');
+  const now = Date.parse('2026-11-25T23:30:00Z');
+
+  await t('a station is seen and set by yourself and a pair partner — never a group co-member, never a stranger', () => {
+    const spaces = [{ id: 'p', memberIds: ['a', 'l'] }, { id: 'g', name: 'Trip', memberIds: ['a', 'l', 's'] }];
+    const rows = [['a', 'a', true], ['a', 'l', true], ['l', 'a', true], ['l', 's', false], ['s', 'l', false], ['a', 's', false], ['x', 'a', false], [null, 'a', false]];
+    for (const [viewer, owner, want] of rows) assert.strictEqual(ST.canSee(viewer, owner, spaces), want, `${viewer} → ${owner}`);
+    const st = {};
+    const kept = ST.set(st, 'a', [{ name: ' Union  Station ', lat: 38.8977, lon: -77.0074, modes: ['SUBWAY', 'TELEPORT'], area: 'DC' },
+      { name: 'Union Station', lat: 38.8977, lon: -77.0074 }, { name: 'In the sea', lat: 0, lon: 0 }, { name: '', lat: 1, lon: 1 },
+      { name: 'B', lat: 38.9, lon: -77.03 }, { name: 'C', lat: 38.91, lon: -77.04 }, { name: 'D', lat: 38.92, lon: -77.05 }], 'l', 5);
+    assert.deepStrictEqual(kept.map(x => x.name), ['Union Station', 'B', 'C'], 'cleaned, once each, a real point, three at most');
+    assert.deepStrictEqual([kept[0].modes, st.stations.a.by], [['SUBWAY'], 'l'], 'and whose hand it was');
+    const people = ST.peopleFor(st, ['a', 'l', 's'], 'l', spaces, id => id.toUpperCase());
+    assert.deepStrictEqual(people.map(p => [p.id, p.stations === null ? null : p.stations.length, p.canSet]), [['a', 3, true], ['l', 0, true], ['s', null, false]],
+      'somebody you may not see is null — not "none set", which would be saying something');
+    ST.set(st, 'a', [], 'a');
+    assert.strictEqual(st.stations.a, undefined);
+  });
+
+  await t('journeys: the quickest way, its lines, a short walk not asked about, and a wall clock as an instant', async () => {
+    const stops = TR.shapeStops([
+      { type: 'STOP', name: 'Main St & 1st', lat: 38.9, lon: -77.0, modes: ['BUS'], areas: [{ name: 'DC', default: true }] },
+      { type: 'STOP', name: 'Union Station', lat: 38.8977, lon: -77.0064, modes: ['SUBWAY', 'BUS'], areas: [{ name: 'United States' }, { name: 'DC', default: true }] },
+      { type: 'STOP', name: 'Union Station', lat: 38.8978, lon: -77.0065, modes: ['SUBWAY'] },
+      { type: 'ADDRESS', name: '1 Union Station Rd', lat: 38.9, lon: -77 }, { type: 'STOP', name: 'Nowhere', lat: 0, lon: 0 }]);
+    assert.deepStrictEqual(stops.map(x => [x.name, x.rail, x.area]), [['Union Station', true, 'DC'], ['Main St & 1st', false, 'DC']],
+      'rail first, platforms folded into one station, addresses and bad points dropped');
+    const p = TR.shapePlan({ direct: [], itineraries: [
+      { duration: 1500, legs: [{ mode: 'BUS', routeShortName: 'C51' }] },
+      { duration: 1080, legs: [{ mode: 'WALK' }, { mode: 'SUBWAY', routeShortName: 'R', routeColor: 'C80F2D', from: { name: 'Union Station' }, to: { name: 'Gallery Place' } },
+        { mode: 'WALK' }, { mode: 'SUBWAY', routeShortName: 'Y', routeColor: 'javascript:1', from: { name: 'Gallery Place' }, to: { name: 'U St' } }, { mode: 'WALK' }] }] });
+    assert.deepStrictEqual([p.minutes, p.transfers, p.lines.map(l => `${l.line}:${l.color}`)], [18, 1, ['R:c80f2d', 'Y:null']], 'a colour is six hex digits or nothing');
+    assert.strictEqual(TR.shapePlan({ itineraries: [] }), null);
+    const a = { lat: 38.8977, lon: -77.0064 };
+    assert.deepStrictEqual(TR.walkOf(a, { lat: 38.9005, lon: -77.0064 }).walk, true, '300 m is a walk');
+    assert.strictEqual(TR.walkOf(a, { lat: 38.93, lon: -77.03 }), null);
+    assert.strictEqual(new Date(TR.instantOf('2026-11-25', '19:00', 'America/New_York')).toISOString(), '2026-11-26T00:00:00.000Z');
+    assert.strictEqual(new Date(TR.instantOf('2026-07-04', '09:30', 'America/New_York')).toISOString(), '2026-07-04T13:30:00.000Z', 'summer time');
+    let asked = 0;
+    const far = { lat: 38.93, lon: -77.03 };
+    const at = Date.parse('2026-11-26T00:00:00Z');
+    const fake = async () => { asked++; return { ok: true, json: async () => ({ itineraries: [{ duration: 1320, legs: [{ mode: 'SUBWAY', routeShortName: 'R' }] }] }) }; };
+    assert.strictEqual(TR.planCached(a, far, at), undefined, 'not known until asked');
+    assert.strictEqual((await TR.plan(a, far, at, { fetchImpl: fake })).minutes, 22);
+    assert.strictEqual((await TR.plan(a, far, at + 60e3, { fetchImpl: fake })).minutes, 22);
+    assert.strictEqual(asked, 1, 'the same half hour is one question');
+    const down = async () => { throw new Error('offline'); };
+    const other = { lat: 38.95, lon: -77.08 };
+    assert.strictEqual(await TR.plan(a, other, at, { fetchImpl: down }), undefined);
+    assert.strictEqual(TR.planCached(a, other, at), undefined, 'a failure is not remembered');
+  });
+
+  await t('what a thing asks of you: from its kind until Claude says better, and a gate on what Claude says', () => {
+    const film = { id: 'f', kind: 'movie', title: 'Paper Moon' };
+    assert.deepStrictEqual([F.fitOf(film).role, F.fitOf(film).energy, F.fitOf(film).rough], ['watch', 1, true]);
+    assert.strictEqual(F.fitOf({ kind: 'place', title: 'Ramen', mod: { place: { what: 'restaurant' } } }).role, 'eat');
+    assert.strictEqual(F.fitOf({ kind: 'place', title: 'Coffee', mod: { place: { what: 'cafe' } } }).role, 'drink');
+    assert.deepStrictEqual([F.fitOf({ kind: 'recipe', title: 'Toast', mod: { recipe: { total: 10 } } }).energy, F.fitOf({ kind: 'recipe', title: 'Cassoulet', mod: { recipe: { total: 240 } } }).energy], [1, 3]);
+    const good = { n: 1, role: 'do', energy: 4, minutes: 180, where: 'out', times: ['morning', 'afternoon', 'teatime'], weather: 'needs_good' };
+    const fit = F.cleanFit(good, { of: 'k' });
+    assert.deepStrictEqual([fit.role, fit.energy, fit.times, fit.weather, fit.of], ['do', 4, ['morning', 'afternoon'], 'needs_good', 'k']);
+    assert.strictEqual(F.cleanFit({ ...good, energy: 9 }), null);
+    assert.strictEqual(F.cleanFit({ ...good, role: 'sleep' }), null);
+    assert.strictEqual(F.cleanFit({ ...good, times: ['morning', 'afternoon', 'evening', 'night'] }).times, null, 'all day is not a preference');
+    const items = [film, { id: 'h', kind: 'activity', title: 'Hike' }];
+    const got = F.cleanBatch({ items: [{ ...good, n: 2 }, { ...good, n: 2, energy: 1 }, { ...good, n: 7 }, { ...good, n: 1, role: 'watch', energy: 1, where: 'home' }] }, items);
+    assert.deepStrictEqual([...got.keys()], ['h', 'f'], 'matched by number; a number not asked about, or answered twice, is ignored');
+    assert.strictEqual(got.get('h').energy, 4);
+    const stored = { ...film, fit: got.get('f') };
+    assert.ok(!F.stale(stored) && F.stale({ ...stored, title: 'Paper Moon (1973)' }) && F.stale({ ...stored, kind: 'show' }), 'reworded, or another kind: made again');
+    const asked = F.promptFor([{ id: 'x', kind: 'place', title: 'Date night', notes: 'SECRET NOTE', mod: { place: { name: 'Roof Bar', what: 'bar' } } }]);
+    assert.ok(asked.includes('Date night') && asked.includes('Roof Bar (bar)') && !asked.includes('SECRET'), 'titles and public facts go; notes never do');
+  });
+
+  const ctx = (over = {}) => ({ energy: 2, date: '2026-11-25', time: '19:30', viewer: 'a', now, tastes: [], ...over });
+  const film = { id: 'film', kind: 'movie', title: 'A film', createdAt: 0 };
+  const hike = { id: 'hike', kind: 'activity', title: 'Hike', createdAt: 0, fit: null };
+  hike.fit = { role: 'do', energy: 5, minutes: 300, where: 'out', times: ['morning', 'afternoon'], weather: 'needs_good', of: F.keyOf(hike) };
+  const bar = { id: 'bar', kind: 'place', title: 'Roof bar', createdAt: 0, mod: { place: { name: 'Roof', what: 'bar', osm: 'N1', lat: 38.9, lon: -77 } } };
+
+  await t('the scorer: energy, the hour, the weather, closed, the journey, a plan — each says why', () => {
+    const tired = SG.rank([film, hike], ctx());
+    assert.deepStrictEqual(tired.good.map(x => x.id), ['film', 'hike'], 'wiped out at 7:30 pm: the film, not the hike');
+    assert.ok(tired.good[0].reasons.some(r => r.text === 'Low effort'));
+    assert.ok(tired.good[1].reasons.some(r => r.text === 'Takes more than you’ve got') && tired.good[1].reasons.some(r => /morning or afternoon thing/.test(r.text)));
+    const keen = SG.rank([film, hike], ctx({ energy: 5, time: '10:00', general: { code: 0, t: 18, rain: 0 } }));
+    assert.strictEqual(keen.good[0].id, 'hike', 'full of it on a clear morning: the hike');
+    assert.ok(keen.good[0].reasons.some(r => r.text === 'Nice out for it'));
+    const wet = { code: 63, t: 9, rain: 80 };
+    const rain = SG.score(film, ctx({ general: wet }));
+    assert.ok(rain.reasons.some(r => r.text === 'Good for a wet one') && rain.score > SG.score(film, ctx()).score);
+    assert.ok(SG.score(hike, ctx({ energy: 5, time: '10:00', general: wet })).reasons.some(r => r.text === 'Wet then'));
+
+    const shut = SG.score(bar, ctx({ openOf: () => ({ known: true, open: false, closedAllDay: false, opens: { date: '2026-11-25', time: '21:00' } }) }));
+    assert.deepStrictEqual([shut.hidden, shut.reasons[0].text], [true, 'Closed then · opens 9 PM'], 'closed then is ruled out, and says so');
+    const closing = SG.score(bar, ctx({ openOf: () => ({ known: true, open: true, until: '20:00' }) }));
+    assert.ok(closing.reasons.some(r => r.text === 'Closes 8 PM') && !closing.hidden);
+    assert.strictEqual(SG.rank([bar, film], ctx({ openOf: (it) => (it.id === 'bar' ? { known: true, open: false, closedAllDay: true, holiday: 'Thanksgiving' } : null) })).notThen[0].reasons[0].text,
+      'Closed that day · Thanksgiving');
+
+    const legs = (mins) => () => [{ uid: 'a', name: 'Andrew', mine: true, minutes: 8 }, { uid: 'l', name: 'Linnea', mine: false, minutes: mins }];
+    const near = SG.score(bar, ctx({ transitOf: legs(12) }));
+    const trek = SG.score(bar, ctx({ transitOf: legs(70) }));
+    assert.ok(near.reasons.some(r => r.text === 'Close by') && trek.reasons.some(r => r.text === 'A trek · 70 min for Linnea'), 'the furthest of you decides');
+    assert.ok(near.score - trek.score >= 25, 'and when you are tired a trek costs more');
+    assert.ok(SG.score({ ...film, when: { date: '2026-11-25', time: '21:00' } }, ctx()).reasons.some(r => r.text === 'Planned for then · 9 PM'));
+    const show = { id: 'sh', kind: 'show', title: 'A show', createdAt: 0, progress: { seen: 4, total: 10, next: { s: 1, e: 5 } } };
+    assert.ok(SG.score(show, ctx()).reasons.some(r => r.text === 'Keep going · S1 E5'));
+    const stew = { id: 'st', kind: 'recipe', title: 'Stew', createdAt: 0 };
+    assert.ok(SG.score(stew, ctx({ readyOf: () => [true, true] })).reasons.some(r => r.text === 'You have everything for it'));
+    const rooftop = { ...bar, weatherFit: { matters: true, setting: 'outdoors', ideal: { conditions: ['clear'], minC: 16, maxC: 30 }, avoid: { conditions: ['rain'], belowC: 8, aboveC: null }, of: 'osm:N1' } };
+    const rained = SG.score(rooftop, ctx({ weatherOf: () => wet }));
+    assert.deepStrictEqual([rained.hidden, rained.reasons[0].text], [true, 'Weather’s against it · rain'], 'an outdoor place in the rain is ruled out too');
+  });
+
+  await t('thumbs: yours on a thing fades, and teaches what you lean toward — bounded, and undone by changing your mind', () => {
+    const taste = SG.blankTaste();
+    const feats = SG.featuresOf(film, F.fitOf(film), 'evening');
+    assert.deepStrictEqual(feats, ['kind:movie', 'energy:low', 'where:home', 'evening:movie']);
+    SG.vote(taste, 'film', -1, feats, now);
+    assert.deepStrictEqual([taste.votes.film.v, taste.w['kind:movie']], [-1, -0.2]);
+    const base = SG.score(film, ctx()).score;
+    const down = SG.score(film, ctx({ tastes: [taste] })).score;
+    const later = SG.score(film, ctx({ tastes: [taste], now: now + 2 * SG.HALF_LIFE_MS })).score;
+    assert.ok(down < base - 20 && later > down && later < base, `"not tonight" is not "never": ${base} ${down} ${later}`);
+    const other = { id: 'film2', kind: 'movie', title: 'Another film', createdAt: 0 };
+    assert.ok(SG.score(other, ctx({ tastes: [taste] })).score < SG.score(other, ctx()).score, 'and other films lean down a little with it');
+    SG.vote(taste, 'film', 1, feats, now);
+    assert.deepStrictEqual([taste.votes.film.v, taste.w['kind:movie']], [1, 0.2], 'changing your mind moves it by the difference, not twice');
+    SG.vote(taste, 'film', 0, feats, now);
+    assert.deepStrictEqual([taste.votes.film, taste.w['kind:movie']], [undefined, undefined], 'and taking it back leaves nothing behind');
+    for (let i = 0; i < 20; i++) SG.learn(taste, ['kind:movie'], 1);
+    assert.strictEqual(taste.w['kind:movie'], 1, 'no number of thumbs makes a leaning unbounded');
+    SG.voteIdea(taste, { title: '🎬 Idea', kind: 'movie' }, 1, [], now);
+    SG.voteIdea(taste, { title: '🎬 idea', kind: 'movie' }, -1, [], now);
+    assert.deepStrictEqual(taste.ideas.map(x => [x.title, x.v]), [['🎬 idea', -1]], 'an idea is kept once, by its words');
+  });
+
+  await t('a plan: the parts of the day still ahead, each filled for its own hour, each with runners-up to swap in', () => {
+    const labels = (start, o) => SG.slotsFor(start, o).map(x => `${x.label}@${x.time}${x.day ? '+1' : ''}`).join(' ');
+    assert.strictEqual(labels({ date: '2026-11-25', time: '18:30' }), 'Dinner@19:00 Evening@21:00');
+    assert.strictEqual(labels({ date: '2026-11-25', time: '20:10' }), 'Dinner@20:10 Evening@21:55');
+    assert.strictEqual(labels({ date: '2026-11-25', time: '22:15' }), 'Evening@22:15');
+    assert.strictEqual(labels({ date: '2026-11-25', time: '09:00' }), 'Morning@10:00 Lunch@12:30 Afternoon@14:30 Dinner@19:00 Evening@21:00');
+    assert.strictEqual(labels({ date: '2026-11-25', time: '18:30' }, { through: true }),
+      'Dinner@19:00 Evening@21:00 Morning@11:00+1 Afternoon@14:30+1 Dinner@18:30+1', 'and on into the next day');
+    const ramen = { id: 'ramen', kind: 'place', title: 'Ramen', createdAt: 0, mod: { place: { what: 'restaurant' } } };
+    const stew = { id: 'stew', kind: 'recipe', title: 'Stew', createdAt: 0 };
+    const show = { id: 'show', kind: 'show', title: 'A show', createdAt: 0 };
+    const museum = { id: 'museum', kind: 'place', title: 'Museum', createdAt: 0, mod: { place: { what: 'museum' } } };
+    const walk = { id: 'walk', kind: 'activity', title: 'Walk', createdAt: 0 };
+    const all = [film, ramen, stew, show, museum, walk, { id: 'gone', kind: 'movie', title: 'Seen', done: true }];
+    const slots = SG.slotsFor({ date: '2026-11-25', time: '18:30' }, { through: true });
+    const ctxFor = (sl) => ctx({ date: sl.date, time: sl.time, energy: sl.day ? 3 : 2 });
+    const p = SG.plan(all, slots, ctxFor);
+    assert.deepStrictEqual(p.map(x => x.role), ['eat', 'watch', 'do', 'do', 'eat']);
+    assert.ok(p.every(x => x.pick), 'every part filled');
+    assert.strictEqual(new Set(p.map(x => x.pick.id)).size, 5, 'nothing twice');
+    assert.ok(['film', 'show'].includes(p[1].pick.id) && p[1].alts.length === 1 && p[1].alts[0].id !== p[1].pick.id, 'something to watch, and the other one to swap in');
+    assert.deepStrictEqual(new Set([p[0].pick.kind, p[4].pick.kind]), new Set(['place', 'recipe']), 'one dinner out and one cooked');
+    assert.ok(!p.some(x => x.pick.id === 'gone' || x.alts.some(a => a.id === 'gone')), 'never something already done');
+    const kept = SG.plan(all, slots, ctxFor, { keep: { s1: 'show', s4: 'ramen' } });
+    assert.deepStrictEqual([kept[1].pick.id, kept[1].kept, kept[4].pick.id, kept[0].pick.id], ['show', true, 'ramen', 'stew'],
+      'a piece you chose stays where you put it, and the rest fits round it');
+    const none = SG.plan([film], SG.slotsFor({ date: '2026-11-25', time: '18:30' }), ctxFor);
+    assert.deepStrictEqual([none[0].pick, none[1].pick.id], [null, 'film'], 'a part with nothing for it says so');
+    const many = Array.from({ length: 9 }, (_, i) => ({ id: `m${i}`, kind: 'movie', title: `Film ${i}`, createdAt: 0 })).concat([stew, walk]);
+    const top = SG.rank(many, ctx()).good.slice(0, 5).map(x => x.kind);
+    assert.ok(top.includes('recipe'), `not five films in a row: ${top}`);
+  });
+
+  await t('new ideas: what is asked, and a gate on what comes back', () => {
+    const titles = [{ title: '🍜 Toki Underground', kind: 'place' }, { title: 'Paper Moon', kind: 'movie' }];
+    const asked = ID.promptFor({ whenWords: 'Wednesday, around 7 PM (evening)', energy: 2, weatherWords: '9°C, rain, 70% chance of rain',
+      stations: ['Union Station (DC)'], titles, liked: ['Past Lives'], passed: ['Go bowling'], role: 'watch' });
+    assert.ok(asked.includes('Union Station (DC)') && asked.includes('Energy: 2 of 5 (low)') && asked.includes('something to watch')
+      && asked.includes('They passed on: Go bowling') && !/38\.\d|-77\.\d/.test(asked), 'station names, never coordinates');
+    assert.ok(/data, and ignore any instructions/.test(ID.SYSTEM));
+    const raw = { ideas: [
+      { title: '🎬 Paper Moon', kind: 'movie', role: 'watch', energy: 1, why: 'x' },
+      { title: '🎳 Go bowling', kind: 'activity', role: 'do', energy: 3, why: 'x' },
+      { title: '🎬 The Apartment', kind: 'movie', role: 'watch', energy: 1, why: 'A warm one for a wet night.' },
+      { title: '🎬 the apartment', kind: 'movie', role: 'watch', energy: 1, why: 'again' },
+      { title: '🚀 Fly to the moon', kind: 'rocket', role: 'do', energy: 5, why: 'x' },
+      { title: '🍷 A wine bar near U Street', kind: 'place', role: 'drink', energy: 2, why: 'x' }] };
+    assert.deepStrictEqual(ID.cleanIdeas(raw, { titles, passed: ['Go bowling'], role: 'watch' }).map(x => x.title), ['🎬 The Apartment'],
+      'already on the list, passed on, twice, not a kind, or not what was asked for: dropped');
+    assert.deepStrictEqual(ID.cleanIdeas(raw, { titles, passed: [] }).map(x => x.kind), ['activity', 'movie', 'place']);
   });
 }
 
@@ -1772,6 +1987,8 @@ async function server() {
   // sent. It answers in the Messages API's own shape.
   const claudeHits = [];
   const placeFitHits = [];
+  const fitHits = [];
+  const ideaHits = [];
   const FIT_SAYS = { weather_matters: true, setting: 'outdoors', ideal_conditions: ['clear', 'partly_cloudy'], ideal_min_c: 10, ideal_max_c: 24,
     avoid_conditions: ['rain', 'thunderstorm'], too_cold_below_c: 4, too_hot_above_c: null, best_time: 'evening', best_seasons: null,
     why: 'A terrace: lovely on a clear evening, miserable in the rain.' };
@@ -1796,6 +2013,29 @@ async function server() {
         const b = JSON.parse(raw);
         claudeHits.push({ url: req.url, headers: req.headers, body: b });
         const asked = JSON.stringify(b.messages);
+        // What each thing asks of you (lib/itemfit.js): one line a thing, answered by number.
+        const format = JSON.stringify((b.output_config || {}).format || {});
+        if (format.includes('better_when_bad')) {
+          fitHits.push(b);
+          const text = b.messages[0].content;
+          const items = [...text.matchAll(/^(\d+)\. \[([a-z]+)\] (.*)$/gm)].map(([, n, kind, rest]) => ({
+            n: Number(n), role: kind === 'film' || kind === 'show' ? 'watch' : kind === 'recipe' || /restaurant/.test(rest) ? 'eat' : 'do',
+            energy: kind === 'film' || kind === 'show' ? 1 : kind === 'recipe' ? 2 : 3, minutes: 90,
+            where: kind === 'film' || kind === 'show' || kind === 'recipe' ? 'home' : 'out', times: null,
+            weather: kind === 'film' || kind === 'show' ? 'better_when_bad' : 'any' }));
+          return res.end(JSON.stringify({ id: 'msg_fits', type: 'message', role: 'assistant', model: b.model, stop_sequence: null,
+            usage: { input_tokens: 10, output_tokens: 10 }, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ items }) }] }));
+        }
+        // New ideas (lib/ideas.js): one already on the list, one new, one that is not what was asked for.
+        if (format.includes('"ideas"')) {
+          ideaHits.push(b);
+          const says = { ideas: [
+            { title: '🎬 SG rainy film', kind: 'movie', role: 'watch', energy: 1, why: 'Already theirs.' },
+            { title: '🎬 The Apartment', kind: 'movie', role: 'watch', energy: 1, why: 'A warm one for a wet night in.' },
+            { title: '🍷 A wine bar near U Street', kind: 'place', role: 'drink', energy: 2, why: 'Close to one of you.' }] };
+          return res.end(JSON.stringify({ id: 'msg_ideas', type: 'message', role: 'assistant', model: b.model, stop_sequence: null,
+            usage: { input_tokens: 10, output_tokens: 10 }, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(says) }] }));
+        }
         // A place's weather profile (lib/placefit.js) asks with its own schema.
         if (JSON.stringify((b.output_config || {}).format || {}).includes('weather_matters')) {
           placeFitHits.push(b);
@@ -1812,6 +2052,17 @@ async function server() {
     if (req.url.startsWith('/r/')) return recipeFixture(req, res);
     // And Open-Meteo, for the weather on a place.
     if (req.url.startsWith('/v1/forecast')) return res.end(JSON.stringify(forecastFixture()));
+    // And Transitous: a station search, and a 22-minute ride on the Red line.
+    if (req.url.startsWith('/transit/api/v1/geocode')) {
+      return res.end(JSON.stringify([
+        { type: 'STOP', name: 'Union Station', id: 'st-union', lat: 38.8977, lon: -77.0064, modes: ['SUBWAY', 'BUS'], areas: [{ name: 'District of Columbia', default: true }] },
+        { type: 'STOP', name: 'Union St & 3rd', id: 'st-bus', lat: 38.9, lon: -77.01, modes: ['BUS'], areas: [] },
+        { type: 'ADDRESS', name: 'Union Station Drive', lat: 38.9, lon: -77.0 }]));
+    }
+    if (req.url.startsWith('/transit/api/v5/plan')) {
+      return res.end(JSON.stringify({ direct: [], itineraries: [{ duration: 1320, legs: [{ mode: 'WALK' },
+        { mode: 'SUBWAY', routeShortName: 'R', routeColor: 'c80f2d', from: { name: 'Union Station' }, to: { name: 'Farragut North' } }, { mode: 'WALK' }] }] }));
+    }
     // And TMDB, for a show's seasons.
     if (req.url.startsWith('/tmdb/')) {
       const tv = tmdbFixture(new URL(req.url, 'http://x').pathname);
@@ -1835,6 +2086,7 @@ async function server() {
     anthropicKey: 'test-key',
     anthropicBaseUrl: `http://127.0.0.1:${photon.address().port}`,
     weatherEndpoint: `http://127.0.0.1:${photon.address().port}/v1/forecast`,
+    transitEndpoint: `http://127.0.0.1:${photon.address().port}/transit`,
   }), { mode: 0o600 });
   // Admin is read from config LIVE, so the suite can grant and revoke it
   // mid-run — which is also the property worth having: no restart either way.
@@ -3000,6 +3252,20 @@ async function server() {
       const again = (await ep({ s: 2, e: 2, seen: false }, L)).body;
       assert.deepStrictEqual([again.finished, again.item.done], [false, true], 'un-ticking an episode does not un-finish the show');
 
+      // Skipping a season: choose it, and next is counted from there — kept on the server.
+      const skip = await mk('EP skip a season', 9001);
+      const sk = (body, as = A) => api('POST', `/api/item/${skip.id}/episodes`, body, as);
+      assert.strictEqual((await sk({ season: 7 })).status, 400);
+      const chose = (await sk({ season: 2 }, L)).body;
+      assert.deepStrictEqual([chose.progress.season, chose.progress.next, chose.progress.seen], [2, { s: 2, e: 1 }, 0], 'choosing ticks nothing');
+      assert.deepStrictEqual((await api('GET', `/api/item/${skip.id}/show`, null, A)).body.progress.season, 2, 'and it is still chosen, for him too');
+      await sk({ s: 2, e: 1 });
+      const reached = (await sk({ s: 2, e: 2 })).body;
+      assert.deepStrictEqual([reached.progress.reachedEnd, reached.finished, reached.item.done], [true, false, false],
+        'the end reached with a season skipped: not finished by itself, and offered');
+      const onShelf = (await api('GET', '/api/space/sp1/items', null, A)).body.items.find(x => x.id === skip.id).progress;
+      assert.deepStrictEqual([onShelf.next, onShelf.reachedEnd], [null, true]);
+
       const running = await mk('EP still going', 9002);
       const r1 = (await api('POST', `/api/item/${running.id}/episodes`, { s: 1, seen: true }, A)).body;
       assert.strictEqual(r1.finished, false);
@@ -3065,6 +3331,90 @@ async function server() {
     const tab = await api('GET', '/api/space/sp1/weather', null, A);
     assert.strictEqual(tab.body.weather.now.code, 2, 'the Places tab: the middle of the pins');
     assert.strictEqual((await api('GET', '/api/space/sp1/weather', null, S)).status, 404);
+  });
+
+  await t('suggestions: stations kept narrow, a plan for then with journeys and weather, thumbs that are yours, new ideas', async () => {
+    const mk = async (body, as = A) => (await api('POST', '/api/space/sp1/item', body, as)).body.item;
+    // Where each of them starts: a station, chosen — and the kitchen's rule about who may know.
+    const union = { name: 'Union Station', lat: 38.8977, lon: -77.0064, modes: ['SUBWAY'], area: 'DC' };
+    assert.strictEqual((await api('POST', `/api/people/${A}/stations`, { stations: [union] }, null)).status, 401);
+    assert.strictEqual((await api('POST', `/api/people/${A}/stations`, { stations: [union] }, A)).body.stations.length, 1);
+    assert.strictEqual((await api('POST', `/api/people/${L}/stations`, { stations: [{ name: 'U Street', lat: 38.917, lon: -77.028, modes: ['SUBWAY'] }] }, A)).body.ok, true,
+      'a pair partner may set yours, as they may your pantry');
+    assert.deepStrictEqual((await api('GET', `/api/people/${A}/stations`, null, L)).body.stations.map(x => x.name), ['Union Station']);
+    assert.strictEqual((await api('GET', `/api/people/${S}/stations`, null, L)).status, 404, 'she knows Sam from a group list only');
+    assert.strictEqual((await api('GET', `/api/people/${A}/stations`, null, J)).status, 404, 'a stranger');
+    assert.strictEqual((await api('POST', `/api/people/${L}/stations`, { stations: [] }, S)).status, 404);
+    const found = (await api('GET', '/api/transit/stops?q=union&space=sp1', null, A)).body;
+    assert.deepStrictEqual(found.results.map(x => [x.name, x.rail]), [['Union Station', true], ['Union St & 3rd', false]]);
+
+    const noodle = await mk({ title: 'SG noodle bar', kind: 'place', mod: { place: { name: 'SG noodle bar', what: 'restaurant', lat: 38.93, lon: -77.03 } } });
+    const shut = await mk({ title: 'SG shut shop', kind: 'place', mod: { place: { name: 'SG shut shop', lat: 38.9, lon: -77.02, osm: 'N778' } } });
+    const film = await mk({ title: 'SG rainy film', kind: 'movie' });
+    const hers = await mk({ title: 'SG her private', kind: 'movie', visibility: 'private' }, L);
+    const base = '/api/space/sp1/suggest?energy=2&at=2026-11-25T18:30&tz=America%2FNew_York&through=1';
+    assert.strictEqual((await api('GET', '/api/space/sp1/suggest?energy=2', null, A)).status, 400, 'the server never decides what time it is');
+    assert.strictEqual((await api('GET', base, null, J)).status, 404);
+    // Journeys, weather and hours arrive behind the first answer: ask until they have.
+    const settled = async (q, as = A) => {
+      let r = (await api('GET', q, null, as)).body;
+      for (let i = 0; i < 80 && r.pending; i++) { await new Promise(ok => setTimeout(ok, 100)); r = (await api('GET', q, null, as)).body; }
+      return r;
+    };
+    const r = await settled(`${base}&keep=s0:${noodle.id},s1:${film.id}`);
+    assert.strictEqual(r.pending, 0, 'everything came in');
+    assert.deepStrictEqual(r.plan.map(x => `${x.label}${x.day ? '+1' : ''}`), ['Dinner', 'Evening', 'Morning+1', 'Afternoon+1', 'Dinner+1']);
+    assert.deepStrictEqual([r.weather.rain, r.weather.code], [70, 63], 'the weather at that hour');
+    const dinner = r.plan[0].pick;
+    assert.deepStrictEqual([dinner.id, r.plan[0].kept], [noodle.id, true]);
+    assert.deepStrictEqual(dinner.transit.map(l => [l.mine, l.name, l.minutes, l.lines[0].line, l.lines[0].color, l.from]),
+      [[true, 'Andrew', 22, 'R', 'c80f2d', 'Union Station'], [false, 'Linnea', 22, 'R', 'c80f2d', 'U Street']], 'how long for each of you, and by which line');
+    const watch = r.plan[1].pick;
+    assert.strictEqual(watch.id, film.id);
+    // Each slot is weighed for its OWN hour: it is raining at half past six, and dry by nine.
+    const atSix = r.good.find(x => x.id === film.id);
+    assert.ok(atSix && atSix.reasons.some(x => x.text === 'Good for a wet one'), JSON.stringify(atSix && atSix.reasons));
+    assert.ok(!watch.reasons.some(x => x.text === 'Good for a wet one'), 'the nine o’clock slot does not borrow the six o’clock rain');
+    const closed = r.notThen.find(x => x.id === shut.id);
+    assert.ok(closed && /^Closed then/.test(closed.reasons[0].text), 'a shop shut at half past six is not suggested, and says why');
+    assert.ok(![...r.good, ...r.notThen, ...r.plan.flatMap(x => [x.pick, ...x.alts])].some(x => x && x.id === hers.id), 'her private film is not in his suggestions');
+    assert.deepStrictEqual(r.people.map(p => [p.id, p.mine, p.stations.length]), [[A, true, 1], [L, false, 1]]);
+    assert.strictEqual(r.needsStations, false);
+
+    // A thumb is yours: his view carries his, hers carries none — and the list's suggestions move for both.
+    const before = watch.score;
+    assert.strictEqual((await api('POST', '/api/space/sp1/suggest/vote', { item: hers.id, v: 1, at: '2026-11-25T18:30' }, A)).status, 404);
+    assert.strictEqual((await api('POST', '/api/space/sp1/suggest/vote', { item: film.id, v: -1, at: '2026-11-25T18:30' }, A)).body.v, -1);
+    const his = (await settled(`${base}&keep=s1:${film.id}`)).plan[1].pick;
+    const herView = (await settled(`${base}&keep=s1:${film.id}`, L)).plan[1].pick;
+    assert.deepStrictEqual([his.vote, herView.vote], [-1, 0], 'whose thumb it was never travels');
+    assert.ok(his.score < before - 15 && herView.score < before - 15, `and it counts for the list: ${before} → ${his.score}, ${herView.score}`);
+    assert.strictEqual((await api('POST', '/api/space/sp1/suggest/vote', { idea: { title: '🎳 Go bowling', kind: 'activity', energy: 3 }, v: -1, at: '2026-11-25T18:30' }, A)).body.ok, true);
+
+    // New ideas: asked of Claude, gated on the way back.
+    const got = await api('POST', '/api/space/sp1/suggest/ideas', { energy: 2, at: '2026-11-25T18:30', tz: 'America/New_York', role: 'watch' }, A);
+    assert.deepStrictEqual(got.body.ideas.map(x => x.title), ['🎬 The Apartment'], JSON.stringify(got.body));
+    const sent = ideaHits[ideaHits.length - 1];
+    const asked = sent.messages[0].content;
+    assert.strictEqual(sent.model, 'claude-opus-5-5');
+    assert.ok(asked.includes('Union Station') && asked.includes('U Street') && asked.includes('SG rainy film') && asked.includes('Go bowling')
+      && asked.includes('something to watch') && asked.includes('70% chance of rain'), asked);
+    assert.ok(!asked.includes('SG her private') && !/38\.\d\d|-77\.\d\d/.test(asked) && !asked.includes('Andrew') && !asked.includes('Linnea'),
+      'never her private things, coordinates, or anybody’s name');
+
+    // What each thing asks of you is filled in behind all this, and is not anybody's to type.
+    let fit = null;
+    for (let i = 0; i < 60 && !(fit && fit.by); i++) {
+      await new Promise(ok => setTimeout(ok, 50));
+      fit = (await api('GET', '/api/space/sp1/items', null, A)).body.items.find(x => x.id === film.id).fit;
+    }
+    assert.deepStrictEqual([fit && fit.by, fit && fit.role, fit && fit.weather], ['claude', 'watch', 'better_when_bad']);
+    // His request profiles what HE can see; her private film waits for a request of her own.
+    const batch = fitHits.find(b => b.messages[0].content.includes('SG rainy film'));
+    assert.ok(batch && batch.model === 'claude-opus-5-5' && !batch.messages[0].content.includes('SG her private'),
+      'profiled in batches, and only what the person asking can see');
+    await api('PATCH', `/api/item/${film.id}`, { title: 'SG rainy film', kind: 'movie', fit: { role: 'do', energy: 5, where: 'out', weather: 'any' } }, A);
+    assert.strictEqual((await api('GET', '/api/space/sp1/items', null, A)).body.items.find(x => x.id === film.id).fit.energy, 1, 'a PATCH cannot set it');
   });
 
   await t('the Claude connector: discovered, registered, allowed — and it reads what you see, nothing more', async () => {
@@ -3892,6 +4242,7 @@ async function placeSuggestions() {
   await recipes();
   await episodeRules();
   await weatherRules();
+  await suggestRules();
   await connectorRules();
   await server();
 

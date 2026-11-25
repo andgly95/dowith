@@ -19,6 +19,7 @@ import { initKitchen } from './kitchen.js';
 import { initCook } from './cook.js';
 import { haptic, fadeIn, skeleton, burst } from './motion.js';
 import { paintEpisodes } from './eps.js';
+import { renderSuggest, initSuggest, leaveSuggest } from './suggest.js';
 
 let onChange = () => {};
 let onBack = () => {};
@@ -310,11 +311,15 @@ export function render() {
   doneBtn.setAttribute('aria-label', `Done together${doneHere ? `, ${doneHere}` : ''}`);
   $('tabCal').classList.toggle('on', tab === 'cal');
   $('tabCal').setAttribute('aria-pressed', String(tab === 'cal'));
+  $('tabSug').classList.toggle('on', tab === 'sug');
+  $('tabSug').setAttribute('aria-pressed', String(tab === 'sug'));
+  if (tab !== 'sug') leaveSuggest();
   // No Map chip any more: the Places tab is the map. A chip that opened a second,
   // lesser map of the same places was one way too many to get to it.
   $('spaceCount').textContent = tab === 'done' ? `${doneHere} done together`
     : tab === 'cal' ? 'Across every kind'
-      : `${openHere} ${VERB[kindTab] || 'to do'}`;
+      : tab === 'sug' ? 'What to do'
+        : `${openHere} ${VERB[kindTab] || 'to do'}`;
 
   const list = $('itemList');
   list.classList.remove('after-groups');
@@ -329,7 +334,7 @@ export function render() {
   renderNav();
   // The calendar spans every kind, so a bar saying which kind you are looking
   // at would be a lie while it is open.
-  $('kindNav').hidden = tab === 'cal';
+  $('kindNav').hidden = tab === 'cal' || tab === 'sug';
 
   // Two axes, and they are orthogonal: WHICH KIND you are looking at, and
   // whether you want what is still to do or what you have already done.
@@ -346,6 +351,13 @@ export function render() {
     if (!cal.sel) calToday();
     list.innerHTML = calendarHtml(S.items, cal, iconFor);
     bindCalendar(list);
+  } else if (tab === 'sug') {
+    // Suggestions keep their own screen: the slider must not be redrawn under
+    // a thumb, so this builds it once and repaints only the answer (suggest.js).
+    renderSuggest(list);
+    visRow($('visRow'), () => S.compose, (v) => { S.compose = v; });
+    syncComposer();
+    return;
   } else if (tab === 'done') {
     const seen = inGroup(done, kindTab);
     list.innerHTML = art && seen.length
@@ -1049,6 +1061,14 @@ export function openItem(id, { generic = false } = {}) {
       render();
     },
     finished: (fid, b) => { closeSheet('itemSheet'); finale(fid, b); },
+    // Reached the end having skipped seasons: finishing it is still a finale.
+    finishNow: async (fid) => {
+      try {
+        const b = await post(`/api/item/${fid}/done`, { done: true });
+        closeSheet('itemSheet');
+        finale(fid, b);
+      } catch (_) { toast('Could not save that'); }
+    },
   });
   paintWhen(it);
   // Somebody else's wording is theirs. You can see it and tick it off; you cannot
@@ -1360,6 +1380,15 @@ export function initSpace(changeHandler, backHandler) {
   });
   // The calendar: a view across every kind, of what you did and what you mean
   // to. Opens on today, every time — the question is always "what's coming".
+  // Suggestions: what on the list would be good for then, as a plan.
+  $('tabSug').addEventListener('click', () => {
+    tab = tab === 'sug' ? 'open' : 'sug';
+    $('spaceScroll').scrollTop = 0;
+    render();
+    enter(0);
+    if (tab === 'open') placePill($('kindNav'));
+  });
+  initSuggest({ openItem: (id) => openItem(id), refresh: () => refresh(), tileHtml });
   $('tabCal').addEventListener('click', () => {
     tab = tab === 'cal' ? 'open' : 'cal';
     if (tab === 'cal') calToday();

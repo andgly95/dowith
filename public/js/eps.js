@@ -37,8 +37,9 @@ export async function paintEpisodes(it, hooks) {
     return;
   }
   const p = b.progress;
-  const started = (p.next && p.next.s) || (p.seasons.filter(x => x.aired).pop() || p.seasons[0]).n;
-  cur = { id: it.id, show: b.show, seen: b.seen, progress: p, season: started, names: {}, hooks };
+  // The season you are in is the server's to remember (lib/episodes.js): it is
+  // still chosen tomorrow, on both your phones.
+  cur = { id: it.id, show: b.show, seen: b.seen, progress: p, season: p.season, names: {}, hooks };
   draw();
   loadNames(cur.season);
 }
@@ -64,6 +65,11 @@ function draw() {
     top = `<div class="ep-next done"><span class="ep-nt"><small>All caught up</small><b>${p.coming
       ? `S${pad(p.coming.s)} · E${pad(p.coming.e)}${p.coming.air ? ` on ${esc(shortDay(p.coming.air))}` : ''}`
       : 'More on the way'}</b></span></div>`;
+  } else if (p.reachedEnd) {
+    // Seasons were skipped and everything from here on is watched. Not every
+    // episode, so the show has not finished itself — but it can be finished.
+    top = `<div class="ep-next done"><span class="ep-nt"><small>You’ve reached the end</small><b>${p.seen} of ${p.total} watched</b></span>
+      <button type="button" class="ep-go" data-finish><span class="ring"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"/></svg></span>Finish the show</button></div>`;
   } else if (p.next) {
     const name = epName(p.next.s, p.next.e);
     top = `<div class="ep-next"><span class="ep-nt"><small>Next up</small><b>S${pad(p.next.s)} · E${pad(p.next.e)}</b>${name ? `<em>${esc(name)}</em>` : ''}</span>
@@ -75,17 +81,24 @@ function draw() {
       data-sea="${x.n}" aria-pressed="${x.n === cur.season}">S${x.n}<small>${x.aired ? `${x.seen}/${x.aired}` : 'soon'}</small></button>`).join('');
   const sea = p.seasons.find(x => x.n === cur.season) || p.seasons[0];
   const seen = new Set(cur.seen[sea.n] || []);
+  // One row an episode: its number in a ring to tick, and its TITLE — which is
+  // how anybody remembers where they got to. Until the names arrive it says
+  // "Episode 3"; one not out yet says when.
+  const info = (e) => (cur.names[sea.n] || []).find(y => y.e === e) || null;
   const grid = Array.from({ length: sea.eps }, (_, i) => {
     const e = i + 1;
     const out = e <= sea.aired;
-    const name = epName(sea.n, e);
+    const x = info(e);
+    const name = (x && x.name) || `Episode ${e}`;
     const on = seen.has(e);
+    const sub = !out ? (x && x.air ? `Out ${shortDay(x.air)}` : 'Not out yet') : (x && x.runtime ? `${x.runtime} min` : '');
     return `<button type="button" class="ep${on ? ' seen' : ''}${out ? '' : ' soon'}" data-e="${e}" ${out ? '' : 'disabled'}
-      aria-pressed="${on}" aria-label="Episode ${e}${name ? `, ${esc(name)}` : ''}${out ? (on ? ', watched' : '') : ', not out yet'}"
-      title="${esc(name || `Episode ${e}`)}">${e}</button>`;
+      aria-pressed="${on}" aria-label="Episode ${e}, ${esc(name)}${out ? (on ? ', watched' : '') : ', not out yet'}">
+      <span class="ep-n">${on ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.4l4.3 4.3L18.6 7.6"/></svg>' : e}</span>
+      <span class="ep-t"><b>${esc(name)}</b>${sub || on ? `<small>${esc([on ? `Episode ${e}` : '', sub].filter(Boolean).join(' · '))}</small>` : ''}</span></button>`;
   }).join('');
   const whole = sea.aired && sea.seen === sea.aired;
-  $('isEps').innerHTML = `${top}<div class="ep-seasons">${seasons}</div><div class="ep-grid">${grid}</div>
+  $('isEps').innerHTML = `${top}<div class="ep-seasons">${seasons}</div><div class="ep-list">${grid}</div>
     ${sea.aired ? `<button type="button" class="ep-all" data-all>${whole ? `Unmark season ${sea.n}` : `Mark season ${sea.n} watched`}</button>` : ''}`;
   bind();
 }
@@ -94,11 +107,25 @@ function bind() {
   const box = $('isEps');
   const nx = box.querySelector('[data-next]');
   if (nx) nx.addEventListener('click', () => send({ s: cur.progress.next.s, e: cur.progress.next.e, seen: true }, nx));
-  box.querySelectorAll('[data-sea]').forEach(b => b.addEventListener('click', () => {
-    cur.season = Number(b.dataset.sea);
+  const fin = box.querySelector('[data-finish]');
+  if (fin) fin.addEventListener('click', () => { haptic('success'); cur.hooks.finishNow(cur.id); });
+  // Choosing a season is choosing where you are: it is drawn at once, kept on
+  // the server, and "Next up" is counted from it — so you can skip seasons.
+  box.querySelectorAll('[data-sea]').forEach(b => b.addEventListener('click', async () => {
+    const n = Number(b.dataset.sea);
+    if (n === cur.season) return;
+    const id = cur.id;
+    cur.season = n;
     haptic('tick');
     draw();
-    loadNames(cur.season);
+    loadNames(n);
+    try {
+      const r = await post(`/api/item/${id}/episodes`, { season: n });
+      if (!cur || cur.id !== id || cur.season !== n) return;
+      cur.progress = r.progress;
+      draw();
+      cur.hooks.changed(r);
+    } catch (_) { /* the season still shows; it just was not kept */ }
   }));
   box.querySelectorAll('[data-e]:not([disabled])').forEach(b => b.addEventListener('click', () => {
     const e = Number(b.dataset.e);
@@ -147,9 +174,9 @@ async function send(body, el) {
     if (top) burst(top, { r: 26, n: 8, size: 4, ring: 1.8 });
     haptic('success');
   } else {
-    // Moving on to the next season's episodes when this one is done.
-    const p = b.progress;
-    if (body.e !== undefined && p.next && p.next.s !== cur.season && body.seen) { cur.season = p.next.s; loadNames(cur.season); }
+    // The season stays the one chosen. It only moves when "Watched it" was an
+    // episode of the next season — which is the server saying you are in it now.
+    if (b.progress.season !== cur.season) { cur.season = b.progress.season; loadNames(cur.season); }
     draw();
   }
   cur.hooks.changed(b);
