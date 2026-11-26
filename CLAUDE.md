@@ -22,12 +22,12 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 228 tests + a headless-chromium check
+- **Tests:** `npm test` — 234 tests + a headless-chromium check
 
 ## The model
 
 ```js
-space = { id, name, memberIds: [...], createdBy, createdAt }
+space = { id, name, memberIds: [...], createdBy, createdAt, diet? }   // diet: see What a list eats
 item  = { id, spaceId, authorId, title, notes, visibility, tags,
           mod: { place?, link?, watch? }, done, doneAt, doneBy,
           when?, plannedBy?, visit?, cooked?, editedBy?, ideaBy?, createdAt, updatedAt }
@@ -40,7 +40,7 @@ state.kitchens[uid] = { pantry: { [key]: { name, state, aisle, by, at } }, buy: 
 state.questions[pairKey] = { zone, decks: {[uid]: kinds}, remind: {[uid]: 'HH:MM'}, paused, pauses, startedOn,
                              days: { 'YYYY-MM-DD': { qid, kind, answers: {[uid]: {text|pick, at}}, reacts, replies } } } // see Today's question
 state.timers = [{ id, uid, itemId, step, label, endsAt }]
-fit        = { role, energy, minutes, where, times, weather, of, by, model, at }   // see Suggestions
+fit        = { role, energy, minutes, where, times, weather, built, of, by, model, at }   // see Suggestions
 episodes   = { of, seen: { [season]: [ep…] }, season, show, by, at }               // see A show's seasons
 state.stations[uid] = { list: [{ id, name, lat, lon, modes, area }], by, at }       // a station each person chose
 state.taste[spaceId][uid] = { votes: { [itemId]: { v, at } }, ideas: [...], w: { [feature]: -1..1 } }
@@ -305,16 +305,43 @@ table (`W`), and each one that moves a thing has words the screen shows:
 - **The part of the day** (*More of a morning or afternoon thing*), and a long thing
   late at night.
 - **The weather at that hour.** A place with a weather profile is judged by it
-  (`placefit.judge`). Everything else goes by its `weather` field: *Nice out for it*,
-  *Wet then*, *Good for a wet one*.
+  (`placefit.judge`): *Weather's against it · rain* rules it out. Everything else goes by
+  its `weather` field: *Nice out for it*, *Wet then* (ruled out), *55% chance of rain*,
+  *Good for a wet one*.
 - **Open or closed then** (`hours.openAt`): *Closed then · opens 9 PM* rules it out.
 - **The journey**, for whoever has furthest to come: *Close by*, *A trek · 70 min for
   Linnea*. When you are tired, a long trip costs more.
-- **Already planned for then**, a show you are **in the middle of** (*Keep going · S2
-  E3*), a recipe you **have everything for**.
+- **On the calendar, at its own hour.** *Planned for then · 6:30 PM* only within 90
+  minutes of the hour asked about; at another hour of that day it is a note, *Planned
+  for 6:30 PM*. A day with no hour is *Planned for that day*.
+- A show you are **in the middle of** (*Keep going · S2 E3*), a recipe you **have
+  everything for**.
+- **What the list eats** (*Has flour · swap for gluten-free*), below.
 - **Thumbs**, below.
 
 `rank` then spreads the top of the list across kinds, so it is not eight films in a row.
+
+**A reason against a thing is a flag, not only a number** (Nov 26). Andrew, with two
+screenshots: "recommendations that were clearly weather inappropriate or more of an
+evening thing for lunch". Both were the weights working as written: a garden's −18 for
+rain lost to +30 for being on the calendar, and on a short list the best of a bad lot
+still wins. So `score` returns two flags beside the number:
+
+- **`hidden`: ruled out for then.** Closed; a place whose own profile says this weather
+  spoils it, **whatever part of it is under a roof** (only wholly outdoor places were
+  ruled out at first, and a garden with a glasshouse stayed in); anything that needs good
+  weather in an hour that is wet. These go to *Not then*, with the reason.
+- **`wrong`: it has a reason against it**, the kind the screen draws in coral: the wrong
+  part of the day, more than you have in you, a trek, built around what the list does not
+  eat, a coin-toss chance of rain. Set in one place (`say`), so a new coral reason cannot
+  forget to. Such a reason is always among the three shown.
+- **In the list, what is flagged comes after everything that is not**, whatever the
+  numbers. **A plan never picks either by itself** (below).
+- **A wet hour is rain** (`placefit.judge`, `WET_PCT` 70). A profile says *rain*; the
+  hour's code said *dense drizzle*, at 100%, and the garden was "not quite the weather".
+  At 70% or more, a place that avoids rain is spoiled (*rain likely*), on a place's page
+  too. `suggest.wet` is the same line for things with no profile; 50–69% is said and not
+  ruled out.
 
 ### A plan is slots, each weighed for its own hour
 
@@ -325,6 +352,26 @@ Dinner@18:30* the next day. They are a template, not a schedule, so the screen s
 slot's hour** (its weather, its opening hours, its journey), never the same thing twice,
 and keeps up to six runners-up for Swap.
 
+- **Never the best of a bad lot.** A slot takes the best thing that is neither `hidden`
+  nor `wrong`. With nothing clean it is empty and says so (*Nothing on your list for a
+  meal then* · **Get ideas**), and what there is waits in Swap, flagged, for a person to
+  choose. An evening recipe is not lunch because it was the only recipe.
+- **What is on the calendar keeps its own hour** (`holds`). A thing planned for an hour
+  belongs to the part of that day nearest it, of its own role, within three hours. It is
+  offered **nowhere else**: not at lunch, and not the night before. That slot **takes the
+  plan's hour as its own** (*Dinner · at 6:30 PM*), so the weather, the hours and the
+  runners-up are all for 6:30. The first cut gave the bonus to any hour of the day, so the
+  first slot it reached took it, and *Put it on the calendar* would then have moved it
+  there.
+  - The wire says `planned`. **The button writes only the rest** (*Put the rest on the
+    calendar*; *All of this is on the calendar* when there is nothing to add).
+  - **Ruled out now** (closed, rained off), it is `bumped`: said in its slot (*… is on the
+    calendar for then · Weather's against it · rain*), with the best clean thing offered
+    under it, and still first in Swap for anyone going anyway. A reason that is only
+    `wrong` does not bump it: they chose that hour.
+  - Planned for a day with no hour, it may go in any part of that day and no other.
+    Planned for before the plan starts, or for an hour no part of the day covers, it is in
+    no slot.
 - **A piece you chose stays put** (`keep=s1:<id>`), and the rest is fitted round it.
 - **Over two days, one dinner out and one cooked** (`W.otherDinner`).
 - **The next day assumes you are rested**: its energy is at least "okay".
@@ -335,8 +382,9 @@ and keeps up to six runners-up for Swap.
 ### What a thing asks of you (`item.fit`, by Opus 5.5)
 
 Every item gets a profile: its **role** (eat, drink, watch, do), **energy** 1–5,
-minutes, home or out, the parts of the day it suits, and what weather does to it
-(`needs_good`, `better_when_bad`, `any`). This is the "same manner" Andrew asked for,
+minutes, home or out, the parts of the day it suits, what weather does to it
+(`needs_good`, `better_when_bad`, `any`), and, for food and drink, what it is **built
+around** (wheat, dairy, meat… see *What a list eats*). This is the "same manner" Andrew asked for,
 for films and shows as well as places.
 
 - **Batched, twenty a call**, in the background, when Suggestions opens. Only what the
@@ -348,6 +396,58 @@ for films and shows as well as places.
 - `of` is the kind and title it was made for. Reword it and it is made again. A PATCH can
   neither set nor lose it. A gate (`cleanFit`, `cleanBatch`) stands between Claude and the
   store.
+
+### What a list eats (`lib/diet.js`)
+
+Added Nov 26, so that a list which keeps to a way of eating is not offered what breaks
+it. The Suggestions controls have a **What you eat** row. Its sheet has ten rules
+(gluten-free, dairy-free, vegetarian, vegan, pescatarian, nut-free, egg-free, no
+shellfish, no pork, no alcohol) and a switch, **It's medical**, for celiac and allergies.
+
+- **A rule of the LIST, not a fact about a person.** `space.diet = { must, strict, by,
+  at }`. Anyone on the list sets it, everyone on it sees it, and it names nobody: "this
+  list eats gluten-free", never who. A diet kept per person would be a new audience (it
+  says something about somebody's health) and would need the kitchen's narrow rule. On the
+  list it goes exactly as far as the list's name does. `by` records whose hand.
+- **An id this server does not know is refused whole** (400), not dropped. A rule you
+  asked for and did not get is worse than an error. `diet.of()` checks again on the way
+  out, so a store edited by hand cannot make a rule there is no table for.
+- **Nothing here can know a restaurant is safe, so nothing says so.** Three kinds of
+  thing are said, and each names where it came from:
+  - **A recipe's own lines** (`scan`): *Has flour, soy sauce · swap for gluten-free*.
+    Judged **as it will be cooked**: a swapped line is what went in instead, so
+    gluten-free pastry clears the pastry. It is a caution list that errs toward flagging,
+    and it knows almond flour is not flour, tamari is not soy sauce and peanut butter is
+    not butter. A line it does not flag has not been checked, and the screen never says
+    it has.
+  - **What a thing is built around** (`item.fit.built`, below): *Built around wheat · ask
+    what's gluten-free*. Claude's coarse profile, used when there are no lines. Only ever
+    a caution.
+  - **What OpenStreetMap's mappers recorded** (`diet:gluten_free=yes|only|limited|no`,
+    read by `geo.shapeDetails`): *Gluten-free options, says OpenStreetMap*. The one source
+    of anything positive, quoted as theirs, and it outranks a guess from a name.
+- **Nothing is hidden for it.** A caution lowers a thing and says why (`W.diet`, ×1.5
+  when strict); *Not then* stays about the hour. The reason is always on the row, however
+  little it weighs (`keep`), so it cannot lose its place to *Close by*.
+- **`built` is asked the same of every list.** What a list eats is never sent with the
+  profile: the profile says "wheat, pork", and the rule is applied here. Adding it bumped
+  the profile key; an earlier profile is still used for the same words (`usable`) while
+  its replacement is made, so a list does not fall back to guesses for a minute.
+- **New ideas** are asked for with the rule (*They eat: gluten-free — STRICTLY. It is
+  medical…*). Every idea to eat or drink must say **how** it keeps to it (`keeps`:
+  "naturally gluten-free", "dedicated gluten-free kitchen"). The gate drops one that does
+  not say, and one whose own title names what they do not eat with nothing promising
+  otherwise (a ramen bar, a brewery tour). A film called *Bread and Roses* is a film.
+  The screen shows `keeps` and, once, *Ask a place before you order*.
+- **Recipe swaps keep to it too.** The server adds the recipe's own list's rule to *It
+  has to be*, whatever the phone sent, and says when it is medical. Only for somebody on
+  that list: a public recipe seen from another list does not carry the rule out with it.
+  The swap sheet shows it as a chip with no ×, because it is changed where it was set.
+- **The connector says it** (`list_lists`: *What this list eats: gluten-free — strictly*).
+  It is on its members' screens, and anything asked to pick dinner from the list ought to
+  know it.
+- **What goes to Anthropic:** the rule's words and whether it is medical, with ideas and
+  swaps. Nobody's name, and no condition beyond "celiac or an allergy".
 
 ### Stations — a new audience, so one narrow rule (`lib/stations.js`)
 
@@ -1442,6 +1542,9 @@ whole word and never inside a bracket it opened (`clip`).
   for `name` in lower case, since it reads after an amount ("2 cups plain milk").
 - **Not labelled as AI** (see *Open threads*): the button says *Suggest a swap*. The SDK
   sends the key as a bearer token (1.10), which the suite accepts in either form.
+- **And a fourth.** A suggestion's reasons carried their tone as a bare class, and the
+  global `.note` (warn colour, 22px above) gave every note a gap and the wrong colour.
+  They are `t-good`, `t-bad`, `t-note`.
 - **Class names are global, a third time.** The kitchen's state button was `.pill` — the
   nav's travelling marker — and gave it a 64px minimum width; the browser check caught
   the marker settling 10px wide. It is `.kstate`. Recipe cards are `.rcard`, not `.card`.
@@ -1558,7 +1661,9 @@ Asked at Andrew's ask, Nov 25, as groundwork for suggestions.
   - "All four seasons" is not a season.
   - Nothing is kept when the weather doesn't matter.
 - **Judged against the forecast** (`judge`, pure). For now and for the plan it says *Good
-  weather for it*, *Not quite ideal · a bit cold* or *Not ideal · rain*. A place where
+  weather for it*, *Not quite ideal · a bit cold* or *Not ideal · rain*. An hour at 70% or
+  more is rain to a place that avoids it, whatever the hour's code says (see
+  *Suggestions*). A place where
   the weather doesn't matter gets no verdict. The profile reads as one line: *Best with
   clear skies, 59°–75° · spoiled by rain, below 41°.*
 - **Stored beside `visit`**, set only here, so a PATCH can neither set nor lose it. It
@@ -1733,8 +1838,9 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `POST /api/item/:id/when` | put it on a day `{date, time?}` or `{clear:true}` — anyone who can see it |
 | `POST /api/item/:id/visit` | `{book?, again?, memory?}` — anyone who can see it; `again`/`memory` only once done (409) |
 | `GET /api/item/:id/weather` · `GET /api/space/:id/weather` | the weather at a place (now, rain soon, its plan) with how it suits the place's profile; the middle of a list's pins for the Places tab — only what you can see |
-| `GET /api/space/:id/suggest?energy=&at=&tz=&through=&keep=` | what would be good for then: a plan of slots (pick and runners-up), the list in order, what is ruled out, `pending` |
+| `GET /api/space/:id/suggest?energy=&at=&tz=&through=&keep=` | what would be good for then: a plan of slots (pick and runners-up, `planned` when the calendar already has it, `bumped` when the calendar's own is ruled out), the list in order, what is ruled out, `pending` |
 | `POST /api/space/:id/suggest/vote {item\|idea, v, at}` · `POST /api/space/:id/suggest/ideas {energy, at, tz, role?}` | a thumb (yours alone on the wire); new ideas from Claude, gated, 12 an hour |
+| `POST /api/space/:id/diet {must: [...], strict}` | what the list eats, set by anyone on it; `{must: []}` is anything; an unknown rule is a 400 |
 | `GET`·`POST /api/people/:uid/stations` · `GET /api/transit/stops?q=&space=` | where somebody starts from — yourself or a pair partner, else 404; the station search |
 | `GET /api/item/:id/show` · `GET /api/item/:id/show/season/:n` · `POST /api/item/:id/episodes {s, e?, seen}` | a show's seasons, episode names, and ticking one (or a whole season) — anyone who can see it; the last of an ended show ticks it off |
 | `GET /api/space/:id/hours?at=` | open or closed now for every place on the list, at the phone's time; `pending` says to ask again |

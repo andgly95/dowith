@@ -6,10 +6,10 @@
 // this draws it, and never ranks anything itself.
 import { S } from './state.js';
 import { $, esc, toast, openSheet, closeSheet, leadEmoji } from './util.js';
-import { get, post } from './api.js';
+import { get, post, applyWire } from './api.js';
 import { haptic, skeleton, burst } from './motion.js';
 import { wxOf, deg, hourWords } from './wx.js';
-import { icon } from './icons.js';
+import { icon, iconFor } from './icons.js';
 
 const WORDS = ['', 'Wiped out', 'Low', 'Okay', 'Good', 'Full of it'];
 const ROLE = { eat: 'a meal', drink: 'a drink', watch: 'something to watch', do: 'something to do' };
@@ -24,6 +24,21 @@ try {
   if (typeof saved.through === 'boolean') st.through = saved.through;
 } catch (_) { /* a fresh start is fine */ }
 const remember = () => { try { localStorage.setItem('dw-sug', JSON.stringify({ energy: st.energy, through: st.through })); } catch (_) { /* private mode */ } };
+
+// What this list eats (lib/diet.js). The answer to the last question asked is
+// the truth; before there is one, what the app already knows about the list.
+const DIETS = () => (S.wire && S.wire.diets) || [];
+function dietNow() {
+  if (st.data && st.data.diet !== undefined) return st.data.diet || null;
+  const sp = ((S.wire && S.wire.spaces) || []).find(s => s.id === S.spaceId);
+  return (sp && sp.diet) || null;
+}
+const dietLabels = (d) => (d ? d.must.map(id => (DIETS().find(x => x.id === id) || { label: id }).label) : []);
+const eatRow = () => {
+  const d = dietNow();
+  return `${iconFor('recipe', 18)}<span class="cb"><b>What you eat</b>
+    <small>${d ? esc(`${dietLabels(d).join(' · ')}${d.strict ? ' · strictly' : ''}`) : 'Anything. Tap if there’s something you don’t.'}</small></span>`;
+};
 
 const pad = (n) => String(n).padStart(2, '0');
 const dayOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -94,12 +109,19 @@ const DOWN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke
 const thumbs = (v, attrs) => `<span class="sg-th"><button type="button" ${attrs} data-v="1" aria-pressed="${v > 0}" aria-label="More like this">${UP}</button>
   <button type="button" ${attrs} data-v="-1" aria-pressed="${v < 0}" aria-label="Not this">${DOWN}</button></span>`;
 
+// One reason, as a span. A short one never breaks mid-phrase ("2:30 / PM"); one
+// longer than a line could not help it, so it wraps like ordinary text instead
+// of dropping to a line of its own and leaving a gap.
+// The tone is `t-good`, `t-bad`, `t-note`, never the bare word: class names are
+// global, and a plain `.note` elsewhere gave every note a 22px gap above it.
+const say = (tone, text) => `<span class="t-${tone}${String(text).length > 30 ? ' long' : ''}">${esc(text)}</span>`;
+
 // One thing, weighed: its tile, its words, why, how to get there, and thumbs.
 function rowHtml(x, { slot = null } = {}) {
   const it = itemOf(x.id);
   if (!it) return '';
   const kind = ((S.wire && S.wire.kinds) || []).find(k => k.id === it.kind);
-  const why = x.reasons.map(r => `<span class="${r.tone}">${esc(r.text)}</span>`).join('<span class="dot">·</span>');
+  const why = x.reasons.map(r => say(r.tone, r.text)).join('<span class="dot">·</span>');
   return `<div class="sg-it" data-sit="${esc(x.id)}"${slot ? ` data-in="${esc(slot)}"` : ''}>
     ${hooks.tileHtml(it)}
     <div class="sg-bd" data-open><b>${esc(leadEmoji(it.title).rest)}</b>
@@ -117,10 +139,26 @@ function slotWx(w) {
     Number.isFinite(w.rain) && w.rain >= 30 ? ` · ${w.rain}% rain` : ''}</span>`;
 }
 
+// What is on the calendar for a part of the day but ruled out now (closed,
+// rained off): said in its slot, above whatever is offered in its place. It is
+// still first in Swap, for anyone going anyway.
+function bumpHtml(sl) {
+  const it = sl.bumped && itemOf(sl.bumped.id);
+  if (!it) return '';
+  const why = sl.bumped.reasons.filter(r => r.tone === 'bad').map(r => say('bad', r.text)).join('<span class="dot">·</span>');
+  return `<p class="sg-why sg-bump" data-bumped="${esc(sl.bumped.id)}"><b>${esc(leadEmoji(it.title).rest)}</b> is on the calendar for then${
+    why ? `<span class="dot">·</span>${why}` : ''}</p>`;
+}
+
+// The pieces "Put it on the calendar" would write: not the ones already there.
+const toPlan = (d) => d.plan.filter(sl => sl.pick && !sl.planned);
+
 function planHtml(d) {
   if (!d.plan.length) return '';
   let day = null;
   const parts = [];
+  const fresh = toPlan(d).length;
+  const onCal = d.plan.filter(sl => sl.pick && sl.planned).length;
   for (const sl of d.plan) {
     if (sl.date !== day) {
       day = sl.date;
@@ -128,13 +166,16 @@ function planHtml(d) {
       parts.push(`<div class="sg-day">${esc(dayWord(day) === 'Today' && first.time >= '17:00' ? 'Tonight' : dayWord(day))}</div>`);
     }
     parts.push(`<div class="sg-slot" data-slot="${esc(sl.key)}">
-      <div class="sg-sh"><b>${esc(sl.label)}</b><small>around ${esc(hourWords(sl.time))}${slotWx(sl.weather)}</small>
+      <div class="sg-sh"><b>${esc(sl.label)}</b><small>${sl.planned ? 'at' : 'around'} ${esc(hourWords(sl.time))}${slotWx(sl.weather)}</small>
         <button type="button" class="sg-swap" data-swap="${esc(sl.key)}">${sl.pick ? 'Swap' : 'Get ideas'}</button></div>
-      ${sl.pick ? rowHtml(sl.pick, { slot: sl.key }) : `<p class="sg-none">Nothing on your list for ${ROLE[sl.role]} then.</p>`}
+      ${bumpHtml(sl)}
+      ${sl.pick ? rowHtml(sl.pick, { slot: sl.key }) : `<p class="sg-none">Nothing ${sl.bumped ? 'else ' : ''}on your list for ${ROLE[sl.role]} then.</p>`}
     </div>`);
   }
-  return `<h3 class="sec">A plan <em>each piece can be swapped</em></h3><div class="sg-plan">${parts.join('')}</div>
-    <button type="button" class="primary" id="sgPlanIt">Put it on the calendar</button>`;
+  // What is already on the calendar is left where it is: the button is for the rest.
+  const put = fresh ? `<button type="button" class="primary" id="sgPlanIt">${onCal ? 'Put the rest on the calendar' : 'Put it on the calendar'}</button>`
+    : onCal ? '<p class="sg-learn sg-oncal">All of this is on the calendar.</p>' : '';
+  return `<h3 class="sec">A plan <em>each piece can be swapped</em></h3><div class="sg-plan">${parts.join('')}</div>${put}`;
 }
 
 function paint() {
@@ -155,18 +196,25 @@ function paint() {
   const fromLine = from.map(p => `${p.mine ? 'You' : p.name}: ${p.stations.length ? p.stations.map(x => x.name).join(', ') : 'not set'}`).join(' · ');
   $('sgFrom').innerHTML = `${icon('pin', 18)}<span class="cb"><b>${d.needsStations ? 'Set where you each start from' : 'Starting from'}</b>
     <small>${esc(d.needsStations ? 'Your nearest station, for travel times' : fromLine)}</small></span>`;
+  if ($('sgEat')) $('sgEat').innerHTML = eatRow();
   const learning = d.profiling ? '<p class="sg-learn">Getting to know your list. These sharpen in a minute.</p>' : '';
   body.innerHTML = `${wx}${learning}${planHtml(d)}${good}${not}${ideasHtml(d)}`;
   bind();
 }
+
+// How an idea keeps to what the list eats, in its own words — and, once, that
+// nobody has checked: it is what is generally known about a dish or a place.
+const keepsHtml = (x) => (x.keeps ? `<span class="dot">·</span>${say('good', x.keeps)}` : '');
+const askNote = (list) => (dietNow() && list && list.some(x => x.keeps)
+  ? `<p class="sg-learn sg-asknote">Kept to ${esc(dietLabels(dietNow()).join(', ').toLowerCase())} as far as it can tell. Ask a place before you order.</p>` : '');
 
 function ideasHtml(d) {
   if (!d.ideas) return '';
   const plural = KIND_PLURAL();
   const list = st.ideas;
   return `<h3 class="sec">New ideas <em>not on your list yet</em></h3>
-    ${st.ideasBusy ? skeleton() : list && list.length ? `<div class="group sg-list">${list.map((x, i) => `<div class="sg-it idea" data-idea="${i}">
-      <div class="sg-bd"><b>${esc(x.title)}</b><div class="sg-why"><span class="k">${esc(plural[x.kind] || x.kind)}</span><span class="dot">·</span><span>${esc(x.why)}</span></div>
+    ${st.ideasBusy ? skeleton() : list && list.length ? `${askNote(list)}<div class="group sg-list">${list.map((x, i) => `<div class="sg-it idea" data-idea="${i}">
+      <div class="sg-bd"><b>${esc(x.title)}</b><div class="sg-why"><span class="k">${esc(plural[x.kind] || x.kind)}</span><span class="dot">·</span>${say('why', x.why)}${keepsHtml(x)}</div>
         <button type="button" class="sg-add" data-add="${i}"${x.added ? ' disabled' : ''}>${x.added ? 'On your list' : `Add to ${esc(plural[x.kind] || 'the list')}`}</button></div>
       ${thumbs(x.vote || 0, `data-ivote="${i}"`)}</div>`).join('')}</div>` : ''}
     <button type="button" class="ghost" id="sgIdeas"${st.ideasBusy ? ' disabled' : ''}>${list ? 'Suggest different ones' : 'Suggest new ideas'}</button>`;
@@ -249,7 +297,7 @@ function bind() {
 
 async function putOnCalendar() {
   const d = st.data;
-  const picks = d.plan.filter(sl => sl.pick);
+  const picks = toPlan(d);
   if (!picks.length) return;
   const btn = $('sgPlanIt');
   btn.disabled = true;
@@ -279,8 +327,8 @@ function paintSwap() {
   const plural = KIND_PLURAL();
   const alts = sl.alts.length ? `<div class="group sg-list">${sl.alts.map(x => rowHtml(x).replace('data-open', 'data-use')).join('')}</div>`
     : `<p class="sg-none">Nothing else on your list for ${ROLE[sl.role]} then.</p>`;
-  const ideas = swapping.busy ? skeleton() : swapping.ideas ? `<div class="group sg-list">${swapping.ideas.map((x, i) => `<div class="sg-it idea">
-      <div class="sg-bd"><b>${esc(x.title)}</b><div class="sg-why"><span class="k">${esc(plural[x.kind] || x.kind)}</span><span class="dot">·</span><span>${esc(x.why)}</span></div>
+  const ideas = swapping.busy ? skeleton() : swapping.ideas ? `${askNote(swapping.ideas)}<div class="group sg-list">${swapping.ideas.map((x, i) => `<div class="sg-it idea">
+      <div class="sg-bd"><b>${esc(x.title)}</b><div class="sg-why"><span class="k">${esc(plural[x.kind] || x.kind)}</span><span class="dot">·</span>${say('why', x.why)}${keepsHtml(x)}</div>
         <button type="button" class="sg-add" data-useidea="${i}">Add it and use this</button></div></div>`).join('')}</div>` : '';
   $('sgSwapBody').innerHTML = `<h3 class="sec">From your list</h3>${alts}
     ${st.data.ideas ? `<h3 class="sec">Something new</h3>${ideas}<button type="button" class="ghost" id="sgSwapIdeas"${swapping.busy ? ' disabled' : ''}>
@@ -378,6 +426,51 @@ function paintStations() {
   });
 }
 
+/* ── what this list eats ────────────────────────────────────────────────── */
+
+// A rule of the list: chips to choose from the server's table, and whether it
+// is medical. Saved on every tap, one after another so they land in order.
+let eat = null;   // { must: Set, strict }
+let saving = Promise.resolve();
+function openDiet() {
+  const d = dietNow();
+  eat = { must: new Set(d ? d.must : []), strict: !!(d && d.strict) };
+  paintDiet();
+  openSheet('sgDietSheet');
+}
+function paintDiet() {
+  $('sgDietBody').innerHTML = `<div class="chips sg-diets" role="group" aria-label="What you eat">${DIETS().map(x => `<button type="button"
+      data-diet="${esc(x.id)}" class="${eat.must.has(x.id) ? 'on' : ''}" aria-pressed="${eat.must.has(x.id)}">${esc(x.label)}</button>`).join('')}</div>
+    <label class="crow sg-strict"><span class="cb"><b>It’s medical</b><small>Celiac or an allergy, not a preference. Be strict about it.</small></span>
+      <input type="checkbox" class="switch" id="sgStrict"${eat.strict ? ' checked' : ''}${eat.must.size ? '' : ' disabled'}></label>
+    <p class="cl-note sg-asknote">Nothing here checks a kitchen for you. What it knows about a place comes from OpenStreetMap and from what is generally known, so ask before you order.</p>`;
+  $('sgDietBody').querySelectorAll('[data-diet]').forEach(b => b.addEventListener('click', () => {
+    if (eat.must.has(b.dataset.diet)) eat.must.delete(b.dataset.diet); else eat.must.add(b.dataset.diet);
+    if (!eat.must.size) eat.strict = false;
+    haptic('tick');
+    paintDiet();
+    saveDiet();
+  }));
+  $('sgStrict').addEventListener('change', (e) => { eat.strict = e.target.checked; haptic('tick'); saveDiet(); });
+}
+function saveDiet() {
+  const sid = S.spaceId;
+  const body = { must: [...eat.must], strict: eat.strict };
+  saving = saving.then(async () => {
+    try {
+      const b = await post(`/api/space/${sid}/diet`, body);
+      applyWire(b.state);
+      if (S.spaceId !== sid) return;
+      if (st.data) st.data.diet = b.diet;
+      // Ideas asked for under the old rule are not ideas for the new one.
+      st.ideas = null;
+      if ($('sgEat')) $('sgEat').innerHTML = eatRow();
+      reload();
+    } catch (_) { toast('Could not save that'); }
+  });
+  return saving;
+}
+
 /* ── the screen ─────────────────────────────────────────────────────────── */
 
 // Called by space.js's render() whenever the Suggestions view is up. The
@@ -400,6 +493,7 @@ export function renderSuggest(list) {
       <label class="crow sg-thru"><span class="cb"><b>Carry on into the next day</b><small>A morning, an afternoon and dinner</small></span>
         <input type="checkbox" class="switch" id="sgThrough"${st.through ? ' checked' : ''}></label>
       <button type="button" class="crow sg-from" id="sgFrom"></button>
+      <button type="button" class="crow sg-from" id="sgEat"></button>
     </div>
     <div id="sgBody"></div></div>`;
   $('sgEnergy').addEventListener('input', (e) => {
@@ -423,6 +517,8 @@ export function renderSuggest(list) {
   $('sgThrough').addEventListener('change', (e) => { st.through = e.target.checked; remember(); haptic('tick'); reload(); });
   $('sgFrom').addEventListener('click', openStations);
   $('sgFrom').innerHTML = `${icon('pin', 18)}<span class="cb"><b>Starting from</b><small>…</small></span>`;
+  $('sgEat').addEventListener('click', openDiet);
+  $('sgEat').innerHTML = eatRow();
   if (st.data) paint();
   st.polls = 0;
   load({ quiet: !!st.data });
@@ -434,4 +530,5 @@ export function initSuggest(h) {
   hooks = { ...hooks, ...h };
   $('sgSwapClose').addEventListener('click', () => { swapping = null; closeSheet('sgSwapSheet'); });
   $('sgStationClose').addEventListener('click', () => { stn = null; closeSheet('sgStationSheet'); reload(); });
+  $('sgDietClose').addEventListener('click', () => { eat = null; closeSheet('sgDietSheet'); });
 }

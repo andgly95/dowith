@@ -1628,6 +1628,11 @@ async function weatherRules() {
     assert.deepStrictEqual(P.judge(beach, { code: 0, t: 21 }), { verdict: 'mixed', why: ['a bit cold'] });
     assert.deepStrictEqual(P.judge(beach, { code: 0, t: 28, wind: 50 }).why, ['windy']);
     assert.strictEqual(P.judge(bar, { code: 63, t: 5 }), null, 'indoors: no verdict at all');
+    // The beach's profile says rain, not drizzle. An hour that is all but certain to be wet is rain to it anyway.
+    assert.deepStrictEqual(P.judge(beach, { code: 55, t: 28, rain: 100 }), { verdict: 'poor', why: ['rain likely'] }, 'dense drizzle at 100% is not "not quite ideal"');
+    assert.deepStrictEqual(P.judge(beach, { code: 3, t: 28, rain: 85 }), { verdict: 'poor', why: ['rain likely'] });
+    assert.strictEqual(P.judge(beach, { code: 3, t: 28, rain: 60 }).verdict, 'mixed', 'a coin toss is not a wet hour');
+    assert.deepStrictEqual(P.judge(beach, { code: 63, t: 28, rain: 100 }).why, ['rain'], 'and rain is said once');
     const it = { title: 'Sunset drinks', mod: { place: { name: 'Roof Terrace', what: 'bar', area: 'Navy Yard', osm: 'W42' } } };
     assert.strictEqual(P.keyOf(it), 'osm:W42');
     assert.ok(P.stale(it) && !P.stale({ ...it, weatherFit: { of: 'osm:W42' } }) && P.stale({ ...it, weatherFit: { of: 'osm:W41' } }),
@@ -1709,6 +1714,15 @@ async function suggestRules() {
     assert.strictEqual(F.cleanFit({ ...good, energy: 9 }), null);
     assert.strictEqual(F.cleanFit({ ...good, role: 'sleep' }), null);
     assert.strictEqual(F.cleanFit({ ...good, times: ['morning', 'afternoon', 'evening', 'night'] }).times, null, 'all day is not a preference');
+    // What it is built around, in lib/diet.js's words: an empty list is an answer, null is "could not tell".
+    assert.deepStrictEqual([F.cleanFit({ ...good, built: ['pork', 'gluten', 'plutonium', 'gluten'] }).built, F.cleanFit({ ...good, built: [] }).built, F.cleanFit(good).built],
+      [['gluten', 'pork'], [], null]);
+    assert.ok(F.SCHEMA.properties.items.items.required.includes('built') && /BUILT AROUND/.test(F.SYSTEM) && !/gluten-free list|They eat/.test(F.SYSTEM),
+      'asked the same of every list: what a list eats is never sent with it');
+    // A profile made before `built` is still used for the same words, and is made again.
+    const old = { id: 'o', kind: 'movie', title: 'Paper Moon' };
+    old.fit = { ...F.cleanFit({ ...good, role: 'watch', energy: 1, where: 'home' }, { of: F.earlierKeyOf(old) }) };
+    assert.deepStrictEqual([F.stale(old), F.usable(old), F.fitOf(old).rough, F.fitOf({ ...old, title: 'Another' }).rough], [true, true, undefined, true]);
     const items = [film, { id: 'h', kind: 'activity', title: 'Hike' }];
     const got = F.cleanBatch({ items: [{ ...good, n: 2 }, { ...good, n: 2, energy: 1 }, { ...good, n: 7 }, { ...good, n: 1, role: 'watch', energy: 1, where: 'home' }] }, items);
     assert.deepStrictEqual([...got.keys()], ['h', 'f'], 'matched by number; a number not asked about, or answered twice, is ignored');
@@ -1758,6 +1772,29 @@ async function suggestRules() {
     const rooftop = { ...bar, weatherFit: { matters: true, setting: 'outdoors', ideal: { conditions: ['clear'], minC: 16, maxC: 30 }, avoid: { conditions: ['rain'], belowC: 8, aboveC: null }, of: 'osm:N1' } };
     const rained = SG.score(rooftop, ctx({ weatherOf: () => wet }));
     assert.deepStrictEqual([rained.hidden, rained.reasons[0].text], [true, 'Weather’s against it · rain'], 'an outdoor place in the rain is ruled out too');
+    // …and so is one with a roof over part of it: its own profile says rain spoils it.
+    const glasshouse = { ...rooftop, weatherFit: { ...rooftop.weatherFit, setting: 'both' } };
+    assert.strictEqual(SG.score(glasshouse, ctx({ weatherOf: () => wet })).hidden, true, 'rained off is rained off, whatever part is indoors');
+    assert.strictEqual(SG.score(glasshouse, ctx({ weatherOf: () => ({ code: 55, t: 12, rain: 100 }) })).reasons[0].text, 'Weather’s against it · rain likely');
+    const up = ctx({ energy: 5, time: '10:00' });
+    const soaked = SG.score(hike, { ...up, general: wet });
+    const maybe = SG.score(hike, { ...up, general: { code: 3, t: 14, rain: 55 } });
+    assert.deepStrictEqual([soaked.hidden, maybe.hidden, maybe.wrong, maybe.reasons[0].text], [true, false, true, '55% chance of rain'],
+      'a hike in the rain is ruled out; at a coin toss it is said, and left to you');
+    // A reason against a thing is flagged, not only weighed — and is always among the three shown.
+    const late = SG.score(hike, ctx({ energy: 5, time: '19:30', transitOf: legs(12), readyOf: () => [true], general: { code: 0, t: 18, rain: 0 } }));
+    assert.ok(late.wrong && !late.hidden && /morning or afternoon thing/.test(late.reasons[0].text), JSON.stringify(late.reasons));
+    assert.deepStrictEqual([SG.score(film, ctx()).wrong, trek.wrong, SG.score(hike, ctx()).wrong], [false, true, true]);
+    // What is on the calendar is planned for its own hour, not for any hour of its day.
+    const dinner = { ...film, when: { date: '2026-11-25', time: '18:30' } };
+    const atLunch = SG.score(dinner, ctx({ time: '12:30' }));
+    const atDinner = SG.score(dinner, ctx({ time: '19:00' }));
+    assert.ok(atLunch.reasons.some(r => r.text === 'Planned for 6:30 PM' && r.tone === 'note') && !atLunch.reasons.some(r => /Planned for then/.test(r.text)));
+    assert.ok(atDinner.reasons.some(r => r.text === 'Planned for then · 6:30 PM'));
+    assert.ok(SG.score({ ...film, when: { date: '2026-11-25', time: null } }, ctx({ time: '12:30' })).reasons.some(r => r.text === 'Planned for that day'));
+    // In the list, what has something against it comes after everything that has not.
+    const order = SG.rank([{ ...hike, when: { date: '2026-11-25', time: null } }, film], ctx({ energy: 5 }));
+    assert.ok(order.good[0].id === 'film' && order.good[1].score > order.good[0].score, `flagged after clean, whatever the numbers: ${order.good.map(x => `${x.id} ${x.score}`)}`);
   });
 
   await t('thumbs: yours on a thing fades, and teaches what you lean toward — bounded, and undone by changing your mind', () => {
@@ -1816,6 +1853,56 @@ async function suggestRules() {
     assert.ok(top.includes('recipe'), `not five films in a row: ${top}`);
   });
 
+  await t('a plan keeps the calendar’s own hours, and never fills a part of the day with something it has a reason against', () => {
+    const day = '2026-11-26';
+    const wet = { code: 63, t: 9, rain: 100 };
+    const mk = (id, kind, fit, extra = {}) => {
+      const it = { id, kind, title: id, createdAt: 0, ...extra };
+      it.fit = { minutes: 90, where: 'out', weather: 'any', built: null, ...fit, of: F.keyOf(it) };
+      return it;
+    };
+    const curry = mk('curry', 'recipe', { role: 'eat', energy: 3, times: ['evening'], where: 'home' }, { when: { date: day, time: '18:30' } });
+    const deli = mk('deli', 'place', { role: 'eat', energy: 3, times: ['afternoon', 'evening'] });
+    const cafe = mk('cafe', 'place', { role: 'drink', energy: 2, times: ['morning', 'afternoon'] }, { when: { date: day, time: '11:00' } });
+    const garden = mk('garden', 'place', { role: 'do', energy: 3, times: ['morning', 'afternoon'] }, { when: { date: day, time: '14:30' },
+      mod: { place: { name: 'Glasshouse', what: 'garden', osm: 'N2', lat: 38.9, lon: -77 } },
+      weatherFit: { matters: true, setting: 'both', ideal: { conditions: ['clear'], minC: 12, maxC: 28 }, avoid: { conditions: ['rain'], belowC: null, aboveC: null }, of: 'osm:N2' } });
+    const arcade = mk('arcade', 'activity', { role: 'do', energy: 3, times: ['morning', 'afternoon', 'evening'] });
+    const play = mk('play', 'activity', { role: 'do', energy: 3, times: ['evening', 'night'] });
+    const all = [curry, deli, cafe, garden, arcade, play, film];
+    const morning = SG.slotsFor({ date: day, time: '09:51' });
+    const facts = (w) => (sl) => ctx({ date: sl.date, time: sl.time, energy: 3, general: w, weatherOf: () => w });
+    const p = SG.plan(all, morning, facts(wet));
+    const say = (x) => `${x.label}@${x.time} ${x.pick ? x.pick.id : '-'}${x.planned ? ' planned' : ''}${x.bumped ? ` (not ${x.bumped.id})` : ''}`;
+    assert.deepStrictEqual(p.map(say), ['Morning@11:00 cafe planned', 'Lunch@12:30 deli', 'Afternoon@14:30 arcade (not garden)', 'Dinner@18:30 curry planned', 'Evening@21:00 film'],
+      'dinner planned for 6:30 is dinner’s, not lunch’s; a part of the day takes the hour of what is planned in it; the rained-off garden is said and replaced');
+    assert.ok(!p.some(x => x.key !== 's3' && [x.pick, ...x.alts].some(a => a && a.id === 'curry')), 'and it is offered nowhere but its own part of the day');
+    assert.deepStrictEqual([p[2].bumped.reasons[0].text, p[2].alts[0].id], ['Weather’s against it · rain', 'garden'], 'why, and still first in Swap for anyone going anyway');
+    assert.ok(p[2].alts.findIndex(a => a.id === 'play') > 0 && p[2].pick.id !== 'play', 'an evening thing is not an afternoon’s pick, though it can be chosen');
+    const insist = SG.plan(all, morning, facts(wet), { keep: { s2: 'garden' } })[2];
+    assert.deepStrictEqual([insist.pick.id, insist.kept, insist.planned, insist.bumped], ['garden', true, true, null], 'chosen anyway, it stays');
+    const dry = SG.plan(all, morning, facts({ code: 0, t: 18, rain: 0 }))[2];
+    assert.deepStrictEqual([dry.pick.id, dry.planned, dry.bumped], ['garden', true, null], 'on a clear day the calendar stands');
+
+    // The night before: tomorrow's dinner is not tonight's, however short the list.
+    const eve = SG.slotsFor({ date: '2026-11-25', time: '18:30' }, { through: true });
+    const before = SG.plan([curry, film], eve, facts(null));
+    assert.deepStrictEqual([before[0].pick, before[0].alts.length, before[4].pick.id, before[4].planned, before[4].time], [null, 0, 'curry', true, '18:30']);
+    // A day with no hour: any part of that day, and no other day.
+    const someTime = { ...curry, when: { date: day, time: null } };
+    const loose = SG.plan([someTime, film], eve, facts(null));
+    assert.deepStrictEqual([loose[0].pick, loose[4].pick.id, loose[4].planned, loose[4].time], [null, 'curry', false, '18:30'], 'it has a day but no hour yet, so the slot keeps its own');
+    // Planned for before the plan starts: it is in no part of it.
+    const noon = SG.plan([{ ...cafe, when: { date: day, time: '09:00' } }, arcade], SG.slotsFor({ date: day, time: '13:00' }), facts(null));
+    assert.ok(!noon.some(x => [x.pick, ...x.alts].some(a => a && a.id === 'cafe')), 'nine o’clock has gone by one');
+    // Nothing clean: the part of the day says so, and what there is waits in Swap.
+    const thin = SG.plan([{ ...curry, when: null }], SG.slotsFor({ date: day, time: '12:00' }), facts(null));
+    assert.deepStrictEqual([thin[0].label, thin[0].pick, thin[0].alts.map(a => a.id), thin[2].label, thin[2].pick.id], ['Lunch', null, ['curry'], 'Dinner', 'curry'],
+      'an evening recipe is not lunch — never the best of a bad lot');
+    const tired = SG.plan([arcade, deli], SG.slotsFor({ date: day, time: '14:00' }), (sl) => ctx({ date: sl.date, time: sl.time, energy: 1 }));
+    assert.deepStrictEqual(tired.map(x => x.pick), [null, null, null], 'wiped out, nothing that takes more than you have is put in front of you');
+  });
+
   await t('new ideas: what is asked, and a gate on what comes back', () => {
     const titles = [{ title: '🍜 Toki Underground', kind: 'place' }, { title: 'Paper Moon', kind: 'movie' }];
     const asked = ID.promptFor({ whenWords: 'Wednesday, around 7 PM (evening)', energy: 2, weatherWords: '9°C, rain, 70% chance of rain',
@@ -1833,6 +1920,128 @@ async function suggestRules() {
     assert.deepStrictEqual(ID.cleanIdeas(raw, { titles, passed: ['Go bowling'], role: 'watch' }).map(x => x.title), ['🎬 The Apartment'],
       'already on the list, passed on, twice, not a kind, or not what was asked for: dropped');
     assert.deepStrictEqual(ID.cleanIdeas(raw, { titles, passed: [] }).map(x => x.kind), ['activity', 'movie', 'place']);
+  });
+
+  const D = require('../lib/diet');
+  const gf = { must: ['gluten-free'], strict: false };
+
+  await t('what a list eats: a fixed set of rules, and one this server does not know is refused whole', () => {
+    assert.deepStrictEqual(D.clean({ must: ['vegan', 'gluten-free', 'gluten-free'], strict: 'yes' }), { ok: true, diet: { must: ['gluten-free', 'vegan'], strict: false } },
+      'in the table’s order, once each, and only `true` is strict');
+    assert.deepStrictEqual(D.clean({ must: [] }), { ok: true, diet: null }, 'nothing chosen is "anything"');
+    for (const bad of [{ must: ['gluten-free', 'paleo'] }, { must: 'gluten-free' }, { must: [7] }, 'gluten-free', []])
+      assert.strictEqual(D.clean(bad).ok, false, JSON.stringify(bad));
+    const space = { id: 's' };
+    assert.deepStrictEqual(D.set(space, { must: ['gluten-free'], strict: true }, 'u1', 5), { ok: true, diet: { must: ['gluten-free'], strict: true } });
+    assert.deepStrictEqual(space.diet, { must: ['gluten-free'], strict: true, by: 'u1', at: 5 }, 'whose hand, and when');
+    assert.strictEqual(D.set(space, { must: ['gluten-free', 'nonsense'] }, 'u2').ok, false);
+    assert.deepStrictEqual([D.of(space).must, space.diet.by], [['gluten-free'], 'u1'], 'a refused write changes nothing');
+    D.set(space, { must: [] }, 'u1');
+    assert.ok(!('diet' in space), 'and taking the last one off leaves nothing behind');
+    assert.strictEqual(D.of({ diet: { must: ['made-up'], strict: true } }), null, 'a store edited by hand cannot make a rule there is no table for');
+    assert.ok(D.manifest().some(x => x.id === 'gluten-free' && x.label === 'Gluten-free') && D.manifest().every(x => Object.keys(x).join() === 'id,label'));
+    assert.strictEqual(D.promptLine(gf), 'gluten-free');
+    assert.ok(/^gluten-free, vegan — STRICTLY\. It is medical/.test(D.promptLine({ must: ['gluten-free', 'vegan'], strict: true })));
+  });
+
+  await t('what a line of food contains: a caution list that knows almond flour is not flour', () => {
+    const hit = (line, cats = D.BUILT) => D.scan(line, cats).map(h => `${h.cat}:${h.word}`).join(' ');
+    for (const [line, want] of [
+      ['2 cups all-purpose flour', 'gluten:flour'], ['2 tbsp soy sauce', 'gluten:soy sauce'], ['1 sheet puff pastry, thawed', 'gluten:puff pastry'],
+      ['1 lb spaghetti', 'gluten:spaghetti'], ['1 cup panko breadcrumbs', 'gluten:panko'], ['12 oz lager', 'gluten:lager alcohol:lager'],
+      ['1 cup almond flour', 'nuts:almond'], ['8 oz rice noodles', ''], ['2 tbsp tamari', ''], ['3 corn tortillas', ''], ['1 cup buckwheat groats', ''],
+      ['1 sheet gluten-free puff pastry', ''], ['2 cups gluten free all purpose flour', ''], ['GF pasta', ''],
+      ['2 tbsp peanut butter', 'nuts:peanut'], ['1 can coconut milk', ''], ['1 butternut squash', ''], ['1 eggplant', ''], ['1/2 tsp nutmeg', ''],
+      ['2 tbsp red wine vinegar', ''], ['1 knob ginger', ''], ['1 can ginger beer', ''], ['4 slices bacon', 'pork:bacon'], ['4 slices turkey bacon', 'meat:turkey'],
+      ['200g oyster mushrooms', ''], ['1 cup chicken stock', 'meat:chicken'], ['1 cup dry white wine', 'alcohol:wine'], ['2 tbsp vegan butter', ''],
+      ['1 tsp Worcestershire sauce', 'fish:worcestershire'], ['2 large eggs', 'egg:eggs'], ['1 cup whole milk', 'dairy:milk'], ['2 stalks celery', ''],
+      // Hoisin is soy sauce underneath, tortillas are wheat unless they say corn, and an oyster among mushrooms is a mushroom.
+      ['3 tbsp hoisin sauce', 'gluten:hoisin'], ['Steamed pancakes or wraps, to serve', 'gluten:pancakes'], ['8 tortillas', 'gluten:tortillas'], ['1 bag tortilla chips', ''],
+      ['300g mixed mushrooms, such as chestnut, oyster and shiitake', ''], ['oyster, chestnut or button mushrooms', ''],
+      ['2 tbsp oyster sauce', 'gluten:oyster sauce shellfish:oyster'], ['6 oysters, shucked', 'shellfish:oysters']])
+      assert.strictEqual(hit(line), want, line);
+    assert.strictEqual(hit('🍜 Ramen near U Street'), 'gluten:ramen', 'a title is a line too');
+    assert.ok(D.names(gf, '🍜 A ramen bar near U Street', 'they can leave things off'), 'names what they do not eat, and promises nothing');
+    assert.ok(!D.names(gf, '🍜 A ramen bar near U Street', 'dedicated gluten-free kitchen'), 'a promise in how it keeps to it counts');
+    assert.ok(!D.names(gf, '🌮 Tacos on corn tortillas', '') && !D.names(null, '🍕 Pizza', ''));
+  });
+
+  await t('one thing against the rule: a caution or a source’s own word, the worst of several, and nothing when nothing is known', () => {
+    assert.strictEqual(D.judge(null, { built: ['gluten'] }), null, 'no rule, nothing to say');
+    assert.strictEqual(D.judge(gf, { kind: 'place', built: [] }), null, 'nothing known is nothing said: never "fine"');
+    assert.deepStrictEqual(D.judge(gf, { kind: 'place', built: ['gluten', 'pork'] }), { level: 'hard', text: 'Built around wheat · ask what’s gluten-free' });
+    assert.deepStrictEqual(D.judge(gf, { kind: 'recipe', built: ['gluten'] }), { level: 'swap', text: 'Built around wheat · needs a gluten-free version' },
+      'a recipe nobody has read is yours to make another way: a nudge, where somebody else’s kitchen is a caution');
+    assert.strictEqual(D.judge(gf, { kind: 'activity', built: ['gluten', 'alcohol'] }).text, 'Built around wheat · not gluten-free as it comes');
+    assert.deepStrictEqual(D.judge(gf, { kind: 'recipe', built: [], lines: ['500g beef', '1 sheet puff pastry', '2 tbsp soy sauce', '1 tbsp flour'] }),
+      { level: 'swap', text: 'Has puff pastry, soy sauce and 1 more · swap for gluten-free' }, 'a recipe that has been read is judged by its lines');
+    assert.strictEqual(D.judge(gf, { kind: 'recipe', built: ['gluten'], lines: ['500g beef', 'gluten-free puff pastry', 'tamari'] }), null,
+      'the lines as they will be cooked are the truth: a swap made clears it, whatever the profile said');
+    const osm = (v) => D.judge(gf, { kind: 'place', built: ['gluten'], osm: { 'gluten-free': v } });
+    assert.deepStrictEqual([osm('only'), osm('yes'), osm('limited'), osm('no')].map(x => `${x.level}: ${x.text}`), [
+      'only: All gluten-free, says OpenStreetMap', 'yes: Gluten-free options, says OpenStreetMap',
+      'limited: A few gluten-free options, says OpenStreetMap', 'no: No gluten-free options, says OpenStreetMap'],
+      'what its mappers recorded outranks a guess from its name, and is quoted as theirs');
+    assert.strictEqual(osm('probably').level, 'hard', 'a value that is not one of theirs is not a source');
+    const both = { must: ['gluten-free', 'vegan'], strict: true };
+    assert.strictEqual(D.judge(both, { kind: 'place', built: ['meat'], osm: { 'gluten-free': 'yes' } }).text, 'Built around meat · ask what’s vegan', 'with two rules the worst wins');
+    assert.strictEqual(D.judge(both, { kind: 'place', osm: { 'gluten-free': 'only', vegan: 'no' } }).text, 'No vegan options, says OpenStreetMap');
+    assert.strictEqual(D.judge(both, { kind: 'recipe', lines: ['2 cups flour', '1 cup milk', 'rice'] }).text, 'Has flour, milk · swap for gluten-free and vegan');
+    assert.deepStrictEqual(D.fromTags({ 'diet:gluten_free': 'Yes', 'diet:vegan': 'maybe', 'diet:vegetarian': 'only', cuisine: 'pizza' }), { 'gluten-free': 'yes', vegetarian: 'only' });
+    assert.strictEqual(D.fromTags({ cuisine: 'pizza' }), null);
+    const G = require('../lib/geo');
+    assert.deepStrictEqual(G.shapeDetails({ extratags: { 'diet:gluten_free': 'no' } }).diet, { 'gluten-free': 'no' });
+    assert.strictEqual(G.shapeDetails(null).diet, null);
+  });
+
+  await t('suggestions keep to what a list eats: the caution is always on the row, weighs more when it is medical, and says nothing with no rule', () => {
+    const fitFor = (it, built) => ({ role: 'eat', energy: 2, minutes: 90, where: it.kind === 'recipe' ? 'home' : 'out', times: null, weather: 'any', built, of: F.keyOf(it) });
+    const ramen = { id: 'ramen', kind: 'place', title: 'Ramen bar', createdAt: 0 };
+    ramen.fit = fitFor(ramen, ['gluten', 'pork']);
+    const tacos = { id: 'tacos', kind: 'place', title: 'Taqueria', createdAt: 0 };
+    tacos.fit = fitFor(tacos, []);
+    const pie = { id: 'pie', kind: 'recipe', title: 'Pot pie', createdAt: 0 };
+    pie.fit = fitFor(pie, ['gluten']);
+    const plain = SG.score(ramen, ctx());
+    assert.ok(!plain.reasons.some(r => /wheat|gluten/.test(r.text)), 'a list with no rule is told nothing about wheat');
+    const careful = SG.score(ramen, ctx({ diet: gf }));
+    const strict = SG.score(ramen, ctx({ diet: { ...gf, strict: true } }));
+    assert.deepStrictEqual([careful.reasons[0], careful.hidden], [{ tone: 'bad', text: 'Built around wheat · ask what’s gluten-free' }, false], 'said first, and not hidden: it is a caution');
+    assert.deepStrictEqual([plain.score - careful.score, plain.score - strict.score], [18, 27], 'and it weighs more when it is medical');
+    assert.strictEqual(SG.score(tacos, ctx({ diet: gf })).score, SG.score(tacos, ctx()).score, 'nothing known, nothing changed');
+    assert.deepStrictEqual(SG.rank([ramen, tacos], ctx({ diet: gf })).good.map(x => x.id), ['tacos', 'ramen']);
+    // A recipe is judged by its lines as they will be cooked, however many other reasons it has.
+    const busy = { transitOf: () => [{ uid: 'a', name: 'Andrew', mine: true, minutes: 8 }], readyOf: () => [true, true], general: { code: 63, t: 9, rain: 80 } };
+    const before = SG.score(pie, ctx({ ...busy, diet: gf, eatsOf: () => ({ lines: ['500g chicken', '1 sheet puff pastry', '1 tbsp flour'] }) }));
+    assert.ok(before.reasons.some(r => r.tone === 'note' && r.text === 'Has puff pastry, flour · swap for gluten-free'), JSON.stringify(before.reasons));
+    const after = SG.score(pie, ctx({ ...busy, diet: gf, eatsOf: () => ({ lines: ['500g chicken', 'gluten-free puff pastry', 'cornflour'] }) }));
+    assert.ok(!after.reasons.some(r => /gluten|wheat/.test(r.text)) && after.score === before.score + 5, 'swapped, the note goes and so does what it cost');
+    const unread = SG.score(pie, ctx({ diet: { ...gf, strict: true } }));
+    assert.deepStrictEqual([unread.reasons[0], SG.score(pie, ctx()).score - unread.score], [{ tone: 'note', text: 'Built around wheat · needs a gluten-free version' }, 7],
+      'a recipe with no lines read goes by what it is built around, and only as a nudge');
+    const says = SG.score(ramen, ctx({ diet: gf, eatsOf: () => ({ osm: { 'gluten-free': 'yes' } }) }));
+    assert.deepStrictEqual([says.reasons[0], says.score - plain.score], [{ tone: 'good', text: 'Gluten-free options, says OpenStreetMap' }, 6]);
+  });
+
+  await t('new ideas keep to what a list eats: the rule is asked for, and an idea that does not say how it keeps to it is not offered', () => {
+    const strict = { must: ['gluten-free'], strict: true };
+    const asked = ID.promptFor({ whenWords: 'Wednesday, around 7 PM (evening)', energy: 3, titles: [], diet: strict });
+    assert.ok(asked.includes('They eat: gluten-free — STRICTLY. It is medical (celiac disease or an allergy)'), asked);
+    assert.ok(!ID.promptFor({ whenWords: 'x', energy: 3, titles: [] }).includes('They eat'), 'and nothing is said when the list has no rule');
+    assert.ok(/never call anything safe/.test(ID.SYSTEM) && ID.SCHEMA.properties.ideas.items.required.includes('keeps'));
+    const raw = { ideas: [
+      { title: '🍝 Fresh pasta night', kind: 'recipe', role: 'eat', energy: 3, why: 'x', keeps: null },
+      { title: '🍜 A ramen bar near U Street', kind: 'place', role: 'eat', energy: 2, why: 'x', keeps: 'they can leave things off' },
+      { title: '🍺 A brewery tour', kind: 'activity', role: 'do', energy: 3, why: 'x', keeps: null },
+      { title: '🌮 Tacos on corn tortillas', kind: 'recipe', role: 'eat', energy: 2, why: 'x', keeps: 'naturally gluten-free' },
+      { title: '🥖 A dedicated gluten-free bakery near Union Station', kind: 'place', role: 'drink', energy: 2, why: 'x', keeps: 'nothing with gluten is baked there' },
+      { title: '🎬 Bread and Roses', kind: 'movie', role: 'watch', energy: 1, why: 'x', keeps: null },
+      { title: '🖼 The portrait gallery', kind: 'place', role: 'do', energy: 3, why: 'x', keeps: null }] };
+    assert.deepStrictEqual(ID.cleanIdeas(raw, { diet: strict }).map(x => [x.title, x.keeps]), [
+      ['🌮 Tacos on corn tortillas', 'naturally gluten-free'], ['🥖 A dedicated gluten-free bakery near Union Station', 'nothing with gluten is baked there'],
+      ['🎬 Bread and Roses', null], ['🖼 The portrait gallery', null]],
+      'no word on how it keeps to it, a promise of nothing, a brewery: dropped. A film called Bread is a film.');
+    assert.deepStrictEqual(ID.cleanIdeas(raw, {}).map(x => x.keeps), [null, null, null, null, null], 'with no rule nothing is dropped for it, and no claim is passed on');
   });
 }
 
@@ -2024,7 +2233,8 @@ async function server() {
             n: Number(n), role: kind === 'film' || kind === 'show' ? 'watch' : kind === 'recipe' || /restaurant/.test(rest) ? 'eat' : 'do',
             energy: kind === 'film' || kind === 'show' ? 1 : kind === 'recipe' ? 2 : 3, minutes: 90,
             where: kind === 'film' || kind === 'show' || kind === 'recipe' ? 'home' : 'out', times: null,
-            weather: kind === 'film' || kind === 'show' ? 'better_when_bad' : 'any' }));
+            weather: kind === 'film' || kind === 'show' ? 'better_when_bad' : 'any',
+            built: /noodle/.test(rest) ? ['gluten'] : kind === 'recipe' ? [] : null }));
           return res.end(JSON.stringify({ id: 'msg_fits', type: 'message', role: 'assistant', model: b.model, stop_sequence: null,
             usage: { input_tokens: 10, output_tokens: 10 }, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ items }) }] }));
         }
@@ -2034,7 +2244,11 @@ async function server() {
           const says = { ideas: [
             { title: '🎬 SG rainy film', kind: 'movie', role: 'watch', energy: 1, why: 'Already theirs.' },
             { title: '🎬 The Apartment', kind: 'movie', role: 'watch', energy: 1, why: 'A warm one for a wet night in.' },
-            { title: '🍷 A wine bar near U Street', kind: 'place', role: 'drink', energy: 2, why: 'Close to one of you.' }] };
+            { title: '🍷 A wine bar near U Street', kind: 'place', role: 'drink', energy: 2, why: 'Close to one of you.' },
+            ...(/They eat: /.test(b.messages[0].content) ? [
+              { title: '🍜 A ramen bar near U Street', kind: 'place', role: 'eat', energy: 2, why: 'Close.', keeps: 'they can leave things off' },
+              { title: '🌮 Tacos on corn tortillas', kind: 'recipe', role: 'eat', energy: 2, why: 'Quick.', keeps: 'naturally gluten-free' },
+              { title: '🍝 Fresh pasta night', kind: 'recipe', role: 'eat', energy: 3, why: 'Cosy.', keeps: null }] : [])] };
           return res.end(JSON.stringify({ id: 'msg_ideas', type: 'message', role: 'assistant', model: b.model, stop_sequence: null,
             usage: { input_tokens: 10, output_tokens: 10 }, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(says) }] }));
         }
@@ -2073,6 +2287,7 @@ async function server() {
     }
     // And for Nominatim's lookup, which the place page asks for hours.
     if (req.url.startsWith('/lookup')) {
+      if (/osm_ids=N779\b/.test(req.url)) return res.end(JSON.stringify([{ extratags: { opening_hours: '24/7', 'diet:gluten_free': 'yes' }, address: {} }]));
       return res.end(JSON.stringify([{
         extratags: { opening_hours: 'Mo-Fr 08:00-17:00; Sa 10:00-14:00', website: 'https://toki.example' },
         address: { house_number: '1234', road: 'H Street Northeast', suburb: 'Atlas District' },
@@ -3402,6 +3617,13 @@ async function server() {
     assert.ok(![...r.good, ...r.notThen, ...r.plan.flatMap(x => [x.pick, ...x.alts])].some(x => x && x.id === hers.id), 'her private film is not in his suggestions');
     assert.deepStrictEqual(r.people.map(p => [p.id, p.mine, p.stations.length]), [[A, true, 1], [L, false, 1]]);
     assert.strictEqual(r.needsStations, false);
+    // What is on the calendar keeps its own hour, and the wire says it is there already.
+    assert.deepStrictEqual([r.plan[1].planned, r.plan[1].bumped], [false, null]);
+    assert.strictEqual((await api('POST', `/api/item/${film.id}/when`, { date: '2026-11-25', time: '20:30' }, A)).status, 200);
+    const cal = (await settled(base)).plan[1];
+    assert.deepStrictEqual([cal.label, cal.time, cal.pick.id, cal.planned, cal.kept], ['Evening', '20:30', film.id, true, false], 'the evening takes the film’s own hour');
+    assert.ok(cal.pick.reasons.some(x => x.text === 'Planned for then · 8:30 PM'));
+    assert.strictEqual((await api('POST', `/api/item/${film.id}/when`, { clear: true }, A)).status, 200);
 
     // A thumb is yours: his view carries his, hers carries none — and the list's suggestions move for both.
     const before = watch.score;
@@ -3423,6 +3645,53 @@ async function server() {
       && asked.includes('something to watch') && asked.includes('70% chance of rain'), asked);
     assert.ok(!asked.includes('SG her private') && !/38\.\d\d|-77\.\d\d/.test(asked) && !asked.includes('Andrew') && !asked.includes('Linnea'),
       'never her private things, coordinates, or anybody’s name');
+
+    // What the list eats: a rule of the list, set by anyone on it and by nobody else.
+    assert.strictEqual((await api('POST', '/api/space/sp1/diet', { must: ['gluten-free'], strict: true }, J)).status, 404, 'a stranger cannot set it');
+    assert.strictEqual((await api('POST', '/api/space/sp1/diet', { must: ['gluten-free', 'keto'] }, A)).status, 400, 'a rule this server does not know is refused whole');
+    assert.strictEqual((await settled(base)).diet, null, 'and a refused one left nothing behind');
+    assert.deepStrictEqual((await api('POST', '/api/space/sp1/diet', { must: ['gluten-free'], strict: true }, L)).body.diet, { must: ['gluten-free'], strict: true });
+    const stateNow = (await api('GET', '/api/state', null, A)).body;
+    assert.deepStrictEqual(stateNow.spaces.find(x => x.id === 'sp1').diet, { must: ['gluten-free'], strict: true }, 'he sees what she set: it is the list’s');
+    assert.ok(stateNow.diets.some(x => x.id === 'gluten-free' && x.label === 'Gluten-free'), 'the rules to choose from come from the server');
+    assert.ok(stateNow.spaces.filter(x => x.id !== 'sp1').every(x => x.diet === null), 'and it is that list’s alone');
+    assert.ok((await api('GET', '/api/state', null, J)).body.spaces.every(x => !x.diet), 'nobody outside the list is told');
+
+    // A recipe is judged by its lines as they will be cooked; a place by what is known of it.
+    const pieRead = (await api('POST', '/api/recipe/paste', { text: 'Ingredients\n500g chicken thighs\n1 sheet puff pastry\n2 tbsp soy sauce\n\nMethod\nFill the pastry and bake for 30 minutes.' }, A)).body;
+    assert.strictEqual(pieRead.ok, true, JSON.stringify(pieRead));
+    const pie = await mk({ title: 'SG pot pie', kind: 'recipe', mod: { recipe: pieRead.recipe } });
+    const careful = await mk({ title: 'SG careful cafe', kind: 'place', mod: { place: { name: 'SG careful cafe', what: 'cafe', lat: 38.91, lon: -77.03, osm: 'N779' } } });
+    const why = async (id, as = A) => {
+      const got2 = await settled(base, as);
+      const x = [...got2.good, ...got2.notThen, ...got2.plan.flatMap(sl => [sl.pick, ...sl.alts])].find(y => y && y.id === id);
+      return x ? x.reasons.map(y => y.text) : [];
+    };
+    assert.deepStrictEqual((await settled(base)).diet, { must: ['gluten-free'], strict: true });
+    assert.ok((await why(pie.id)).includes('Has puff pastry, soy sauce · swap for gluten-free'), JSON.stringify(await why(pie.id)));
+    assert.ok((await why(pie.id, L)).includes('Has puff pastry, soy sauce · swap for gluten-free'), 'the list’s rule, so for both of them');
+    assert.strictEqual((await api('POST', `/api/item/${pie.id}/swap`, { i: 1, use: 'gluten-free puff pastry', ratio: 1, needs: ['gluten-free puff pastry'] }, L)).status, 200);
+    assert.ok((await why(pie.id)).includes('Has soy sauce · swap for gluten-free'), 'a swap already made is what will be cooked');
+    assert.ok((await why(careful.id)).includes('Gluten-free options, says OpenStreetMap'), JSON.stringify(await why(careful.id)));
+    let noodleWhy = [];
+    for (let i = 0; i < 80 && !noodleWhy.some(x => /Built around wheat/.test(x)); i++) { await new Promise(ok => setTimeout(ok, 50)); noodleWhy = await why(noodle.id); }
+    assert.ok(noodleWhy.includes('Built around wheat · ask what’s gluten-free'), `once Claude has said what it is built around: ${JSON.stringify(noodleWhy)}`);
+    assert.ok(!fitHits.some(b => /gluten-free|They eat|celiac/i.test(b.messages[0].content)), 'the profile is asked the same of every list: what this one eats is not sent with it');
+
+    // New ideas are asked for with the rule, and one that breaks it or does not say how it keeps to it is not offered.
+    const fed = await api('POST', '/api/space/sp1/suggest/ideas', { energy: 2, at: '2026-11-25T18:30', tz: 'America/New_York', role: 'eat' }, A);
+    assert.deepStrictEqual((fed.body.ideas || []).map(x => [x.title, x.keeps]), [['🌮 Tacos on corn tortillas', 'naturally gluten-free']], JSON.stringify(fed.body));
+    const fedAsk = ideaHits[ideaHits.length - 1].messages[0].content;
+    assert.ok(fedAsk.includes('They eat: gluten-free — STRICTLY') && !fedAsk.includes('Andrew') && !fedAsk.includes('Linnea'), 'the rule goes; whose it is does not');
+
+    // And it is a rule for a recipe's swaps, whatever the phone sent — but only for somebody on the list.
+    claudeHits.length = 0;
+    assert.strictEqual((await api('POST', `/api/item/${pie.id}/swap/suggest`, { i: 2 }, L)).body.ok, true);
+    assert.ok(/It has to be: gluten-free\. That is medical/.test(claudeHits[0].body.messages[0].content), claudeHits[0].body.messages[0].content);
+    const wish = await mk({ title: 'SG open stew', kind: 'recipe', visibility: 'public', mod: { recipe: pieRead.recipe } });
+    claudeHits.length = 0;
+    assert.strictEqual((await api('POST', `/api/item/${wish.id}/swap/suggest`, { i: 2 }, S)).body.ok, true, 'Sam sees a public recipe from another list');
+    assert.ok(!/It has to be|gluten-free|medical/.test(claudeHits[0].body.messages[0].content), 'and that list’s rule does not travel out with it');
 
     // What each thing asks of you is filled in behind all this, and is not anybody's to type.
     let fit = null;
@@ -3513,8 +3782,10 @@ async function server() {
     assert.strictEqual((await fetch(RES, { method: 'POST', headers: { cookie: cookieFor(A), 'content-type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }) })).status, 401, 'a session cookie is not a way in');
 
+    await api('POST', '/api/space/sp1/diet', { must: ['gluten-free'], strict: true }, A);
     const lists = (await call(t1.access_token, 'list_lists')).content[0].text;
     assert.ok(lists.includes('To do with Linnea (id sp1)') && lists.includes('Ski trip'), lists);
+    assert.strictEqual((lists.match(/What this list eats: gluten-free — strictly/g) || []).length, 1, `what a list eats is on its members' screens, so it is here: ${lists}`);
     const his = (await call(t1.access_token, 'get_list_items', { list: 'Linnea' })).content[0].text;
     assert.ok(his.includes('CX her shared film') && his.includes('CX his private thing'), his);
     assert.ok(his.includes('only you can see this'), 'his private thing says so');
@@ -4226,7 +4497,7 @@ async function placeSuggestions() {
     assert.strictEqual(d.website, null, 'this ends up in an href on somebody else\'s phone');
     assert.strictEqual(d.phone, '+1 202 555 0100');
     assert.strictEqual(d.address, 'M Street, Washington');
-    assert.deepStrictEqual(G.shapeDetails(null), { hours: null, website: null, phone: null, address: null });
+    assert.deepStrictEqual(G.shapeDetails(null), { hours: null, website: null, phone: null, address: null, diet: null });
   });
 
   await t('the visit gate takes only what it knows, and nothing left is null', () => {

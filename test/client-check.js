@@ -91,9 +91,11 @@ function connectCdp(wsUrl) {
             minutes: 90, where: kind === 'place' ? 'out' : 'home', times: null, weather: 'any' })) });
         }
         if (fmt.includes('"ideas"')) {
-          return reply({ ideas: [{ title: '🎬 The Apartment', kind: 'movie', role: 'watch', energy: 1, why: 'A warm one for a night in.' },
-            { title: '🍲 A big pot of chili', kind: 'recipe', role: 'eat', energy: 2, why: 'Easy, and it feeds tomorrow too.' },
-            { title: '🧩 A jigsaw and a record', kind: 'activity', role: 'do', energy: 1, why: 'Nothing to get up for.' }] });
+          const eats = /They eat: /.test(b.messages[0].content);
+          return reply({ ideas: [{ title: '🎬 The Apartment', kind: 'movie', role: 'watch', energy: 1, why: 'A warm one for a night in.', keeps: null },
+            { title: '🍲 A big pot of chili', kind: 'recipe', role: 'eat', energy: 2, why: 'Easy, and it feeds tomorrow too.', keeps: eats ? 'naturally gluten-free' : null },
+            { title: '🧩 A jigsaw and a record', kind: 'activity', role: 'do', energy: 1, why: 'Nothing to get up for.', keeps: null },
+            ...(eats ? [{ title: '🍝 Fresh pasta night', kind: 'recipe', role: 'eat', energy: 3, why: 'Cosy.', keeps: null }] : [])] });
         }
         if (fmt.includes('weather_matters')) {
           const fit = { weather_matters: true, setting: 'outdoors', ideal_conditions: ['clear'], ideal_min_c: 15, ideal_max_c: 26,
@@ -1863,6 +1865,8 @@ function connectCdp(wsUrl) {
     // A long title too: unwrapped it is wider than the screen, and nothing here
     // may size itself to that.
     await asApi(A, 'POST', '/api/space/sp1/item', { title: 'Walk the whole length of the canal towpath and stop for lunch somewhere along the way when it looks nice', kind: 'activity' });
+    const flourRead = await asApi(A, 'POST', '/api/recipe/paste', { text: 'Ingredients\n2 cups flour\n2 tbsp soy sauce\n1 lb chicken\n\nMethod\nMix and bake for 20 minutes.' });
+    const flourPie = (await asApi(A, 'POST', '/api/space/sp1/item', { title: 'Flour pie', kind: 'recipe', mod: { recipe: flourRead.recipe } })).item;
     await S('Page.navigate', { url: `${BASE}/?list=sp1` });
     await sleep(2200);
     await evalJs(`document.getElementById('tabSug').click()`);
@@ -1921,6 +1925,108 @@ function connectCdp(wsUrl) {
     check(/Tomorrow/.test(await evalJs(`[...document.querySelectorAll('#sgBody .sg-day')].map(x => x.innerText).join('|')`)), 'a plan can carry on into tomorrow');
     check(await evalJs(`[...document.querySelectorAll('#sgBody .sg-slot .sg-sh small')].some(x => /°/.test(x.innerText))`),
       'and each piece says the weather for its own hour');
+    // What the list eats: a rule of the list, chosen from the server's table.
+    check(/Anything/.test(await evalJs(`document.getElementById('sgEat').innerText`)), 'a list with no rule says it eats anything');
+    await evalJs(`document.getElementById('sgEat').click()`);
+    await sleep(700);
+    check(await visible('#sgDietSheet .modal-in') && await evalJs(`document.querySelectorAll('#sgDietBody [data-diet]').length`) >= 8
+      && await evalJs(`document.getElementById('sgStrict').disabled`) === true, 'What you eat opens the rules a list can keep, and "medical" waits for one');
+    await evalJs(`document.querySelector('#sgDietBody [data-diet="gluten-free"]').click()`);
+    await sleep(900);
+    await evalJs(`document.getElementById('sgStrict').click()`);
+    await sleep(900);
+    check(/Gluten-free · strictly/.test(await evalJs(`document.getElementById('sgEat').innerText`)), 'and the screen says what the list keeps to');
+    if (process.env.SHOT_DIET) {
+      const { data } = await S('Page.captureScreenshot', { format: 'png' });
+      require('fs').writeFileSync(process.env.SHOT_DIET, Buffer.from(data, 'base64'));
+    }
+    const kept = (await asApi(A, 'GET', '/api/state')).spaces.find(x => x.id === 'sp1').diet;
+    check(!!kept && kept.must.join() === 'gluten-free' && kept.strict === true, `saved on the list, for both of them: ${JSON.stringify(kept)}`);
+    await evalJs(`document.getElementById('sgDietClose').click()`);
+    await sleep(2400);
+    await evalJs(`(() => { const m = document.getElementById('sgMore'); if (m) m.click(); })()`);
+    await sleep(300);
+    check(/Has flour, soy sauce · swap for gluten-free/.test(await evalJs(`document.getElementById('sgBody').innerText`)), 'a recipe with flour in it says so on its row');
+    await evalJs(`document.getElementById('sgIdeas').click()`);
+    await sleep(1600);
+    const ideasText = await evalJs(`document.getElementById('sgBody').innerText`);
+    check(/naturally gluten-free/.test(ideasText) && /Ask a place before you order/.test(ideasText) && !/Fresh pasta/.test(ideasText),
+      'new ideas say how they keep to it, one that does not is not offered, and nobody is told a place was checked');
+    if (process.env.SHOT_EAT) {
+      for (const [name, sel] of [['a', '#sgEat'], ['b', '#sgBody .sg-list'], ['c', '#sgIdeas']]) {
+        await evalJs(`document.querySelector(${JSON.stringify(sel)}).scrollIntoView({ block: 'center' })`);
+        await sleep(300);
+        const { data } = await S('Page.captureScreenshot', { format: 'png' });
+        require('fs').writeFileSync(process.env.SHOT_EAT.replace(/\.png$/, `-${name}.png`), Buffer.from(data, 'base64'));
+      }
+    }
+    // And it is a rule on a recipe's swap sheet, with no × there: it is the list's.
+    const ruleChip = await evalJs(`(async () => {
+      const base = document.querySelector('script[type=module]').src.replace(/app\\.js.*$/, '');
+      const { openSwap } = await import(base + 'swap.js');
+      await openSwap(${JSON.stringify(flourPie.id)}, 0, null);
+      await new Promise(r => setTimeout(r, 400));
+      const chip = document.querySelector('#swBody .sw-musts .rule');
+      return [chip ? chip.innerText : '', chip ? chip.tagName : '', document.getElementById('swAsk').innerText.trim()].join('|'); })()`);
+    check(ruleChip === 'Gluten-free|B|Suggest a gluten-free swap', `a swap for that recipe has to be gluten-free too: ${ruleChip}`);
+    await evalJs(`document.getElementById('swClose').click()`);
+    await sleep(400);
+    // What is on the calendar keeps its own hour. A film planned for 8:45 is the
+    // evening's, at 8:45; a gallery planned for 5:30, when it shuts at five, is
+    // said in its slot and something else is offered; and the button puts only
+    // the REST on the calendar, so nothing already there is moved.
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const d2 = new Date(Date.now() + 2 * 864e5);
+    const planDay = `${d2.getFullYear()}-${pad2(d2.getMonth() + 1)}-${pad2(d2.getDate())}`;
+    const lateShow = (await asApi(A, 'POST', '/api/space/sp1/item', { title: 'Late show', kind: 'movie' })).item;
+    const supper = (await asApi(A, 'POST', '/api/space/sp1/item', { title: 'Print gallery', kind: 'place',
+      mod: { place: { name: 'Print gallery', what: 'gallery', lat: 38.9, lon: -77.03, osm: 'N4242' } } })).item;
+    await asApi(A, 'POST', `/api/item/${lateShow.id}/when`, { date: planDay, time: '20:45' });
+    await asApi(A, 'POST', `/api/item/${supper.id}/when`, { date: planDay, time: '17:30' });
+    await S('Page.navigate', { url: `${BASE}/?list=sp1` });
+    await sleep(2200);
+    await evalJs(`document.getElementById('tabSug').click()`);
+    await sleep(1200);
+    // The slider remembers "wiped out" from above; an ordinary evening has things to offer.
+    await evalJs(`(() => { const r = document.getElementById('sgEnergy'); r.value = '3'; r.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await sleep(600);
+    await evalJs(`document.querySelector('.sg-when [data-when="pick"]').click()`);
+    await sleep(300);
+    await evalJs(`(() => { for (const [id, v] of [['sgDate', ${JSON.stringify(planDay)}], ['sgTime', '16:30']]) {
+      const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); } })()`);
+    await sleep(5200);
+    const slotsSay = await evalJs(`[...document.querySelectorAll('#sgBody .sg-slot')].map(el => ({
+      head: el.querySelector('.sg-sh b').innerText + ' ' + el.querySelector('.sg-sh small').innerText,
+      bump: (el.querySelector('.sg-bump') || {}).innerText || '',
+      row: (el.querySelector('.sg-it b') || {}).innerText || '' }))`);
+    const eveSlot = slotsSay.find(x => /^Evening/.test(x.head));
+    const dinSlot = slotsSay.find(x => /^Afternoon/.test(x.head));
+    check(!!eveSlot && /^Evening at 8:45 PM/.test(eveSlot.head) && eveSlot.row === 'Late show', `a film on the calendar for 8:45 is the evening’s, at its own hour: ${JSON.stringify(eveSlot)}`);
+    check(!!dinSlot && /Print gallery is on the calendar for then/.test(dinSlot.bump) && /Closed then/.test(dinSlot.bump) && !!dinSlot.row && dinSlot.row !== 'Print gallery',
+      `what is on the calendar but shut then is said, and not offered: ${JSON.stringify(dinSlot)}`);
+    check(/^Afternoon around 5:30 PM/.test((dinSlot || {}).head || ''), `and that part of the day is weighed for its hour: ${JSON.stringify(dinSlot)}`);
+    const bumpColour = await evalJs(`(() => { const b = document.querySelector('#sgBody .sg-bump .t-bad'); const r = document.querySelector('#sgBody .sg-bump').getBoundingClientRect();
+      return [b ? getComputedStyle(b).color : '', getComputedStyle(document.documentElement).getPropertyValue('--warn').trim(), Math.round(r.left), Math.round(r.right), innerWidth].join('|'); })()`);
+    check(/^rgb/.test(bumpColour) && Number(bumpColour.split('|')[2]) >= 8 && Number(bumpColour.split('|')[3]) <= Number(bumpColour.split('|')[4]) - 8, `drawn in the slot, inside the screen: ${bumpColour}`);
+    if (process.env.SHOT_PLAN) {
+      await evalJs(`document.querySelector('#sgBody .sg-bump').scrollIntoView({ block: 'center' })`);
+      await sleep(300);
+      const { data } = await S('Page.captureScreenshot', { format: 'png' });
+      require('fs').writeFileSync(process.env.SHOT_PLAN, Buffer.from(data, 'base64'));
+    }
+    const planBtn = await evalJs(`(document.getElementById('sgPlanIt') || {}).innerText || ''`);
+    check(planBtn === 'Put the rest on the calendar', `the button is for what is not on the calendar yet: ${planBtn}`);
+    const hadWhen = new Set((await asApi(A, 'GET', '/api/space/sp1/items')).items.filter(x => x.when).map(x => x.id));
+    await evalJs(`document.getElementById('sgPlanIt').click()`);
+    await sleep(2600);
+    const afterPlan = (await asApi(A, 'GET', '/api/space/sp1/items')).items;
+    const whenOf = (id) => { const w = (afterPlan.find(x => x.id === id) || {}).when; return w ? `${w.date} ${w.time}` : ''; };
+    check(whenOf(lateShow.id) === `${planDay} 20:45` && whenOf(supper.id) === `${planDay} 17:30`, `and it moved neither: ${whenOf(lateShow.id)} · ${whenOf(supper.id)}`);
+    check(afterPlan.some(x => x.when && x.when.date === planDay && !hadWhen.has(x.id)), 'while the rest of the plan went on');
+    // Leave the calendar as it was found.
+    for (const x of afterPlan.filter(x => x.when && !hadWhen.has(x.id))) await asApi(A, 'POST', `/api/item/${x.id}/when`, { clear: true });
+    await asApi(A, 'DELETE', `/api/item/${lateShow.id}`);
+    await asApi(A, 'DELETE', `/api/item/${supper.id}`);
     await evalJs(`document.getElementById('tabSug').click()`);
     await sleep(600);
     check(await visible('#kindNav') && !(await evalJs(`!!document.querySelector('.sg')`)), 'and the button puts the list back');

@@ -47,6 +47,14 @@ function savedMusts() {
 }
 function keepMusts() { try { localStorage.setItem(MUSTS_KEY, JSON.stringify(st.musts)); } catch (_) { /* this visit only */ } }
 const cap = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+// What the recipe's own list eats (lib/diet.js) is a rule here too. The server
+// adds it whatever this sheet sends; it is drawn so nobody has to wonder, and
+// with no × — it is changed where it was set, under Suggestions.
+function listRules(it) {
+  const sp = it && ((S.wire && S.wire.spaces) || []).find(s => s.id === it.spaceId);
+  return sp && sp.diet ? sp.diet.must.slice() : [];
+}
+const ruleLabel = (id) => (((S.wire && S.wire.diets) || []).find(x => x.id === id) || { label: cap(id) }).label;
 
 const itemNow = () => st && (S.items || []).find(x => x.id === st.id);
 const canSuggest = () => !!(S.wire && S.wire.swap && S.wire.swap.suggest);
@@ -65,7 +73,9 @@ export async function openSwap(id, i, kitchenId) {
   // its options already on the table, ticked: which one is the question.
   const it = (S.items || []).find(x => x.id === id);
   const alts = (it && it.choices && it.choices[i]) || [];
-  st = { id, i, kitchen: kitchenId, alts, picks: new Set(alts), extra: [...alts], musts: savedMusts(), res: null, busy: false, why: null, verdict: null, seq: 0 };
+  const rules = listRules(it);
+  st = { id, i, kitchen: kitchenId, alts, picks: new Set(alts), extra: [...alts], rules, musts: savedMusts().filter(m => !rules.includes(m)),
+    res: null, busy: false, why: null, verdict: null, seq: 0 };
   paint();
   openSheet('swapSheet');
   $('swapSheet').querySelector('.modal-in').scrollTop = 0;
@@ -105,11 +115,12 @@ function paint() {
     const seen = new Set();
     const names = [...st.extra, ...have].filter((nm) => { const k = nm.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
     const n = st.picks.size;
-    const rule = st.musts.join(', ');
+    const rule = [...st.rules, ...st.musts].join(', ');
     ask = `<h3 class="sec">${st.alts.length ? 'Which works best here?' : 'Weighing options?'}</h3>
       <p class="sw-hint">Tick what you have, or add what you could buy — or what it has to be, like gluten-free — and it says which works best in this recipe${
         n ? '.' : '. Tick nothing and it looks through everything you have.'}</p>
-      ${st.musts.length ? `<div class="chips sw-musts" role="group" aria-label="It has to be"><span>Has to be</span>${st.musts.map(m => `<button type="button"
+      ${st.rules.length || st.musts.length ? `<div class="chips sw-musts" role="group" aria-label="It has to be"><span>Has to be</span>${
+        st.rules.map(m => `<b class="rule" title="What this list eats">${esc(ruleLabel(m))}</b>`).join('')}${st.musts.map(m => `<button type="button"
           class="on" data-must="${esc(m)}" aria-label="${esc(cap(m))}, take it off">${esc(cap(m))}${icon('x', 15, 2)}</button>`).join('')}</div>` : ''}
       ${names.length ? `<div class="chips sw-picks" role="group" aria-label="Options">${names.map(nm => `<button type="button" data-pick="${esc(nm)}"
           class="${st.picks.has(nm) ? 'on' : ''}" aria-pressed="${st.picks.has(nm)}">${esc(nm)}</button>`).join('')}</div>`
@@ -195,7 +206,7 @@ function addTyped(raw) {
   if (!v) return false;
   const must = requirement(v);
   if (must) {
-    if (!st.musts.includes(must)) { st.musts = [...st.musts, must].slice(-4); keepMusts(); }
+    if (!st.musts.includes(must) && !st.rules.includes(must)) { st.musts = [...st.musts, must].slice(-4); keepMusts(); }
   } else {
     if (!st.extra.includes(v)) st.extra.push(v);
     st.picks.add(v);
