@@ -5,7 +5,7 @@
 // each piece swappable — and the whole list in order. lib/suggest.js decides;
 // this draws it, and never ranks anything itself.
 import { S } from './state.js';
-import { $, esc, toast, openSheet, closeSheet } from './util.js';
+import { $, esc, toast, openSheet, closeSheet, leadEmoji } from './util.js';
 import { get, post } from './api.js';
 import { haptic, skeleton, burst } from './motion.js';
 import { wxOf, deg, hourWords } from './wx.js';
@@ -102,11 +102,19 @@ function rowHtml(x, { slot = null } = {}) {
   const why = x.reasons.map(r => `<span class="${r.tone}">${esc(r.text)}</span>`).join('<span class="dot">·</span>');
   return `<div class="sg-it" data-sit="${esc(x.id)}"${slot ? ` data-in="${esc(slot)}"` : ''}>
     ${hooks.tileHtml(it)}
-    <div class="sg-bd" data-open><b>${esc(it.title.replace(/^\p{Extended_Pictographic}\S*\s*/u, '') || it.title)}</b>
+    <div class="sg-bd" data-open><b>${esc(leadEmoji(it.title).rest)}</b>
       <div class="sg-why">${kind ? `<span class="k">${esc(kind.label)}</span>${why ? '<span class="dot">·</span>' : ''}` : ''}${why}</div>
       ${transitHtml(x.transit)}</div>
     ${thumbs(x.vote, 'data-vote')}
   </div>`;
+}
+
+// The weather for one piece's own day and hour — tomorrow's slots say tomorrow's.
+function slotWx(w) {
+  if (!w) return '';
+  const x = wxOf(w.code);
+  return ` · <span class="sg-swx" title="${esc(x.label)}"><span aria-hidden="true">${x.icon}</span> ${deg(w.t)}${
+    Number.isFinite(w.rain) && w.rain >= 30 ? ` · ${w.rain}% rain` : ''}</span>`;
 }
 
 function planHtml(d) {
@@ -120,7 +128,7 @@ function planHtml(d) {
       parts.push(`<div class="sg-day">${esc(dayWord(day) === 'Today' && first.time >= '17:00' ? 'Tonight' : dayWord(day))}</div>`);
     }
     parts.push(`<div class="sg-slot" data-slot="${esc(sl.key)}">
-      <div class="sg-sh"><b>${esc(sl.label)}</b><small>around ${esc(hourWords(sl.time))}</small>
+      <div class="sg-sh"><b>${esc(sl.label)}</b><small>around ${esc(hourWords(sl.time))}${slotWx(sl.weather)}</small>
         <button type="button" class="sg-swap" data-swap="${esc(sl.key)}">${sl.pick ? 'Swap' : 'Get ideas'}</button></div>
       ${sl.pick ? rowHtml(sl.pick, { slot: sl.key }) : `<p class="sg-none">Nothing on your list for ${ROLE[sl.role]} then.</p>`}
     </div>`);

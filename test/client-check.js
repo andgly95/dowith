@@ -134,11 +134,14 @@ function connectCdp(wsUrl) {
     // Open-Meteo: a clear 20° afternoon, so the weather has something to show.
     if (req.url.startsWith('/v1/forecast')) {
       const day = new Date().toISOString().slice(0, 10);
-      const time = Array.from({ length: 24 }, (_, h) => `${day}T${String(h).padStart(2, '0')}:00`);
+      // Three days of it, so a plan that carries on into tomorrow has weather there too.
+      const days = [0, 1, 2].map(n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10));
+      const time = days.flatMap(d => Array.from({ length: 24 }, (_, h) => `${d}T${String(h).padStart(2, '0')}:00`));
       return res.end(JSON.stringify({ timezone: 'UTC',
         current: { time: `${day}T12:00`, temperature_2m: 20, apparent_temperature: 20, weather_code: 0, is_day: 1, wind_speed_10m: 5 },
         hourly: { time, temperature_2m: time.map(() => 20), precipitation_probability: time.map(() => 0), weather_code: time.map(() => 0) },
-        daily: { time: [day], weather_code: [0], temperature_2m_max: [22], temperature_2m_min: [12], precipitation_probability_max: [0] } }));
+        daily: { time: days, weather_code: days.map(() => 0), temperature_2m_max: days.map(() => 22), temperature_2m_min: days.map(() => 12),
+          precipitation_probability_max: days.map(() => 0) } }));
     }
     // A recipe page, written for the suite, and its photo.
     if (req.url === '/r/recipe.html') {
@@ -1857,6 +1860,11 @@ function connectCdp(wsUrl) {
     // ── suggestions ─────────────────────────────────────────────────────
     // The button beside Calendar opens a view of its own: how much energy, for
     // when, and then a plan — each piece swappable — and the list in order.
+    // A long title too: unwrapped it is wider than the screen, and nothing here
+    // may size itself to that.
+    await asApi(A, 'POST', '/api/space/sp1/item', { title: 'Walk the whole length of the canal towpath and stop for lunch somewhere along the way when it looks nice', kind: 'activity' });
+    await S('Page.navigate', { url: `${BASE}/?list=sp1` });
+    await sleep(2200);
     await evalJs(`document.getElementById('tabSug').click()`);
     await sleep(1600);
     check(await visible('.sg') && await visible('#sgEnergy'), 'Suggestions opens its own view, with an energy slider');
@@ -1868,6 +1876,20 @@ function connectCdp(wsUrl) {
     check(await evalJs(`document.querySelectorAll('#sgBody .sg-slot').length`) >= 1 && await evalJs(`document.querySelectorAll('#sgBody .sg-it[data-sit]').length`) >= 2,
       'and there is a plan, and the list in order');
     check(/Low effort|No going anywhere/.test(await evalJs(`document.getElementById('sgBody').innerText`)), 'each thing says why');
+    // On a phone, by LAYOUT. On iOS Safari the first cut came out wider
+    // than the screen, centred, with every card's edges off it. Chrome never
+    // reproduced that (checked: this passes on the old rule too), so this
+    // asserts the result and is not proof against that bug.
+    const sgEdges = await evalJs(`(() => { const out = [...document.querySelectorAll('.sg, .sg-ctl, .sg-slot, #sgPlanIt, .sg-list, .sg-day')]
+      .map(e => e.getBoundingClientRect()).filter(r => r.width);
+      const sc = document.getElementById('spaceScroll');
+      const sg = document.querySelector('.sg').getBoundingClientRect();
+      const list = document.getElementById('itemList');
+      const pad = parseFloat(getComputedStyle(list).paddingLeft) + parseFloat(getComputedStyle(list).paddingRight);
+      return { left: Math.min(...out.map(r => Math.round(r.left))), right: Math.max(...out.map(r => Math.round(r.right))),
+        vw: innerWidth, sideways: sc.scrollWidth - sc.clientWidth, sg: Math.round(sg.width), room: Math.round(list.clientWidth - pad) }; })()`);
+    check(sgEdges.left >= 8 && sgEdges.right <= sgEdges.vw - 8 && sgEdges.sideways <= 0 && Math.abs(sgEdges.sg - sgEdges.room) <= 2,
+      `everything sits inside the screen, exactly as wide as the list: ${JSON.stringify(sgEdges)}`);
     await evalJs(`document.querySelector('#sgBody [data-vote][data-v="1"]').click()`);
     await sleep(1500);
     check(await evalJs(`!!document.querySelector('#sgBody [data-vote][data-v="1"][aria-pressed="true"]')`), 'a thumb is kept');
@@ -1897,6 +1919,8 @@ function connectCdp(wsUrl) {
     await evalJs(`document.getElementById('sgThrough').click()`);
     await sleep(2000);
     check(/Tomorrow/.test(await evalJs(`[...document.querySelectorAll('#sgBody .sg-day')].map(x => x.innerText).join('|')`)), 'a plan can carry on into tomorrow');
+    check(await evalJs(`[...document.querySelectorAll('#sgBody .sg-slot .sg-sh small')].some(x => /°/.test(x.innerText))`),
+      'and each piece says the weather for its own hour');
     await evalJs(`document.getElementById('tabSug').click()`);
     await sleep(600);
     check(await visible('#kindNav') && !(await evalJs(`!!document.querySelector('.sg')`)), 'and the button puts the list back');

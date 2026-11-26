@@ -22,7 +22,7 @@ Same shape as `~/workout` and `~/trips`:
 - **Auth:** Google Sign-In and/or Cloudflare Access — **ported wholesale from
   `~/workout`** (`lib/auth.js`, `lib/cfaccess.js`, `lib/config.js`). It is tested
   there and this is not the place to have a second opinion about sessions.
-- **Tests:** `npm test` — 227 tests + a headless-chromium check
+- **Tests:** `npm test` — 228 tests + a headless-chromium check
 
 ## The model
 
@@ -751,6 +751,28 @@ costs one tap. The same chooser is how you change it later, from **Which one** i
 item sheet, and `Remove the poster` lets go of it — getting it wrong has to be undoable
 or choosing is a trap.
 
+**Choosing which one tidies the title** (`watch.tidyTitle`, Nov 26). A shelf could say
+*Parks and*, *Sopranos* and *Halt and catch fire* under the right posters, because a row
+kept whatever was typed. Now `POST /watch` rewrites the title when it is **the same words**:
+the same once folded, a beginning of the real title, or the real title without its
+article, accents aside (*Amelie* is *Amélie*). A leading emoji stays, and a year typed to
+say which one goes.
+
+- **In its own alphabet** (Andrew: "casing to be fixed and Cyrillic as well"). Say *Ei
+  sosedi* was typed by ear on a Latin keyboard for a show whose own title is *Эй,
+  соседи!* and which TMDB files as *Hey, Neighbours!*. `detail()` returns TMDB's
+  `original_name`, and a title that is that one transliterated (compared as a loose
+  `skeleton`: y/j/i, kh/h, yo/e) or lower-cased in its own alphabet becomes **the
+  original**, not the English name nobody here calls it. The original is used at the
+  moment of choosing and is not stored. A shorter or differently-cased form counts too
+  (`stems`): *Slon gektor* becomes *Приключения слона Гектора*, when that is TMDB's title.
+  (The examples here and in the suite are invented, not anybody's shelf.)
+- **A name of your own is left alone**: *Our Sunday thing* is not a typo for anything.
+- When the hand is not the author's (an admin), `editedBy` says so. The bulk backfill
+  never renames: nobody chose.
+- The escapes in these regexes (`\u0400-\u04ff`) must stay escapes. Twice this session a
+  tool turned them into literal invisible characters in the source.
+
 So **nothing guesses while somebody is standing there who could be asked**. The silent
 lookup on every write is gone; `pickMatch` now runs only where nobody is in the room —
 the bulk backfill. A guess made in front of you is the one you are most likely to
@@ -775,8 +797,8 @@ Island". No confident match means no poster, which the card already draws proper
   shows other people's items to you.
 - **The search query is not the matching key.** The key can flatten everything; the
   query cannot — "Dune: Part Two" needs its colon and "Se7en" its digit. So only
-  decoration comes off: a trailing year, and leading or trailing symbols. The live list
-  is full of titles like `🐴 Bojack Horseman`, and sending that verbatim returns
+  decoration comes off: a trailing year, and leading or trailing symbols. A list
+  is full of titles like `🦆 Ducktales`, and sending that verbatim returns
   nothing — it was the one miss in the first seven.
 - **Providers are sorted by TMDB's `display_priority`, where ZERO is best.** Reading it
   with `Number(x) || 999` treats a legitimate 0 as missing and buries the most relevant

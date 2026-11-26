@@ -677,7 +677,16 @@ button.crow:active{background:var(--card2)}
    it draws is painted from the palette it would switch to. */
 /* Suggestions (suggest.js, lib/suggest.js). */
 #tabSug{padding:0 12px}
-.sg{padding:6px 16px 28px;max-width:var(--page);margin:0 auto}
+/* A full-width child of the list, which already has the page's side padding:
+   an explicit width, no side padding of its own, and NOT `margin:0 auto`.
+   The first cut centred itself with auto margins inside the list (a column
+   flex container), which makes its width shrink-to-fit. Chrome got that right;
+   iOS Safari came out wider than the screen, centred, with both edges of
+   every card off it (Andrew's screenshot, Nov 26). Stated outright, there is
+   nothing for an engine to work out. Chrome never reproduced it, so the browser
+   check asserts the result — as wide as the list, inside the screen — and
+   cannot prove it against the old rule. Look at it on a phone after touching this. */
+.sg{padding:6px 0 28px;width:100%;min-width:0}
 .sg-ctl{padding:16px 16px 6px}
 .sg-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 10px}
 .sg-row b{font:600 15.5px/1.2 var(--sans)}
@@ -704,18 +713,21 @@ button.crow:active{background:var(--card2)}
 .sg-sh{display:flex;align-items:baseline;gap:8px;padding:11px 8px 0 14px}
 .sg-sh b{font:600 14px/1.2 var(--sans)}
 .sg-sh small{flex:1;color:var(--dim);font-size:13px}
+.sg-swx{color:var(--ink2);white-space:nowrap}
 .sg-swap{min-height:var(--tap);margin:-10px 0;padding:0 10px;color:var(--accent);font:600 14px/1 var(--sans)}
 .sg-it{display:flex;align-items:center;gap:12px;min-height:64px;padding:8px 6px 8px 12px;position:relative}
 .sg-list .sg-it+.sg-it::before{content:'';position:absolute;left:68px;right:0;top:0;height:1px;background:var(--line)}
 .sg-bd{flex:1;min-width:0;cursor:pointer}
 .sg-bd b{display:block;font:500 16px/1.3 var(--sans);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .sg-why{color:var(--dim);font-size:13px;line-height:1.45;margin-top:2px}
+.sg-why>span:not(.dot){display:inline-block;max-width:100%}
 .sg-why .k{color:var(--ink2)}
 .sg-why .good{color:var(--accent2)}
 .sg-why .bad{color:var(--warn)}
 .sg-why .dot,.sg-tr .dot{margin:0 5px;color:var(--faint)}
 .sg-tr{color:var(--ink2);font-size:13px;line-height:1.6;margin-top:1px}
-.sg-tr span{white-space:nowrap}
+.sg-tr>span:not(.dot){display:inline-block;max-width:100%}
+.sg-slot,.sg-ctl,.sg-it,.sg-plan,.sg-list{min-width:0;max-width:100%}
 .ln{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;margin-left:4px;border-radius:5px;vertical-align:-3px;
   background:var(--card2);color:var(--ink);font:700 11px/1 var(--sans);font-style:normal}
 .sg-th{flex:none;display:flex}

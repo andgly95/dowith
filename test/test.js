@@ -507,11 +507,11 @@ async function watchLookups() {
   });
 
   await t('a tv result is matched on `name`, not `title`', () => {
-    const got = W.pickMatch([{ id: 4, name: 'The Rehearsal', popularity: 30, first_air_date: '2022-07-15' }],
-      'The Rehearsal');
+    const got = W.pickMatch([{ id: 4, name: 'The Understudy', popularity: 30, first_air_date: '2022-07-15' }],
+      'The Understudy');
     assert.strictEqual(got.id, 4);
     assert.strictEqual(W.shape(got, 'tv').year, 2022);
-    assert.strictEqual(W.shape(got, 'tv').title, 'The Rehearsal');
+    assert.strictEqual(W.shape(got, 'tv').title, 'The Understudy');
   });
 
   await t('what is stored is a PATH, never a URL', () => {
@@ -552,10 +552,10 @@ async function watchLookups() {
 
   await t('THE QUERY KEEPS WHAT A TITLE NEEDS AND DROPS WHAT IT DOES NOT', () => {
     // The matching key can afford to flatten everything; the query cannot.
-    // "Dune: Part Two" needs its colon and "Se7en" its digit — but the live
-    // list is full of titles like "🐴 Bojack Horseman", and sending that
+    // "Dune: Part Two" needs its colon and "Se7en" its digit — but a list
+    // is full of titles like "🦆 Ducktales", and sending that
     // verbatim to TMDB returns nothing at all. It was the one miss in seven.
-    assert.strictEqual(W.searchQuery('🐴 Bojack Horseman'), 'Bojack Horseman');
+    assert.strictEqual(W.searchQuery('🦆 Ducktales'), 'Ducktales');
     assert.strictEqual(W.searchQuery('💃 Go swing dancing!'), 'Go swing dancing');
     assert.strictEqual(W.searchQuery('Dune: Part Two'), 'Dune: Part Two');
     assert.strictEqual(W.searchQuery('Se7en'), 'Se7en');
@@ -966,7 +966,7 @@ async function inviteRules() {
 
   await t('a name typed at an invite is made safe to show, and never takes somebody\'s account', () => {
     assert.strictEqual(INVITES.cleanName('  Rowan \n  K  '), 'Rowan K');
-    assert.strictEqual(INVITES.cleanName('‮evil​'), 'evil', 'no bidi or zero-width tricks');
+    assert.strictEqual(INVITES.cleanName('\u202eevil\u200b'), 'evil', 'no bidi or zero-width tricks');
     assert.strictEqual(INVITES.cleanName(null), '');
     const long = '🙂'.repeat(60);
     assert.strictEqual(Array.from(INVITES.cleanName(long)).length, INVITES.NAME_MAX, 'counted in characters');
@@ -1458,10 +1458,12 @@ const SHOW_RUNNING = { id: 9002, name: 'Still Going', status: 'Returning Series'
   seasons: [{ season_number: 1, episode_count: 2, air_date: '2024-01-01' }, { season_number: 2, episode_count: 3, air_date: '2026-11-01' }],
   last_episode_to_air: { season_number: 2, episode_number: 1, air_date: '2026-11-20' },
   next_episode_to_air: { season_number: 2, episode_number: 2, air_date: '2026-11-27' } };
+// And one whose own title is in Cyrillic, filed by TMDB under an English name.
+const SHOW_CYRILLIC = { ...SHOW_ENDED, id: 9003, name: 'The Last Test', original_name: 'Финал тест', original_language: 'ru' };
 function tmdbFixture(pathname) {
   const m = /^\/tmdb\/tv\/(\d+)(\/season\/(\d+))?(\/watch\/providers)?$/.exec(pathname);
   if (!m) return null;
-  const show = { 9001: SHOW_ENDED, 9002: SHOW_RUNNING }[m[1]];
+  const show = { 9001: SHOW_ENDED, 9002: SHOW_RUNNING, 9003: SHOW_CYRILLIC }[m[1]];
   if (!show) return null;
   if (m[4]) return { results: {} };
   if (m[3]) return { episodes: Array.from({ length: 3 }, (_, i) => ({ episode_number: i + 1, name: `Chapter ${i + 1}`, air_date: '2019-01-01', runtime: 50 })) };
@@ -1851,7 +1853,7 @@ async function connectorRules() {
     const st = {};
     assert.strictEqual(O.register(st, { redirect_uris: ['https://evil.example/cb'] }).error, 'invalid_redirect_uri');
     assert.strictEqual(O.register(st, { redirect_uris: [CB], grant_types: ['client_credentials'] }).error, 'invalid_client_metadata');
-    const r = O.register(st, { client_name: 'Claude‮', redirect_uris: [CB], token_endpoint_auth_method: 'client_secret_post' });
+    const r = O.register(st, { client_name: 'Claude\u202e', redirect_uris: [CB], token_endpoint_auth_method: 'client_secret_post' });
     assert.strictEqual(r.client.token_endpoint_auth_method, 'none', 'a public client whatever it asked for — PKCE is the proof');
     assert.strictEqual(r.client.client_name, 'Claude', 'the name is cleaned: it is shown on the Allow page');
     assert.ok(!('client_secret' in r.client));
@@ -3273,6 +3275,23 @@ async function server() {
       const r2 = (await api('POST', `/api/item/${running.id}/episodes`, { s: 2, e: 1 }, A)).body;
       assert.deepStrictEqual([r2.caughtUp, r2.finished, r2.item.done], [true, false, false], 'caught up, and still on the shelf');
 
+      // Choosing which one it is tidies the SAME words, and leaves a name of your own alone.
+      const sloppy = (await api('POST', '/api/space/sp1/item', { title: '🎭 finale (2019)', kind: 'show' }, L)).body.item;
+      assert.strictEqual((await api('POST', `/api/item/${sloppy.id}/watch`, { tmdbId: 9001 }, S)).status, 404);
+      const hersNow = (await api('POST', `/api/item/${sloppy.id}/watch`, { tmdbId: 9001 }, L)).body.item;
+      assert.deepStrictEqual([hersNow.title, hersNow.editedByName], ['🎭 Finale Test', null], 'cut short and lower case: now its real title, emoji kept, year gone');
+      const own = (await api('POST', '/api/space/sp1/item', { title: 'Our Sunday thing', kind: 'show' }, L)).body.item;
+      setAdmins([A]);
+      const byAdmin = (await api('POST', `/api/item/${own.id}/watch`, { tmdbId: 9001 }, A)).body.item;
+      assert.strictEqual(byAdmin.title, 'Our Sunday thing', 'her own name for it is not a typo');
+      // Typed by ear: it becomes the show's own title, in its own alphabet.
+      const byEar = (await api('POST', '/api/space/sp1/item', { title: 'final test', kind: 'show' }, A)).body.item;
+      assert.strictEqual((await api('POST', `/api/item/${byEar.id}/watch`, { tmdbId: 9003 }, A)).body.item.title, 'Финал тест');
+      const fixed = (await api('POST', '/api/space/sp1/item', { title: 'finale test', kind: 'show' }, L)).body.item;
+      const tidied = (await api('POST', `/api/item/${fixed.id}/watch`, { tmdbId: 9001 }, A)).body.item;
+      assert.deepStrictEqual([tidied.title, tidied.editedByName], ['Finale Test', 'Andrew'], 'and when an admin’s choice changes her words, the sheet says whose hand');
+      setAdmins([]);
+
       // Pinned to a different show, the episodes go with the old one.
       const moved = (await api('POST', `/api/item/${running.id}/watch`, { tmdbId: 9001 }, A)).body.item;
       assert.strictEqual(moved.progress, null);
@@ -3365,6 +3384,9 @@ async function server() {
     assert.strictEqual(r.pending, 0, 'everything came in');
     assert.deepStrictEqual(r.plan.map(x => `${x.label}${x.day ? '+1' : ''}`), ['Dinner', 'Evening', 'Morning+1', 'Afternoon+1', 'Dinner+1']);
     assert.deepStrictEqual([r.weather.rain, r.weather.code], [70, 63], 'the weather at that hour');
+    assert.deepStrictEqual(r.plan.map(x => [x.date, x.time, x.weather.rain, x.weather.t]),
+      [['2026-11-25', '19:00', 70, 12], ['2026-11-25', '21:00', 5, 12], ['2026-11-26', '11:00', 5, 12], ['2026-11-26', '14:30', 5, 12], ['2026-11-26', '18:30', 70, 12]],
+      'and each piece carries the weather for its OWN day and hour: tomorrow evening’s rain is tomorrow’s');
     const dinner = r.plan[0].pick;
     assert.deepStrictEqual([dinner.id, r.plan[0].kept], [noodle.id, true]);
     assert.deepStrictEqual(dinner.transit.map(l => [l.mine, l.name, l.minutes, l.lines[0].line, l.lines[0].color, l.from]),
@@ -3753,6 +3775,48 @@ async function recipes() {
     assert.deepStrictEqual([r.prep, r.cook, r.total], [5, 18, 25], 'the sidebar\'s times; "Ready Time" is the total');
     assert.deepStrictEqual(r.yield, { n: 2, unit: 'servings' });
     assert.strictEqual(got.imageUrl, 'https://www.farm.example/r/photo.jpg', 'og:image:secure_url first, made absolute');
+  });
+
+  await t('a chosen film or show has its title tidied — the same words only, never a name of your own', () => {
+    const W = require('../lib/watch');
+    const rows = [
+      // Invented stand-ins, one for each way a typed title goes wrong.
+      ['Parks and', 'Parks and Recreation', 'Parks and Recreation'],
+      ['Sopranos', 'The Sopranos', 'The Sopranos'],
+      ['Halt and catch fire', 'Halt and Catch Fire', 'Halt and Catch Fire'],
+      ['Last week tonight with John oliver', 'Last Week Tonight with John Oliver', 'Last Week Tonight with John Oliver'],
+      ['🦆 Ducktales', 'DuckTales', '🦆 DuckTales'],
+      ['🦆Ducktales', 'DuckTales', '🦆 DuckTales'],
+      ['Obsession (1976)', 'Obsession', 'Obsession'],
+      ['dune', 'Dune: Part Two', 'Dune: Part Two'],
+      ['Ei sosedi', 'Hey, Neighbours!', 'Ei sosedi'],
+      ['Slon gektor', 'Hector the Elephant', 'Slon gektor'],
+      ['The bear', 'Bear Island', 'The bear'],
+      ['Эй, соседи!', 'Hey, Neighbours!', 'Эй, соседи!'],
+      ['Star Trek: The Next Generation', 'Star Trek: The Next Generation', 'Star Trek: The Next Generation'],
+      ['Something', '', 'Something'],
+      ['Amelie', 'Amélie', 'Amélie'],
+    ];
+    for (const [typed, official, want] of rows) assert.strictEqual(W.tidyTitle(typed, official), want, `${typed} + ${official}`);
+    // Typed by ear on a Latin keyboard, or in lower case in its own alphabet:
+    // it becomes its ORIGINAL title, not the English one TMDB files it under.
+    const own = [
+      ['Ei sosedi', 'Hey, Neighbours!', 'Эй, соседи!', 'Эй, соседи!'],
+      ['Slon gektor', 'Hector the Elephant', 'Слон Гектор', 'Слон Гектор'],
+      ['🐺 ei, sosedi', 'Hey, Neighbours!', 'Эй, соседи!', '🐺 Эй, соседи!'],
+      ['эй соседи', 'Hey, Neighbours!', 'Эй, соседи!', 'Эй, соседи!'],
+      ['Slon gektor', 'Hector the Elephant', 'Приключения слона Гектора', 'Приключения слона Гектора'],
+      ['Slon', 'Hector the Elephant', 'Приключения слона Гектора', 'Slon'],
+      ['Yozhik v tumane', 'Hedgehog in the Fog', 'Ёжик в тумане', 'Ёжик в тумане'],
+      ['Ezhik v tumane', 'Hedgehog in the Fog', 'Ёжик в тумане', 'Ёжик в тумане'],
+      ['Hey neighbours', 'Hey, Neighbours!', 'Эй, соседи!', 'Hey, Neighbours!'],
+      ['Spirited away', 'Spirited Away', '千と千尋の神隠し', 'Spirited Away'],
+      ['Sen to chihiro', 'Spirited Away', '千と千尋の神隠し', 'Sen to chihiro'],
+      ['Our cartoon', 'Hey, Neighbours!', 'Эй, соседи!', 'Our cartoon'],
+      ['Parks and', 'Parks and Recreation', 'Parks and Recreation', 'Parks and Recreation'],
+    ];
+    for (const [typed, official, original, want] of own) assert.strictEqual(W.tidyTitle(typed, official, original), want, `${typed} + ${original}`);
+    assert.strictEqual(W.tidyTitle(W.tidyTitle('parks and', 'Parks and Recreation'), 'Parks and Recreation'), 'Parks and Recreation', 'and doing it twice changes nothing');
   });
 
   await t('…and it reads only that: a page that is not plainly a recipe stays a no-recipe', () => {
