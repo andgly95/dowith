@@ -294,6 +294,39 @@ Tomorrow, or a day and time). It answers with:
 Every row has a thumb up and a thumb down. **Put it on the calendar** gives each piece
 of the plan its day and hour (`/when`).
 
+### The screen: the plan first (Nov 27, `public/js/suggest.js`)
+
+Redrawn at Andrew's ask, from six screenshots: the controls filled the first screen and
+the plan started below the fold. **Client only.** The wire, the scorer and every route
+are as they were.
+
+- **What the plan is for is one row** (`#sgSum`): *Low energy · Now*, and under it
+  *Into the next day · From Ballston-MU · Gluten-free*. It opens **Tune the plan**
+  (`#sgTuneSheet`), which holds the slider, For when, Carry on, Starting from and What
+  you eat. The sheet is **built once, when the app starts** (`buildTune`), for the old
+  reason: a slider must not be redrawn under a thumb. Every change lands at once and the
+  plan behind the sheet follows; there is nothing to save.
+- **One sheet at a time.** Starting from and What you eat close the controls and open
+  their own sheet, as the account sheet does for its Claude row.
+- **Two days are a tab each** (`.sg-days`), with that day's weather on the tab (the
+  range across its pieces). **Both days are drawn and a tap only shows the other**
+  (`hidden` on `.sg-dayp`), so nothing is asked again and the suite can still read
+  every slot. One day keeps its heading and the weather line above it.
+- **A piece of the plan is a card** (`pieceHtml`), on a rail with a dot a piece. Its
+  reasons are **one to a line, each with a mark** (tick, !, dot for good, bad, note).
+  The rows under *Also good then* keep their one dotted line (`rowHtml`): a list wants
+  the density, a plan of three wants to be read.
+- **A journey is said once when it is the same for everybody** (`transitHtml`):
+  *25 min each*, with the lines once. Different journeys are still one each.
+- **A holiday is said once over the day** (`.sg-hol`), not on every place. It is lifted
+  from the scorer's own note by its words (`MAY_DIFFER`), so if those words change the
+  note is simply on each piece again. *Also good then* and *Not then* still say it per
+  row. **No fixture covers this yet.**
+- **Not then says when a thing IS in the plan**: *In tomorrow's plan*. The garden rained
+  off today and planned for tomorrow morning read as a contradiction.
+- **Thumbs and Swap are where they were.** A mockup traded the thumb down for a "why
+  not" in Swap; a thumb down already means "not tonight" (it fades), so nothing changed.
+
 ### The scorer is pure, and every weight says why
 
 `suggest.score(item, ctx)` weighs one thing for one moment. The routes gather the facts

@@ -688,6 +688,27 @@ button.crow:active{background:var(--card2)}
    cannot prove it against the old rule. Look at it on a phone after touching this. */
 .sg{padding:6px 0 28px;width:100%;min-width:0}
 .sg-ctl{padding:16px 16px 6px}
+/* The screen, redrawn (Nov 27). What the plan is for is ONE row, and the
+   controls are a sheet behind it, so the plan is the first thing you see. */
+.sg-sum{margin-bottom:0;min-width:0;max-width:100%}
+.sg-sum>i{width:40px;height:40px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--accent-tint);color:var(--accent)}
+.sg-sum>svg{flex:none;color:var(--dim)}
+.sg-sum .cb b{font-weight:600}
+/* In the sheet the controls sit on the sheet itself: a card inside a sheet was
+   a box in a box, and its padding cost the chips their one line. */
+#sgTuneBody .sg-ctl{margin-bottom:0;padding:2px 2px 0;background:none;border-radius:0}
+/* A tab a day, each with its weather. The words are a <b>, so the tab's own
+   one-line ellipsis rule does not apply to two lines. */
+.segs.sg-days{margin:0 0 10px;min-width:0;max-width:100%}
+.segs.sg-days button{height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;white-space:normal}
+.sg-days b{font:600 14.5px/1 var(--sans)}
+.sg-days small{max-width:100%;font:500 12.5px/1.1 var(--sans);color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sg-days .on small{color:inherit;opacity:.82}
+.sg-dayp{min-width:0;max-width:100%}
+/* Said once over the day, not on every place in it. */
+.sg-hol{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:10px 14px;border-radius:14px;
+  background:color-mix(in srgb, var(--warn) 12%, transparent);color:var(--warn);font-size:13.5px;line-height:1.35}
+.sg-hol svg{flex:none}
 .sg-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 10px}
 .sg-row b{font:600 15.5px/1.2 var(--sans)}
 .sg-row span{color:var(--accent);font:600 15px/1.2 var(--sans)}
@@ -716,6 +737,13 @@ button.crow:active{background:var(--card2)}
 .sg-day{font:600 13.5px/1.2 var(--sans);color:var(--accent);margin:14px 2px 8px}
 .sg-day:first-child{margin-top:0}
 .sg-slot{background:var(--card);border-radius:var(--r-card);margin-bottom:8px;overflow:hidden}
+/* In a plan, a rail down the left with a dot a piece: one thing after another.
+   The dot and the line sit outside the card, so it cannot clip them. */
+.sg-dayp .sg-slot{position:relative;margin-left:22px;overflow:visible}
+.sg-dayp .sg-slot::before{content:'';position:absolute;left:-17px;top:15px;width:9px;height:9px;border-radius:50%;background:var(--faint)}
+.sg-dayp .sg-slot.lead::before{background:var(--accent)}
+.sg-dayp .sg-slot::after{content:'';position:absolute;left:-13.5px;top:30px;bottom:-18px;width:2px;border-radius:1px;background:var(--line)}
+.sg-dayp .sg-slot:last-child::after{display:none}
 .sg-sh{display:flex;align-items:baseline;gap:8px;padding:11px 8px 0 14px}
 .sg-sh b{font:600 14px/1.2 var(--sans)}
 .sg-sh small{flex:1;color:var(--dim);font-size:13px}
@@ -736,6 +764,18 @@ button.crow:active{background:var(--card2)}
 .sg-tr{color:var(--ink2);font-size:13px;line-height:1.6;margin-top:1px}
 .sg-tr>span:not(.dot){display:inline-block;max-width:100%}
 .sg-slot,.sg-ctl,.sg-it,.sg-plan,.sg-list{min-width:0;max-width:100%}
+/* A piece of the plan. Its reasons are one to a line under the title, each
+   with a mark, and lined up with it; the list rows below keep their one line. */
+.sg-it.sg-pc{display:block;min-height:0;padding:6px 6px 14px 12px}
+.sg-top{display:flex;align-items:center;gap:12px;min-height:52px}
+.sg-pc .sg-bd .k{display:block;color:var(--dim);font-size:13px;line-height:1.35;margin-top:1px}
+.sg-rs{list-style:none;margin:6px 10px 0 56px;padding:0;display:grid;gap:4px}
+.sg-rs li{display:flex;gap:7px;min-width:0;color:var(--ink2);font-size:13.5px;line-height:1.4}
+.sg-rs li svg{flex:none;margin-top:2px}
+.sg-rs li span{min-width:0;overflow-wrap:anywhere}
+.sg-rs .t-good{color:var(--accent2)}
+.sg-rs .t-bad{color:var(--warn)}
+.sg-pc .sg-tr{margin:7px 10px 0 56px}
 .ln{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;margin-left:4px;border-radius:5px;vertical-align:-3px;
   background:var(--card2);color:var(--ink);font:700 11px/1 var(--sans);font-style:normal}
 .sg-th{flex:none;display:flex}

@@ -1871,20 +1871,51 @@ function connectCdp(wsUrl) {
     await sleep(2200);
     await evalJs(`document.getElementById('tabSug').click()`);
     await sleep(1600);
-    check(await visible('.sg') && await visible('#sgEnergy'), 'Suggestions opens its own view, with an energy slider');
+    // What the plan is for is one row; the controls are a sheet behind it, so
+    // the plan is what the screen opens on.
+    check(await visible('.sg') && await visible('#sgSum') && !(await visible('#sgEnergy')), 'Suggestions opens its own view, with what it is planning for in one row');
     check(!(await visible('#kindNav')) && !(await visible('#newItem')), 'and the kind bar and the composer step aside');
+    await evalJs(`document.getElementById('sgSum').click()`);
+    await sleep(700);
+    check(await visible('#sgTuneSheet .modal-in') && await visible('#sgEnergy'), 'the row opens the controls, with an energy slider');
     await evalJs(`(() => { const r = document.getElementById('sgEnergy'); r.value = '1';
       r.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(1800);
     check(await evalJs(`document.getElementById('sgWord').innerText`) === 'Wiped out', 'the slider says what it means');
+    check(/^Wiped out · Now/.test(await evalJs(`document.querySelector('#sgSum b').innerText`)), 'and the row behind the sheet already says it');
+    if (process.env.SHOT_SUG) {
+      await evalJs(`document.getElementById('spaceScroll').scrollTop = 0`);
+      await sleep(300);
+      const { data } = await S('Page.captureScreenshot', { format: 'png' });
+      require('fs').writeFileSync(process.env.SHOT_SUG.replace(/\.png$/, '-controls.png'), Buffer.from(data, 'base64'));
+    }
+    await evalJs(`document.getElementById('sgTuneClose').click()`);
+    await sleep(500);
+    check(!(await visible('#sgTuneSheet')) && await visible('#sgBody .sg-slot'), 'closing the controls leaves the plan');
     check(await evalJs(`document.querySelectorAll('#sgBody .sg-slot').length`) >= 1 && await evalJs(`document.querySelectorAll('#sgBody .sg-it[data-sit]').length`) >= 2,
       'and there is a plan, and the list in order');
     check(/Low effort|No going anywhere/.test(await evalJs(`document.getElementById('sgBody').innerText`)), 'each thing says why');
+    // A piece of the plan says its reasons one to a line, each with a mark, and
+    // every line is drawn (a rule that hid them would still leave the words in the DOM).
+    const lines = await evalJs(`[...document.querySelectorAll('#sgBody .sg-slot .sg-pc .sg-rs li')].map(li => {
+      const r = li.getBoundingClientRect(); return { h: Math.round(r.height), mark: !!li.querySelector('svg'), top: Math.round(r.top) }; })`);
+    check(lines.length >= 1 && lines.every(x => x.h >= 14 && x.mark), `a piece's reasons are lines of their own: ${JSON.stringify(lines.slice(0, 4))}`);
+    // Starting from the same place, the journey is said once; apart, each has a line.
+    const legs = await evalJs(`(async () => {
+      const base = document.querySelector('script[type=module]').src.replace(/app\\.js.*$/, '');
+      const { transitHtml } = await import(base + 'suggest.js');
+      const box = document.createElement('div');
+      const leg = (mine, minutes) => ({ mine, name: 'Linnea', minutes, lines: [{ line: 'OR', color: 'ED8B00' }] });
+      box.innerHTML = transitHtml([leg(true, 25), leg(false, 25)]);
+      const same = box.innerText;
+      box.innerHTML = transitHtml([leg(true, 25), leg(false, 40)]);
+      return same + '|' + box.innerText; })()`);
+    check(/^25 min each\s*OR\|/.test(legs) && /You 25 min/.test(legs) && /Linnea 40 min/.test(legs), `one journey for both when it is the same, one each when not: ${legs}`);
     // On a phone, by LAYOUT. On iOS Safari the first cut came out wider
     // than the screen, centred, with every card's edges off it. Chrome never
     // reproduced that (checked: this passes on the old rule too), so this
     // asserts the result and is not proof against that bug.
-    const sgEdges = await evalJs(`(() => { const out = [...document.querySelectorAll('.sg, .sg-ctl, .sg-slot, #sgPlanIt, .sg-list, .sg-day')]
+    const sgEdges = await evalJs(`(() => { const out = [...document.querySelectorAll('.sg, .sg-sum, .sg-slot, #sgPlanIt, .sg-list, .sg-day, .sg-days, .sg-rs')]
       .map(e => e.getBoundingClientRect()).filter(r => r.width);
       const sc = document.getElementById('spaceScroll');
       const sg = document.querySelector('.sg').getBoundingClientRect();
@@ -1907,10 +1938,13 @@ function connectCdp(wsUrl) {
       && await evalJs(`document.querySelectorAll('#sgSwapBody [data-useidea]').length`) === 1, 'and something new of the same sort, when asked');
     await evalJs(`document.getElementById('sgSwapClose').click()`);
     await sleep(400);
-    // Where you start from: a station you choose.
+    // Where you start from: a station you choose. It is a row in the controls,
+    // and it opens a sheet of its own in their place.
+    await evalJs(`document.getElementById('sgSum').click()`);
+    await sleep(600);
     await evalJs(`document.getElementById('sgFrom').click()`);
     await sleep(700);
-    check(await visible('#sgStationSheet .modal-in'), 'Starting from opens the stations');
+    check(await visible('#sgStationSheet .modal-in') && !(await visible('#sgTuneSheet')), 'Starting from opens the stations, one sheet at a time');
     await evalJs(`(() => { const i = document.querySelector('#sgStationBody [data-q]'); i.value = 'union';
       i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(1300);
@@ -1919,23 +1953,59 @@ function connectCdp(wsUrl) {
     check(/Union Station/.test(await evalJs(`document.querySelector('#sgStationBody .crow').innerText`)), 'search, tap, and it is yours');
     await evalJs(`document.getElementById('sgStationClose').click()`);
     await sleep(2600);
-    check(/Union Station/.test(await evalJs(`document.getElementById('sgFrom').innerText`)), 'and the screen says where you start from');
+    check(/Union Station/.test(await evalJs(`document.getElementById('sgSum').innerText`)) && await visible('#sgSum small'), 'and the screen says where you start from');
+    await evalJs(`document.getElementById('sgSum').click()`);
+    await sleep(600);
+    check(/Union Station/.test(await evalJs(`document.getElementById('sgFrom').innerText`)) && await visible('#sgFrom'), 'as do the controls');
     await evalJs(`document.getElementById('sgThrough').click()`);
     await sleep(2000);
-    check(/Tomorrow/.test(await evalJs(`[...document.querySelectorAll('#sgBody .sg-day')].map(x => x.innerText).join('|')`)), 'a plan can carry on into tomorrow');
+    await evalJs(`document.getElementById('sgTuneClose').click()`);
+    await sleep(500);
+    check(/Into the next day/.test(await evalJs(`document.querySelector('#sgSum small').innerText`)), 'carrying on is said in the row');
+    // Two days are a tab each: both are drawn, and a tap shows the other.
+    const dayTabs = await evalJs(`[...document.querySelectorAll('#sgBody .sg-days [data-day]')].map(x => x.innerText.replace(/\\s+/g, ' ').trim())`);
+    check(dayTabs.length === 2 && /Tomorrow/.test(dayTabs[1]) && /°/.test(dayTabs.join('|')), `a plan can carry on into tomorrow, a tab a day with its weather: ${JSON.stringify(dayTabs)}`);
+    const shown = () => evalJs(`[...document.querySelectorAll('#sgBody .sg-dayp')].map(p => p.getClientRects().length ? p.querySelectorAll('.sg-slot').length : 0)`);
+    const day1 = await shown();
+    if (process.env.SHOT_SUG) {
+      await evalJs(`document.getElementById('spaceScroll').scrollTop = 0`);
+      await sleep(300);
+      const { data } = await S('Page.captureScreenshot', { format: 'png' });
+      require('fs').writeFileSync(process.env.SHOT_SUG.replace(/\.png$/, '-today.png'), Buffer.from(data, 'base64'));
+    }
+    await evalJs(`document.querySelectorAll('#sgBody .sg-days [data-day]')[1].click()`);
+    await sleep(200);
+    const day2 = await shown();
+    check(day1[0] >= 1 && day1[1] === 0 && day2[0] === 0 && day2[1] >= 1, `one day on screen at a time: ${JSON.stringify([day1, day2])}`);
+    if (process.env.SHOT_SUG) {
+      await evalJs(`document.getElementById('spaceScroll').scrollTop = 0`);
+      await sleep(300);
+      const { data } = await S('Page.captureScreenshot', { format: 'png' });
+      require('fs').writeFileSync(process.env.SHOT_SUG.replace(/\.png$/, '-tomorrow.png'), Buffer.from(data, 'base64'));
+    }
+    // The rail's dot sits beside the card, inside the screen, never under it.
+    const rail = await evalJs(`(() => { const sl = [...document.querySelectorAll('#sgBody .sg-dayp .sg-slot')].find(e => e.getClientRects().length);
+      const c = sl.getBoundingClientRect(); const dot = getComputedStyle(sl, '::before');
+      return { card: Math.round(c.left), dot: Math.round(c.left + parseFloat(dot.left)), w: parseFloat(dot.width) }; })()`);
+    check(rail.dot >= 8 && rail.dot + rail.w <= rail.card, `each piece has its dot on the rail: ${JSON.stringify(rail)}`);
+    await evalJs(`document.querySelectorAll('#sgBody .sg-days [data-day]')[0].click()`);
+    await sleep(200);
     check(await evalJs(`[...document.querySelectorAll('#sgBody .sg-slot .sg-sh small')].some(x => /°/.test(x.innerText))`),
       'and each piece says the weather for its own hour');
     // What the list eats: a rule of the list, chosen from the server's table.
     check(/Anything/.test(await evalJs(`document.getElementById('sgEat').innerText`)), 'a list with no rule says it eats anything');
+    await evalJs(`document.getElementById('sgSum').click()`);
+    await sleep(600);
     await evalJs(`document.getElementById('sgEat').click()`);
     await sleep(700);
-    check(await visible('#sgDietSheet .modal-in') && await evalJs(`document.querySelectorAll('#sgDietBody [data-diet]').length`) >= 8
+    check(await visible('#sgDietSheet .modal-in') && !(await visible('#sgTuneSheet')) && await evalJs(`document.querySelectorAll('#sgDietBody [data-diet]').length`) >= 8
       && await evalJs(`document.getElementById('sgStrict').disabled`) === true, 'What you eat opens the rules a list can keep, and "medical" waits for one');
     await evalJs(`document.querySelector('#sgDietBody [data-diet="gluten-free"]').click()`);
     await sleep(900);
     await evalJs(`document.getElementById('sgStrict').click()`);
     await sleep(900);
-    check(/Gluten-free · strictly/.test(await evalJs(`document.getElementById('sgEat').innerText`)), 'and the screen says what the list keeps to');
+    check(/Gluten-free · strictly/.test(await evalJs(`document.getElementById('sgEat').innerText`))
+      && /Gluten-free/.test(await evalJs(`document.getElementById('sgSum').innerText`)), 'and the screen says what the list keeps to');
     if (process.env.SHOT_DIET) {
       const { data } = await S('Page.captureScreenshot', { format: 'png' });
       require('fs').writeFileSync(process.env.SHOT_DIET, Buffer.from(data, 'base64'));
