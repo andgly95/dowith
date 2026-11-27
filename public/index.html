@@ -273,6 +273,12 @@
     <div class="box wx" id="plWx" hidden></div>
     <div class="box info" id="plInfo" hidden></div>
     <p class="pl-src" id="plSrc" hidden>Hours and address come from OpenStreetMap, fresh each time you open this.</p>
+    <!-- Suggest nearby: what else on the list is a walk from here, and new
+         ideas for around it. Drawn in the page, not a sheet over a sheet. -->
+    <div id="plNear" hidden>
+      <button type="button" class="pl-nearbtn" id="plNearBtn"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 4.2l1.7 4.6 4.6 1.7-4.6 1.7-1.7 4.6-1.7-4.6-4.6-1.7 4.6-1.7z"/><path d="M18 14.6l.8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8z"/></svg><span>Suggest nearby</span></button>
+      <div id="plNearBody"></div>
+    </div>
 
     <div id="plPlanBox">
       <h3 class="sec">Your plan</h3>

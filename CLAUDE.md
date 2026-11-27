@@ -539,6 +539,33 @@ asker cannot see.
   it on the map.
 - Not labelled as AI: the section is *New ideas*.
 
+### Suggest nearby, on a place's page (Nov 27, `public/js/pl.js`)
+
+Andrew's ask: "a suggest nearby button on location detail page". A pinned place's page
+has **Suggest nearby** under its hours. It answers in the page, not in a sheet over a
+sheet, with the two halves Swap has:
+
+- **On your list, close by**: the other places still to go within 2 km of this pin,
+  closest first, at most five, each *0.2 mi · about 4 min walk* (as the crow flies, so
+  "about"). Arithmetic over pins the phone already has: no request, and it works with no
+  key. A tap opens that place's page.
+- **Something new**: asked of Opus 5.5 when the button is tapped, never before
+  (`ideas.suggest`, with `near`). Same route, same hourly limit, same gate, same *Add to
+  Places*. It is asked for **the day and hour the place is planned for** when that is
+  still to come, and otherwise for now on the phone's clock, with the energy the
+  Suggestions slider was last left at.
+  - **What goes to Anthropic on top of an ordinary ask: the place's name, what
+    OpenStreetMap calls it, and its area.** That is what its weather profile already
+    sends. **Never its pin.**
+  - **`near` is an item id, and the server looks it up among what the asker can see**
+    (`SP.visibleIn`). One they cannot see is a 404; one with no place is a 400. Both are
+    refused **before** one of the hour's asks is spent, and before Claude is called.
+  - **Only somewhere to go or something to do comes back** (`NEAR_KINDS`): the gate drops
+    films, shows, recipes and the place itself, whatever the model says.
+- **With no key and nothing close on the list, there is no button.** With no key and
+  something close, the button shows those and steps aside.
+- A place with no pin has nothing to be near: no button until it is on the map.
+
 ## The Claude connector (`lib/connector.js`, `lib/oauth.js`, `public/js/connect.js`)
 
 **Claude can read your lists.** Do With is an MCP server at `/mcp`. Add
@@ -1876,6 +1903,7 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `POST /api/space/:id/diet {must: [...], strict}` | what the list eats, set by anyone on it; `{must: []}` is anything; an unknown rule is a 400 |
 | `GET`·`POST /api/people/:uid/stations` · `GET /api/transit/stops?q=&space=` | where somebody starts from — yourself or a pair partner, else 404; the station search |
 | `GET /api/item/:id/show` · `GET /api/item/:id/show/season/:n` · `POST /api/item/:id/episodes {s, e?, seen}` | a show's seasons, episode names, and ticking one (or a whole season) — anyone who can see it; the last of an ended show ticks it off |
+| `POST /api/space/:id/suggest/ideas {energy, at, tz, role?, near?}` | new ideas, asked of Claude, **saves nothing**; `near` is a place you can see (404 if not, 400 if it is not a place) and limits the ideas to what is close to it |
 | `GET /api/space/:id/hours?at=` | open or closed now for every place on the list, at the phone's time; `pending` says to ask again |
 | `GET /api/item/:id/place?at=` | a place's hours, website, address — live from OSM by its id — and open or closed now and on its plan; 404 if you can't see it |
 | `GET`·`POST /api/space/:id/pleasure` | the rose — pairs only; partner's try answers appear only as matches; `question` is today's Spicy one, answered here with `{ question: {date, text\|pick\|react\|reply} }` |

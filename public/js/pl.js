@@ -17,7 +17,7 @@
 //   · Rights are the server's answers (canEdit, canCredit…), never worked out here.
 import { S } from './state.js';
 import { $, esc, toast, openSheet, closeSheet, leadEmoji, initialOf, metres, distLabel, shortDate, calm } from './util.js';
-import { haptic, burst } from './motion.js';
+import { haptic, burst, skeleton } from './motion.js';
 import { get, post, patch, del, applyWire } from './api.js';
 import { createMap } from './map.js';
 import { icon, iconFor } from './icons.js';
@@ -25,8 +25,9 @@ import { dayLabel, timeLabel } from './calendar.js';
 import { wxOf, deg, hourWords } from './wx.js';
 import {
   render, refresh, changed, rowHtml, visRow, kindList, kindOf, kindOrDefault,
-  kindPicker, ideaControl, whenHint, setTab,
+  kindPicker, ideaControl, whenHint, setTab, tileHtml,
 } from './space.js';
+import { ideasNear, addIdea, askNote, ideaHtml } from './suggest.js';
 
 // A kind whose only field is a place IS a place. Read off the manifest rather
 // than a hard-coded id, the same test the Where field uses.
@@ -408,11 +409,87 @@ const mapsUrl = (it) => {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`;
 };
 
+/* ── suggest nearby ───────────────────────────────────────────────────────
+   On a place's page: what else on the list is a walk from here, and — asked
+   of Claude when the button is tapped, like every new idea (lib/ideas.js) —
+   places and things to do around it that are not on the list yet.
+
+   The first half is arithmetic over pins this phone already has, so it works
+   with no key. The second asks about the place by NAME (and what it is, and
+   its area), for the day and hour it is planned for when it has one. Nothing
+   is added until somebody taps Add. */
+const NEAR_M = 2000;       // about a 25 minute walk
+let near = null;           // null until asked: { busy, ideas }
+const canAskNear = () => !!(S.wire && S.wire.swap && S.wire.swap.suggest);
+function nearOnList(it) {
+  const p = pinOf(it);
+  if (!p) return [];
+  return (S.items || []).filter(x => x.id !== it.id && !x.done && pinOf(x) && isPlaceKind(kindOf(kindOrDefault(x))))
+    .map(x => ({ it: x, m: metres(p, pinOf(x)) })).filter(x => x.m <= NEAR_M).sort((a, b) => a.m - b.m).slice(0, 5);
+}
+// As the crow flies, so "about": 80 metres a minute is an easy walk.
+const walkWords = (m) => `about ${Math.max(1, Math.round(m / 80))} min walk`;
+function paintNear(it) {
+  const mine = nearOnList(it);
+  const ask = canAskNear();
+  $('plNear').hidden = !pinOf(it) || (!ask && !mine.length);
+  if ($('plNear').hidden) return;
+  $('plNearBtn').disabled = !!(near && near.busy);
+  $('plNearBtn').querySelector('span').textContent = near && near.ideas && near.ideas.length ? 'Suggest different ones' : 'Suggest nearby';
+  // Once the list's own places are showing and nothing can be asked, the button has said all it can.
+  $('plNearBtn').hidden = !!near && !ask;
+  const body = $('plNearBody');
+  if (!near) { body.innerHTML = ''; return; }
+  const plural = Object.fromEntries(kindList().map(k => [k.id, k.plural]));
+  const onList = mine.length ? `<h3 class="sec">On your list, close by</h3><div class="group sg-list">${mine.map(({ it: x, m }) => `<button type="button" class="sg-it pl-nr" data-near="${esc(x.id)}">
+      ${tileHtml(x)}<span class="sg-bd"><b>${esc(leadEmoji(x.title).rest)}</b><span class="sg-why">${esc([distLabel(m), walkWords(m)].filter(Boolean).join(' · '))}</span></span>${icon('chev', 18)}</button>`).join('')}</div>`
+    : ask ? '' : '<p class="sg-none">Nothing else on your list is close to here.</p>';
+  const fresh = !ask ? '' : `<h3 class="sec">Something new <em>not on your list yet</em></h3>${
+    near.busy ? skeleton(3) : near.ideas && near.ideas.length ? `${askNote(near.ideas)}<div class="group sg-list">${near.ideas.map((x, i) => ideaHtml(x,
+      `<button type="button" class="sg-add" data-nearadd="${i}"${x.added ? ' disabled' : ''}>${x.added ? 'On your list' : `Add to ${esc(plural[x.kind] || 'the list')}`}</button>`)).join('')}</div>`
+      : '<p class="sg-none">Nothing new came back for around here.</p>'}`;
+  body.innerHTML = onList + fresh;
+  body.querySelectorAll('[data-near]').forEach(b => b.addEventListener('click', () => openPlace(b.dataset.near)));
+  body.querySelectorAll('[data-nearadd]').forEach(b => b.addEventListener('click', async () => {
+    const x = near && near.ideas && near.ideas[Number(b.dataset.nearadd)];
+    if (!x) return;
+    b.disabled = true;
+    try {
+      await addIdea(x);
+      x.added = true;
+      haptic('success');
+      toast(`Added to ${plural[x.kind] || 'your list'}`);
+    } catch (_) { toast('Could not add that'); }
+    const now = pageItem();
+    if (now) paintNear(now);
+  }));
+}
+async function suggestNear() {
+  const it = pageItem();
+  if (!it || !pinOf(it) || (near && near.busy)) return;
+  const id = it.id;
+  near = { busy: canAskNear(), ideas: near ? near.ideas : null };
+  haptic('tick');
+  paintNear(it);
+  if (!near.busy) return;
+  // For when you will be there: its day and hour if it has one still to come.
+  const w = it.when;
+  const at = w && w.date && w.date >= localAt().slice(0, 10) ? `${w.date}T${w.time || '12:00'}` : localAt();
+  let list = null;
+  try { list = await ideasNear(id, at); } catch (_) { toast('Could not get ideas just now.'); }
+  // The page may have moved on to another place while that was thinking.
+  if (page !== id || !near) return;
+  near = { busy: false, ideas: list || near.ideas || [] };
+  const now = pageItem();
+  if (now) paintNear(now);
+}
+
 export function openPlace(id) {
   const it = (S.items || []).find(x => x.id === id);
   if (!it) return;
   page = id;
   renaming = false;
+  near = null;
   if (pinOf(it) && sel !== id) sel = id;
   paintPage(it, { fresh: true });
   if (snip) snip.resetDrops();
@@ -533,6 +610,7 @@ function paintPage(it, { fresh = false } = {}) {
 
   $('plDir').href = mapsUrl(it);
   $('plPlanLabel').textContent = been ? 'Go again' : 'Plan it';
+  paintNear(it);
   if (fresh) {
     $('plWeb').removeAttribute('href');
     $('plWeb').setAttribute('aria-disabled', 'true');
@@ -929,6 +1007,7 @@ export function initPlaces() {
   });
   $('plFind').addEventListener('click', openWhere);
   $('plChange').addEventListener('click', openWhere);
+  $('plNearBtn').addEventListener('click', suggestNear);
   $('plShare').addEventListener('click', async () => {
     const it = pageItem();
     if (!it) return;

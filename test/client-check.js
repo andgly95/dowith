@@ -2101,6 +2101,51 @@ function connectCdp(wsUrl) {
     await sleep(600);
     check(await visible('#kindNav') && !(await evalJs(`!!document.querySelector('.sg')`)), 'and the button puts the list back');
 
+    // Suggest nearby, on a place's page: what else on the list is a walk from
+    // here, and something new for around it. Two places 330 m apart, well away
+    // from every other pin in this list.
+    const mkPlace = async (title, name, lat) => (await asApi(A, 'POST', '/api/space/sp1/item', { title, kind: 'place',
+      mod: { place: { name, what: 'park', area: 'Navy Yard', lat, lon: -76.9 } } })).item;
+    const quay = await mkPlace('⛵ Quay walk', 'Quay walk', 38.8);
+    const kiosk = await mkPlace('☕ Kiosk coffee', 'Kiosk coffee', 38.803);
+    await S('Page.navigate', { url: `${BASE}/?list=sp1` });
+    await sleep(2200);
+    await evalJs(`(async () => {
+      const base = document.querySelector('script[type=module]').src.replace(/app\\.js.*$/, '');
+      const { openPlace } = await import(base + 'pl.js');
+      openPlace(${JSON.stringify(quay.id)}); })()`);
+    await sleep(900);
+    check(await visible('#placeSheet .modal-in') && await visible('#plNearBtn') && (await evalJs(`document.getElementById('plNearBody').innerText`)) === '',
+      'a pinned place offers Suggest nearby, and nothing until it is asked');
+    await evalJs(`document.getElementById('plNearBtn').click()`);
+    await sleep(1800);
+    const nearText = await evalJs(`document.getElementById('plNearBody').innerText`);
+    check(/On your list, close by/.test(nearText) && /Kiosk coffee/.test(nearText) && /about 4 min walk/.test(nearText) && !/Quay walk/.test(nearText),
+      `it says what else on the list is a walk from here, and how far: ${JSON.stringify(nearText.slice(0, 160))}`);
+    check(/jigsaw/.test(nearText) && !/The Apartment|pot of chili/.test(nearText) && await evalJs(`document.querySelectorAll('#plNearBody [data-nearadd]').length`) === 1,
+      'and something new for around it: somewhere to go or something to do, never a film or a recipe');
+    const nearBox = await evalJs(`(() => { const out = [...document.querySelectorAll('#plNearBtn, #plNearBody .sg-list, #plNearBody .sg-it')].map(e => e.getBoundingClientRect()).filter(r => r.width);
+      return { n: out.length, left: Math.min(...out.map(r => Math.round(r.left))), right: Math.max(...out.map(r => Math.round(r.right))), vw: innerWidth }; })()`);
+    check(nearBox.n >= 4 && nearBox.left >= 8 && nearBox.right <= nearBox.vw - 8, `drawn in the page, inside the screen: ${JSON.stringify(nearBox)}`);
+    if (process.env.SHOT_NEAR) {
+      await evalJs(`document.getElementById('plNearBtn').scrollIntoView({ block: 'start' })`);
+      await sleep(300);
+      const { data } = await S('Page.captureScreenshot', { format: 'png' });
+      require('fs').writeFileSync(process.env.SHOT_NEAR, Buffer.from(data, 'base64'));
+    }
+    await evalJs(`document.querySelector('#plNearBody [data-nearadd]').click()`);
+    await sleep(1600);
+    const added = (await asApi(A, 'GET', '/api/space/sp1/items')).items.find(x => /jigsaw/.test(x.title));
+    check(!!added && added.kind === 'activity' && /On your list/.test(await evalJs(`document.querySelector('#plNearBody [data-nearadd]').innerText`))
+      && await evalJs(`document.querySelector('#plNearBody [data-nearadd]').disabled`) === true, 'one tap adds it, and the row says so');
+    await evalJs(`document.querySelector('#plNearBody [data-near]').click()`);
+    await sleep(700);
+    check(/Kiosk coffee/.test(await evalJs(`document.getElementById('plTitle').innerText`)) && (await evalJs(`document.getElementById('plNearBody').innerText`)) === '',
+      'a place close by opens as its own page, with nothing asked yet');
+    await evalJs(`document.getElementById('plClose').click()`);
+    await sleep(400);
+    for (const x of [quay, kiosk, added].filter(Boolean)) await asApi(A, 'DELETE', `/api/item/${x.id}`);
+
     // The Claude row: the address to paste into Claude, and a code for a browser
     // that is not signed in here.
     await evalJs(`document.getElementById('btnMe').click()`);

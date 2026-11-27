@@ -310,9 +310,12 @@ async function addIdea(x) {
   return b.item;
 }
 
-async function askIdeas(role = null) {
+// `near` is a place on this list and `at` its own day and hour: a place's page
+// asks what is close to it, for when you will be there (ideasNear, below).
+async function askIdeas(role = null, { near = null, at: when = null } = {}) {
   const at = whenAt();
-  const b = await post(`/api/space/${S.spaceId}/suggest/ideas`, { energy: st.energy, at: `${at.date}T${at.time}`, tz: zone(), role });
+  const b = await post(`/api/space/${S.spaceId}/suggest/ideas`, { energy: st.energy, at: when || `${at.date}T${at.time}`, tz: zone(), role,
+    ...(near ? { near } : {}) });
   if (!b.ok) {
     toast(b.why === 'slow-down' ? 'That’s a lot of ideas. Try again in a bit.' : b.why === 'none' ? 'Nothing new came to mind. Try again.'
       : b.why === 'declined' ? 'It would not suggest for that.' : 'Could not get ideas just now.');
@@ -320,6 +323,14 @@ async function askIdeas(role = null) {
   }
   return b.ideas;
 }
+
+// For a place's page (pl.js, "Suggest nearby"): the same ask, the same gate
+// and the same words when it cannot, about what is close to that place. And
+// the same row, so an idea reads the same wherever it is offered.
+export const ideasNear = (id, at) => askIdeas(null, { near: id, at });
+export { addIdea, askNote };
+export const ideaHtml = (x, button) => `<div class="sg-it idea"><div class="sg-bd"><b>${esc(x.title)}</b>
+  <div class="sg-why"><span class="k">${esc(KIND_PLURAL()[x.kind] || x.kind)}</span><span class="dot">·</span>${say('why', x.why)}${keepsHtml(x)}</div>${button}</div></div>`;
 
 function bind() {
   const body = $('sgBody');

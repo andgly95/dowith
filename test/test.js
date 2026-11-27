@@ -1920,6 +1920,14 @@ async function suggestRules() {
     assert.deepStrictEqual(ID.cleanIdeas(raw, { titles, passed: ['Go bowling'], role: 'watch' }).map(x => x.title), ['🎬 The Apartment'],
       'already on the list, passed on, twice, not a kind, or not what was asked for: dropped');
     assert.deepStrictEqual(ID.cleanIdeas(raw, { titles, passed: [] }).map(x => x.kind), ['activity', 'movie', 'place']);
+    // Asked from a place's page: the place by name, and only somewhere to go or something to do comes back.
+    const toki = { name: 'Toki Underground', what: 'restaurant', area: 'H Street' };
+    const nearAsk = ID.promptFor({ whenWords: 'Wednesday, around 7 PM (evening)', energy: 3, titles, near: toki });
+    assert.ok(nearAsk.includes('They will be at: Toki Underground (restaurant) in H Street. They are asking what else is close to it.') && !/38\.\d|-77\.\d/.test(nearAsk), nearAsk);
+    assert.ok(!ID.promptFor({ whenWords: 'x', energy: 3, titles }).includes('They will be at'), 'and nothing about a place when none was asked about');
+    assert.deepStrictEqual(ID.cleanIdeas({ ideas: [...raw.ideas, { title: '🍜 Toki Underground', kind: 'place', role: 'eat', energy: 2, why: 'x' }] },
+      { titles: [], passed: [], near: toki }).map(x => x.title), ['🎳 Go bowling', '🍷 A wine bar near U Street'],
+    'near a place: no films, shows or recipes, and not the place itself');
   });
 
   const D = require('../lib/diet');
@@ -3645,6 +3653,21 @@ async function server() {
       && asked.includes('something to watch') && asked.includes('70% chance of rain'), asked);
     assert.ok(!asked.includes('SG her private') && !/38\.\d\d|-77\.\d\d/.test(asked) && !asked.includes('Andrew') && !asked.includes('Linnea'),
       'never her private things, coordinates, or anybody’s name');
+
+    // Suggest nearby, from a place's page: asked about that place by name, and
+    // what comes back is somewhere to go or something to do.
+    const nearBody = { energy: 3, at: '2026-11-25T18:30', tz: 'America/New_York' };
+    const by = await api('POST', '/api/space/sp1/suggest/ideas', { ...nearBody, near: noodle.id }, A);
+    assert.deepStrictEqual((by.body.ideas || []).map(x => x.title), ['🍷 A wine bar near U Street'], JSON.stringify(by.body));
+    const byAsk = ideaHits[ideaHits.length - 1].messages[0].content;
+    assert.ok(byAsk.includes('They will be at: SG noodle bar (restaurant).') && !/38\.\d\d|-77\.\d\d/.test(byAsk) && !byAsk.includes('SG her private'),
+      `the place by name, never its pin: ${byAsk}`);
+    const asks = ideaHits.length;
+    assert.strictEqual((await api('POST', '/api/space/sp1/suggest/ideas', { ...nearBody, near: hers.id }, A)).status, 404, 'near a thing you cannot see is a 404');
+    assert.strictEqual((await api('POST', '/api/space/sp1/suggest/ideas', { ...nearBody, near: 'no-such-thing' }, A)).status, 404);
+    assert.strictEqual((await api('POST', '/api/space/sp1/suggest/ideas', { ...nearBody, near: film.id }, A)).status, 400, 'and a film is not somewhere to be near');
+    assert.strictEqual(ideaHits.length, asks, 'none of which was asked of Claude');
+    assert.strictEqual((await api('POST', '/api/space/sp1/suggest/ideas', { ...nearBody, near: noodle.id }, J)).status, 404, 'a stranger to the list');
 
     // What the list eats: a rule of the list, set by anyone on it and by nobody else.
     assert.strictEqual((await api('POST', '/api/space/sp1/diet', { must: ['gluten-free'], strict: true }, J)).status, 404, 'a stranger cannot set it');

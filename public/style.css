@@ -1278,6 +1278,18 @@ button.crow:active{background:var(--card2)}
 .info .open{color:var(--accent2);font-weight:600}
 .info .shut{color:var(--warn);font-weight:600}
 .pl-src{color:var(--dim);font-size:13px;line-height:1.45;margin:-4px 4px 4px}
+/* Suggest nearby (pl.js): a quiet button under the hours, and what it finds
+   drawn in the page under it, in the suggestions' own rows. */
+#plNear{margin:14px 0 18px}
+.pl-nearbtn{width:100%;height:50px;border-radius:25px;background:var(--accent-tint);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;gap:8px;font:600 15.5px/1 var(--sans)}
+.pl-nearbtn:disabled{opacity:.55}
+.pl-nearbtn:active{opacity:.85}
+#plNearBody .sec{margin-top:18px}
+#plNearBody .sg-none{padding:10px 2px 0}
+.sg-it.pl-nr{width:100%;text-align:left;color:var(--ink)}
+.pl-nr .sg-bd,.pl-nr .sg-why{display:block}
+.pl-nr>svg{flex:none;color:var(--dim);margin-right:8px}
 .pickday{position:relative;flex:none;color:var(--accent);font:600 15px/1 var(--sans);padding:12px 0 12px 8px}
 .pickday input{position:absolute;inset:0;width:100%;opacity:0;cursor:pointer}
 .timein{flex:none;background:var(--card2);border:0;border-radius:10px;padding:8px 10px;font-size:15px;color:var(--ink)}
