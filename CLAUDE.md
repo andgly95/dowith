@@ -1899,11 +1899,10 @@ hard. So lookups are serialised behind a single queue, the cache is checked agai
 | `POST /api/item/:id/visit` | `{book?, again?, memory?}` — anyone who can see it; `again`/`memory` only once done (409) |
 | `GET /api/item/:id/weather` · `GET /api/space/:id/weather` | the weather at a place (now, rain soon, its plan) with how it suits the place's profile; the middle of a list's pins for the Places tab — only what you can see |
 | `GET /api/space/:id/suggest?energy=&at=&tz=&through=&keep=` | what would be good for then: a plan of slots (pick and runners-up, `planned` when the calendar already has it, `bumped` when the calendar's own is ruled out), the list in order, what is ruled out, `pending` |
-| `POST /api/space/:id/suggest/vote {item\|idea, v, at}` · `POST /api/space/:id/suggest/ideas {energy, at, tz, role?}` | a thumb (yours alone on the wire); new ideas from Claude, gated, 12 an hour |
+| `POST /api/space/:id/suggest/vote {item\|idea, v, at}` · `POST /api/space/:id/suggest/ideas {energy, at, tz, role?, near?}` | a thumb (yours alone on the wire); new ideas from Claude, gated, 12 an hour; `near` is a place you can see (404 if not, 400 if it is not a place) and keeps the ideas to what is close to it |
 | `POST /api/space/:id/diet {must: [...], strict}` | what the list eats, set by anyone on it; `{must: []}` is anything; an unknown rule is a 400 |
 | `GET`·`POST /api/people/:uid/stations` · `GET /api/transit/stops?q=&space=` | where somebody starts from — yourself or a pair partner, else 404; the station search |
 | `GET /api/item/:id/show` · `GET /api/item/:id/show/season/:n` · `POST /api/item/:id/episodes {s, e?, seen}` | a show's seasons, episode names, and ticking one (or a whole season) — anyone who can see it; the last of an ended show ticks it off |
-| `POST /api/space/:id/suggest/ideas {energy, at, tz, role?, near?}` | new ideas, asked of Claude, **saves nothing**; `near` is a place you can see (404 if not, 400 if it is not a place) and limits the ideas to what is close to it |
 | `GET /api/space/:id/hours?at=` | open or closed now for every place on the list, at the phone's time; `pending` says to ask again |
 | `GET /api/item/:id/place?at=` | a place's hours, website, address — live from OSM by its id — and open or closed now and on its plan; 404 if you can't see it |
 | `GET`·`POST /api/space/:id/pleasure` | the rose — pairs only; partner's try answers appear only as matches; `question` is today's Spicy one, answered here with `{ question: {date, text\|pick\|react\|reply} }` |
