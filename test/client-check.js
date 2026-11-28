@@ -135,9 +135,15 @@ function connectCdp(wsUrl) {
     }
     // Open-Meteo: a clear 20° afternoon, so the weather has something to show.
     if (req.url.startsWith('/v1/forecast')) {
-      const day = new Date().toISOString().slice(0, 10);
       // Three days of it, so a plan that carries on into tomorrow has weather there too.
-      const days = [0, 1, 2].map(n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10));
+      // LOCAL dates, as the real one's are (timezone=auto, the place's own clock):
+      // the server finds an hour by its local date string. Dated in UTC, from 7 PM
+      // Eastern the first day was already tomorrow, and tonight had no weather.
+      // Counted from noon, so a DST change cannot skip or repeat a day.
+      const noon = new Date(); noon.setHours(12, 0, 0, 0);
+      const ymd = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+      const days = [0, 1, 2].map(n => ymd(noon.getTime() + n * 864e5));
+      const day = days[0];
       const time = days.flatMap(d => Array.from({ length: 24 }, (_, h) => `${d}T${String(h).padStart(2, '0')}:00`));
       return res.end(JSON.stringify({ timezone: 'UTC',
         current: { time: `${day}T12:00`, temperature_2m: 20, apparent_temperature: 20, weather_code: 0, is_day: 1, wind_speed_10m: 5 },
@@ -1867,8 +1873,19 @@ function connectCdp(wsUrl) {
     await asApi(A, 'POST', '/api/space/sp1/item', { title: 'Walk the whole length of the canal towpath and stop for lunch somewhere along the way when it looks nice', kind: 'activity' });
     const flourRead = await asApi(A, 'POST', '/api/recipe/paste', { text: 'Ingredients\n2 cups flour\n2 tbsp soy sauce\n1 lb chicken\n\nMethod\nMix and bake for 20 minutes.' });
     const flourPie = (await asApi(A, 'POST', '/api/space/sp1/item', { title: 'Flour pie', kind: 'recipe', mod: { recipe: flourRead.recipe } })).item;
+    // "Now" is the phone's clock, and what a plan holds depends on the hour: after
+    // 8:30 PM it is one Evening slot, and a film that late is flagged, so the slot
+    // is rightly empty and nothing below has a piece to look at. So for this page
+    // the clock reads 5:30 PM today, still ticking: Dinner at 7, Evening at 9, the
+    // plan this was written against. Removed before the next navigate.
+    const { identifier: clockPin } = await S('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
+      const Real = Date; const at = new Real(); at.setHours(17, 30, 0, 0); const skew = at.getTime() - Real.now();
+      class Pinned extends Real { constructor(...a) { if (a.length) super(...a); else super(Real.now() + skew); }
+        static now() { return Real.now() + skew; } }
+      globalThis.Date = Pinned; })()` });
     await S('Page.navigate', { url: `${BASE}/?list=sp1` });
     await sleep(2200);
+    check(await evalJs(`new Date().getHours()`) === 17, 'the page’s clock is pinned to the afternoon for the plan');
     await evalJs(`document.getElementById('tabSug').click()`);
     await sleep(1600);
     // What the plan is for is one row; the controls are a sheet behind it, so
@@ -2053,6 +2070,7 @@ function connectCdp(wsUrl) {
       mod: { place: { name: 'Print gallery', what: 'gallery', lat: 38.9, lon: -77.03, osm: 'N4242' } } })).item;
     await asApi(A, 'POST', `/api/item/${lateShow.id}/when`, { date: planDay, time: '20:45' });
     await asApi(A, 'POST', `/api/item/${supper.id}/when`, { date: planDay, time: '17:30' });
+    await S('Page.removeScriptToEvaluateOnNewDocument', { identifier: clockPin });
     await S('Page.navigate', { url: `${BASE}/?list=sp1` });
     await sleep(2200);
     await evalJs(`document.getElementById('tabSug').click()`);
